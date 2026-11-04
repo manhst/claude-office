@@ -9,7 +9,7 @@ if [ "$1" = "demo" ] || [ "$1" = "mock" ]; then DEMO="--demo"; fi
 node scripts/install-mod.mjs || echo "[office] WARNING: mod install failed."
 [ -d orchestrator/node_modules ] || (cd orchestrator && npm install)
 [ -d web/node_modules ] || (cd web && npm install)
-[ -f web/dist/index.html ] || (cd web && npm run build)
+(cd web && npm run build)
 rm -f orchestrator/.run/ui-url.txt
 ( for i in $(seq 1 60); do
     if [ -s orchestrator/.run/ui-url.txt ]; then
