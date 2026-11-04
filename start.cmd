@@ -1,11 +1,14 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+git pull --ff-only || echo [office] WARNING: git pull failed, continuing with the local copy.
+cls
 rem Usage: start.cmd         (live: shows Claude Code sessions reported by the "office" mod)
 rem        start.cmd demo    (3 simulated sessions, no Claude needed)
 set DEMO=
 if /i "%~1"=="demo" set DEMO=--demo
 if /i "%~1"=="mock" set DEMO=--demo
+node scripts\install-mod.mjs || echo [office] WARNING: mod install failed.
 if not exist orchestrator\node_modules (pushd orchestrator & call npm install & popd)
 if not exist web\node_modules (pushd web & call npm install & popd)
 if not exist web\dist\index.html (pushd web & call npm run build & popd)

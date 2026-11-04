@@ -11,20 +11,31 @@ Claude Code session ──(office mod, POST /event, loopback)──> orchestrato
 ## Quick start (Windows)
 
 1. Install Node.js 20+.
-2. In Claude Code, add the mod marketplace from this repo and install the mod:
-   ```
-   /plugin marketplace add C:\path\to\claude-office\mod
-   /plugin install office@office-mods
-   ```
-   Restart Claude Code sessions after installing.
-3. Double-click `start.cmd`. The first run installs dependencies and builds the web UI, then the browser opens
-   the office with its per-run token (`http://127.0.0.1:7777/#token=…`).
+2. Double-click `start.cmd` (macOS/Linux: `./start.command`). In order, it:
+   1. runs `git pull --ff-only` (if that fails it prints a warning and continues with the local copy);
+   2. clears the screen;
+   3. installs the `office` mod into Claude Code (`node scripts/install-mod.mjs`, see below);
+   4. on first run, runs `npm install` and builds the web UI, then starts the server and opens the browser with the per-run token (`http://127.0.0.1:7777/#token=…`).
+3. Reopen any Claude Code sessions that were already open, so they load the mod.
 4. Open Claude Code sessions in any project. They appear in the **Sessions** panel within a few seconds and
    their agents take desks. Close a session and it leaves (immediately on SessionEnd, otherwise after ~60 s with no heartbeat).
 
 Demo without Claude: `start.cmd demo` (macOS/Linux: `./start.command demo`, or `cd orchestrator && npm run demo`)
 runs 3 simulated sessions, one per agent-profile source below. For a server without the simulator you can also run
 `npx tsx src/simulate.ts http://127.0.0.1:7777/event` from `orchestrator/` against a running office.
+
+### How the mod gets installed
+
+`scripts/install-mod.mjs` (Node, no dependencies; it works the same way as esp-claude's `install.ps1`) edits `${CLAUDE_CONFIG_DIR or ~/.claude}/settings.json`:
+- If `<config>/plugins/installed_plugins.json` already lists `office@…` (installed through the marketplace), it leaves
+  `CLAUDE_CODE_PLUGIN_DIRS` alone except to remove this repo's `mod/office` from it, so the mod is not loaded twice.
+- Otherwise it adds the absolute path of `mod/office` to `env.CLAUDE_CODE_PLUGIN_DIRS` (`;`-separated on Windows, `:` on macOS/Linux). Existing entries such as usage-esp's dir are kept, and duplicates are removed.
+- It sets `pluginConfigs.office.options.endpoint` (and `pluginConfigs["office@…"]` when installed) to `http://127.0.0.1:<port>/event` and touches no other option.
+- It writes only when something changed. In that case it first backs up the file to `settings.json.bak-YYYYMMDD-HHmmss`, then writes UTF-8 without BOM, 2-space JSON, keeping all other keys.
+  It prints only the mod path and endpoint, never other settings (they may contain tokens). Use `--port N` for a non-default port.
+
+Manual alternative: `/plugin marketplace add C:\path\to\claude-office\mod` then `/plugin install office@office-mods`.
+The next run of `start.cmd` then detects the installed plugin and removes the plugin-dirs entry.
 
 ## Which agents a session shows
 

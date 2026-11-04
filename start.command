@@ -2,8 +2,11 @@
 # Usage: ./start.command        (live: shows Claude Code sessions reported by the "office" mod)
 #        ./start.command demo   (3 simulated sessions, no Claude needed)
 cd "$(dirname "$0")" || exit 1
+git pull --ff-only || echo "[office] WARNING: git pull failed, continuing with the local copy."
+clear
 DEMO=""
 if [ "$1" = "demo" ] || [ "$1" = "mock" ]; then DEMO="--demo"; fi
+node scripts/install-mod.mjs || echo "[office] WARNING: mod install failed."
 [ -d orchestrator/node_modules ] || (cd orchestrator && npm install)
 [ -d web/node_modules ] || (cd web && npm install)
 [ -f web/dist/index.html ] || (cd web && npm run build)
