@@ -48,7 +48,7 @@ For each session the server (same PC) reads, in priority order:
 | C | neither | placeholders `Dev 1`, `Dev 2` |
 
 `<project>` is the repo root the mod reports (`$.session.repo()`), else the session cwd. Project agents win over
-user agents with the same name. Files over 64 KB are ignored; at most 3 desks per session and 6 desks in total
+user agents with the same name. Files over 64 KB are ignored; at most 6 desks per session and 6 desks in total
 (extra sessions are still listed in the panel, with a "no free desk" notice).
 
 Live activity is pushed onto those desks so it looks like the agents are working:

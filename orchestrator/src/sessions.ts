@@ -77,7 +77,7 @@ export class SessionTracker {
       startedAt: ts, lastSeen: ts, source, profiles, agentIds: [] };
     this.sessions.set(e.sid, s);
     const total = this.o.desks ?? 6, cols = this.o.cols ?? 3;
-    for (const p of profiles.slice(0, this.o.perSession ?? 3)) {
+    for (const p of profiles.slice(0, this.o.perSession ?? 6)) {
       const used = new Set([...this.desks.values()].map((d) => d.view.desk.y * cols + d.view.desk.x));
       let slot = 0; while (used.has(slot)) slot++;
       if (slot >= total) { this.emit({ t: 'office.notice', level: 'warn', text: `No free desk for ${p.name} (${s.project})`, ts }); break; }
