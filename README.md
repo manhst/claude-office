@@ -54,38 +54,42 @@ and live activity (state, tool, prompt first sentence, subagents, cost).
 `.claude-plugin/plugin.json` (userConfig `endpoint`, default `http://127.0.0.1:7777/event`) and
 `hooks/hooks.json` = `{ "modules": ["./register.ts"] }` → `hooks/register.ts`.
 
-It POSTs JSON events `{type, sid, ...}`: `heartbeat` every 12 s and at register (project, cwd, root, title, transcript path,
-state, tool, subagents, cost), `start` on SessionStart, `state` / `tool` on prompt / tool / permission / stop,
-`subagents` on subagent start/stop, `end` on SessionEnd. Tool detail is only a file **basename**, the **first line** of a command,
-a glob/query, a URL **host** or a subagent description, never file contents; the server also redacts tokens and caps lengths.
-Headless `claude -p` sessions are skipped. Non-loopback endpoints are refused by the mod.
+It POSTs JSON events `{type, sid, ...}` (`sid` = the full session id), one at a time in event order:
+`start` on `session.start` and a `heartbeat` every 12 s (project, cwd, root, title, transcript path), `state` / `tool` on
+turn start, tool calls, permission requests and turn completion, `subagents` when a subagent starts a turn or calls a tool,
+`end` on `session.end`. Every post also carries state, tool, prompt first sentence, subagents and cost.
+Tool detail is only a file **basename**, the **first line** of a command, a URL **host**, a pattern/query or a description,
+never file contents; the server also redacts tokens and caps lengths. Headless `claude -p` sessions
+(`CLAUDE_CODE_ENTRYPOINT=sdk-cli`) are skipped. Non-loopback endpoints are refused by the mod.
 
-Engine API the mod relies on. The type defs were not available when this was written, so every call is optional-chained
-and wrapped in try/catch (a missing API only loses detail). **Verify these against `.claude-plugin/types/claude-code/index.d.ts` from usage-esp:**
+Engine API used (the same as in the owner's usage-esp mod). Handlers only observe and always call `next(e)`; the classic
+and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they never block.
 
-| Call | Used for | Fallback if missing |
-|---|---|---|
-| `export function register($)` (also `export default`) | entry point | none |
-| `$.on(name, handler)` (then tries `$.hooks.on`, `$.events.on`) | hook events `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `Notification`, `SubagentStart`, `SubagentStop`, `Stop`, `SessionEnd` | heartbeat only (state stays idle) |
-| hook payload `e.cwd`, `e.tool_name`/`toolName`, `e.tool_input`/`toolInput`/`input`, `e.prompt`, `e.message` | cwd, tool, prompt | generic `tool` |
-| `$.session.id()` | session id | `CLAUDE_SESSION_ID` env |
-| `$.session.repo()` (string or `{root}`) | project root for agent files | cwd |
-| `$.session.usage().cost.usd` | cost | omitted |
-| `$.session.quiet?.()` / `isQuiet` / `headless`, or `-p`/`--print` in argv | skip headless sessions | argv check |
-| `$.agent.list()` → `{id, type, description, status}` | subagents | empty |
-| `$.http.fetch(url, {method, headers, body})` | POST events | `globalThis.fetch` |
-| `$.clock.setInterval(fn, ms)` (or `$.clock.every(ms, fn)`) | heartbeat | global `setInterval` |
-| `$.config.get('endpoint')` / `$.config.endpoint` / `$.userConfig.endpoint` | userConfig | `CLAUDE_PLUGIN_OPTION_ENDPOINT` env, then default |
-| `import('node:fs')` | read session title from `<configDir>/projects/<cwd, non-alphanumerics→'-'>/<sid>.jsonl` (`custom-title` > `ai-title`, last 256 KB) | no title |
+| API | Used for |
+|---|---|
+| `export const register: Register = (on, options)`; `options.endpoint` from `plugin.json` userConfig | entry point, endpoint |
+| `on('session.start')`: `e.cwd`, `$.env.get('CLAUDE_CODE_ENTRYPOINT' / 'USERPROFILE' / 'HOME' / 'CLAUDE_CONFIG_DIR')`, `$.session.id()`, `$.session.repo()` → `root` | session info, quiet check, transcript path |
+| `$.clock.every(12000, fn)` | heartbeat |
+| `on('turn.start')`: `e.agentId` (undefined = main turn) | thinking |
+| `on('tool.call')`: `e.tool` + tool args on `e`, `e.agentId`, `next.origin.plugin === 'engine'` | current tool (model's own calls only) |
+| `on('classic.PermissionRequest')`: `e.tool_name`, `e.tool_input` | waiting for permission |
+| `on('classic.SessionStart')`, `on('classic.UserPromptSubmit')`: `e.session_title`, `e.transcript_path`, `e.prompt` (if a string) | title, prompt |
+| `on('turn.complete')`: `e.agentId`, `e.reason` (`aborted` → idle, otherwise done) | done |
+| `on('session.end')` | end |
+| `$.agent.list()` → `{type, description, status}` | subagents |
+| `$.session.usage()` → `cost.usd` | cost |
+| `$.http.fetch(url, {method: 'POST', headers, body})` | posting events |
+| `$.fs.exists(path)`, `$.fs.read(path)` | title from the transcript (`custom-title` > `ai-title`) when no `session_title` was given |
 
-Also check: the `hooks.json` module path is resolved relative to `hooks/` here (`mod/office/hooks/register.ts`), and the
-`userConfig` schema in `plugin.json` matches usage-esp's.
+Not confirmed: the name of the prompt text field on `classic.UserPromptSubmit` (`e.prompt` is used only when it is a string).
+For typechecking without the engine's types package, `orchestrator/test/claude-code.d.ts` declares a stand-in `claude-code` module.
 
 ### Why POST /event has no token
 
 The browser token is per run, so the mod cannot know it. Instead `/event` accepts a request only when
 1. the peer address is loopback (`127.0.0.1` / `::1`; the server also only listens on 127.0.0.1),
-2. there is **no `Origin` and no `Sec-Fetch-Site` header** (browsers always send these on cross-site requests, so a web page cannot post), and
+2. it does not look like a browser page: requests are rejected if `Origin` is an http(s) URL or `null`, or if `Sec-Fetch-Site` is
+   `cross-site` / `same-site`. When these headers are absent the request is allowed, because we don't know whether `$.http.fetch` sends them, and
 3. `Content-Type` is `application/json` (a cross-origin browser request with that type needs a CORS preflight, which the server never answers).
 
 Payloads are validated, capped at 64 KB and redacted. Any local process could still post fake sessions; it can only make the

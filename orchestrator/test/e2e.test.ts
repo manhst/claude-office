@@ -19,7 +19,9 @@ describe('security helpers', () => {
     expect(r('127.0.0.1', json)).toBe(0); expect(r('::1', json)).toBe(0); expect(r('::ffff:127.0.0.1', json)).toBe(0);
     expect(r('192.168.1.5', json)).toBe(403);
     expect(r('127.0.0.1', { ...json, origin: 'http://127.0.0.1:7777' })).toBe(403);
-    expect(r('127.0.0.1', { ...json, 'sec-fetch-site': 'cross-site' })).toBe(403);
+    expect(r('127.0.0.1', { ...json, origin: 'null' })).toBe(403);
+    expect(r('127.0.0.1', { ...json, 'sec-fetch-site': 'cross-site' })).toBe(403); expect(r('127.0.0.1', { ...json, 'sec-fetch-site': 'same-site' })).toBe(403);
+    expect(r('127.0.0.1', { ...json, 'sec-fetch-site': 'none', 'sec-fetch-mode': 'cors' })).toBe(0);
     expect(r('127.0.0.1', { 'content-type': 'text/plain' })).toBe(415);
     expect(r('127.0.0.1', {})).toBe(415);
   });

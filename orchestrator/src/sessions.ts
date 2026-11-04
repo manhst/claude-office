@@ -73,7 +73,7 @@ export class SessionTracker {
   private create(e: ModEvent, ts: number): SessionView {
     const root = e.root || e.cwd || '';
     const { source, profiles } = (this.o.load ?? loadProfiles)(root, this.o.userAgentsDir);
-    const s: SessionView = { sid: e.sid, project: e.project || basename(root) || e.sid.slice(0, 8), cwd: e.cwd || root, state: 'idle', subagents: [],
+    const s: SessionView = { sid: e.sid, project: e.project || basename(root) || e.sid, cwd: e.cwd || root, state: 'idle', subagents: [],
       startedAt: ts, lastSeen: ts, source, profiles, agentIds: [] };
     this.sessions.set(e.sid, s);
     const total = this.o.desks ?? 6, cols = this.o.cols ?? 3;
@@ -81,7 +81,7 @@ export class SessionTracker {
       const used = new Set([...this.desks.values()].map((d) => d.view.desk.y * cols + d.view.desk.x));
       let slot = 0; while (used.has(slot)) slot++;
       if (slot >= total) { this.emit({ t: 'office.notice', level: 'warn', text: `No free desk for ${p.name} (${s.project})`, ts }); break; }
-      const id = `${e.sid.slice(0, 8)}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${s.agentIds.length}`;
+      const id = `${e.sid}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${s.agentIds.length}`;
       const desk = { x: slot % cols, y: Math.floor(slot / cols) };
       const d: Desk = { id, sid: e.sid, profile: p, view: { id, role: p.name, name: p.name, state: 'idle', desk } };
       this.desks.set(id, d); s.agentIds.push(id);

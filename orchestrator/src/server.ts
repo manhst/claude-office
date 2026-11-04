@@ -17,13 +17,14 @@ export function originOk(origin: string | undefined) {
   try { const u = new URL(origin); return (u.protocol === 'http:' || u.protocol === 'https:') && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname); } catch { return false; }
 }
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
-/** POST /event auth (the mod cannot know the per-run token): loopback peer only, no browser markers
- *  (Origin / Sec-Fetch-Site; browsers always send them on cross-site requests. Sec-Fetch-Mode is NOT checked: Node/undici fetch sends it), and Content-Type application/json,
- *  which makes any cross-origin browser POST a CORS preflight that we never answer. Returns an HTTP status to reject with, or 0. */
+/** POST /event auth (the mod cannot know the per-run token): loopback peer only; reject browser pages, i.e. an Origin that is an
+ *  http(s) URL or 'null' (sandboxed/file pages), or Sec-Fetch-Site cross-site/same-site; absent headers are fine (the engine's
+ *  $.http.fetch may or may not add them). Content-Type must be application/json, which forces a CORS preflight on any
+ *  cross-origin browser request, and we never answer preflights. Returns an HTTP status to reject with, or 0. */
 export function eventRequestRejection(req: Pick<IncomingMessage, 'headers'> & { socket: { remoteAddress?: string } }): number {
   if (!LOOPBACK.has(req.socket.remoteAddress ?? '')) return 403;
-  const h = req.headers;
-  if (h.origin !== undefined || h['sec-fetch-site'] !== undefined) return 403;
+  const h = req.headers, origin = String(h.origin ?? '').trim().toLowerCase(), site = String(h['sec-fetch-site'] ?? '').toLowerCase();
+  if (/^https?:/.test(origin) || origin === 'null' || site === 'cross-site' || site === 'same-site') return 403;
   if (!String(h['content-type'] ?? '').toLowerCase().startsWith('application/json')) return 415;
   return 0;
 }
