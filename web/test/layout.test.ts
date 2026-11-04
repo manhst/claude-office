@@ -30,7 +30,7 @@ describe('camera + 2D placement + view persistence', () => {
   });
   it('view choice persists and defaults to 2d', () => {
     const m = new Map<string, string>(); const st = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
-    expect(loadView(st)).toBe('2d'); saveView(st, '3d'); expect(loadView(st)).toBe('3d');
+    expect(loadView(st)).toBe('2d'); saveView(st, '3d'); expect(loadView(st)).toBe('3d'); saveView(st, 'vanphong'); expect(loadView(st)).toBe('vanphong'); st.setItem('office.view', 'bogus'); expect(loadView(st)).toBe('2d');
     expect(loadView({ getItem: () => { throw new Error('denied'); } })).toBe('2d'); expect(loadView(undefined)).toBe('2d');
   });
 });

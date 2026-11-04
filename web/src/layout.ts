@@ -25,6 +25,7 @@ export function clampTarget(v: Vec3, half = { x: 9, z: 7 }): Vec3 {
 export function cardPosition(a: { x: number; y: number }, b: { x: number; y: number }, rowTop: number, index: number, width = 220) {
   return { left: (a.x + b.x) / 2 - width / 2, top: Math.max(4, rowTop - 62 - index * 40) };
 }
-export type ViewMode = '2d' | '3d';
-export function loadView(store: Pick<Storage, 'getItem'> | undefined): ViewMode { try { return store?.getItem('office.view') === '3d' ? '3d' : '2d'; } catch { return '2d'; } }
+export type ViewMode = '2d' | '3d' | 'vanphong';
+const VIEWS: readonly string[] = ['2d', '3d', 'vanphong'];
+export function loadView(store: Pick<Storage, 'getItem'> | undefined): ViewMode { try { const v = store?.getItem('office.view'); return v && VIEWS.includes(v) ? v as ViewMode : '2d'; } catch { return '2d'; } }
 export function saveView(store: Pick<Storage, 'setItem'> | undefined, v: ViewMode) { try { store?.setItem('office.view', v); } catch { /* private mode */ } }

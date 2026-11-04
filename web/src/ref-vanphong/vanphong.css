@@ -1,0 +1,145 @@
+/* Ported from VanphongAI (Phuc) public/style.css. See ./NOTICE. Rules copied verbatim; ':root' became '.vp-ref' and every
+   selector is scoped under .vp-ref so nothing leaks into our 2D/3D views. The Google Fonts link is not used (CSP).
+   The 'Be Vietnam Pro' family stays first in the stack and falls back to system fonts. */
+.vp-ref {
+  --nen: #f4efe7;
+  --san: #ebe2d4;
+  --o-san: rgba(90, 70, 40, .06);
+  --be-mat: #fffdf9;
+  --be-mat-2: #f8f3ec;
+  --vien: #e2d7c8;
+  --chu: #2b2622;
+  --chu-phu: #74695f;
+  --nhan: #7b6cf6;
+  --nhan-chu: #fff;
+  --xanh: #2a9d63;
+  --vang: #e0a030;
+  --do: #d24b4b;
+  --ban-mat: #cba582;
+  --ban-than: #b88f6a;
+  --laptop: #d8dce5;
+  --laptop-logo: #aab1c2;
+  --quay: #6d64b8;
+  --quay-mat: #8a81d6;
+  --bong: 0 1px 2px rgba(60, 40, 20, .06), 0 6px 18px rgba(60, 40, 20, .08);
+  --code-nen: #1f2030;
+  --code-chu: #e9e8f2;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  .vp-ref {
+    --nen: #15161d;
+    --san: #1b1d28;
+    --o-san: rgba(255, 255, 255, .035);
+    --be-mat: #222431;
+    --be-mat-2: #282b3a;
+    --vien: #363a4d;
+    --chu: #eceaf4;
+    --chu-phu: #a4a7ba;
+    --nhan: #9488ff;
+    --nhan-chu: #14121f;
+    --xanh: #4cc98b;
+    --vang: #f0b54a;
+    --do: #f07070;
+    --ban-mat: #6e5647;
+    --ban-than: #5a463b;
+    --laptop: #3b4152;
+    --laptop-logo: #5d6580;
+    --quay: #4a4490;
+    --quay-mat: #5d56a8;
+    --bong: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 22px rgba(0, 0, 0, .28);
+    --code-nen: #12131b;
+    color-scheme: dark;
+  }
+}
+
+.vp-ref, .vp-ref * { box-sizing: border-box; }
+.vp-ref { font-family: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--chu);
+  border-radius: 16px; overflow: hidden; border: 1px solid var(--vien); box-shadow: var(--bong); background: #dfe9f1; }
+.vp-ref .cham { display: inline-flex; gap: 3px; margin-left: 4px; vertical-align: middle; }
+.vp-ref .cham i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .3; animation: cham 1.2s infinite; }
+.vp-ref .cham i:nth-child(2) { animation-delay: .2s; }
+.vp-ref .cham i:nth-child(3) { animation-delay: .4s; }
+@keyframes cham { 30% { opacity: 1; transform: translateY(-2px); } }
+@keyframes tho-mic { 50% { transform: scale(1.2); } }
+.vp-ref .vp3d-canh { position: absolute; inset: 0; }
+.vp-ref .vp3d-canh canvas { display: block; touch-action: none; outline: none; }
+.vp-ref .vp3d-nhan { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.vp-ref .vp3d-cong-cu { position: absolute; top: 10px; left: 10px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+.vp-ref .vp3d-cong-cu.phai { left: auto; right: 10px; }
+.vp-ref .nut-3d {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; min-width: 34px; padding: 0 10px;
+  border-radius: 10px; border: 1px solid var(--vien); background: color-mix(in srgb, var(--be-mat) 88%, transparent);
+  backdrop-filter: blur(6px); box-shadow: var(--bong); font-size: 13px; font-weight: 700; color: var(--chu);
+}
+.vp-ref .nut-3d svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.vp-ref .nut-3d:hover { border-color: var(--nhan); }
+.vp-ref .nut-3d:focus-visible { outline: 2px solid var(--nhan); outline-offset: 2px; }
+.vp-ref .vp3d-goi-y {
+  position: absolute; left: 12px; bottom: 10px; z-index: 2; margin: 0; max-width: calc(100% - 24px); pointer-events: none;
+  padding: 4px 11px; border-radius: 999px; font-size: 12px; color: var(--chu-phu); background: color-mix(in srgb, var(--be-mat) 82%, transparent);
+}
+.vp-ref .vp3d-cho { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-weight: 700; color: #5a6475; background: #dfe9f1; }
+/* Bảng tên + bong bóng lời nói trên đầu nhân viên */
+.vp-ref .nguoi-3d { display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
+.vp-ref .ten-3d {
+  pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 12px; color: var(--chu);
+  background: color-mix(in srgb, var(--be-mat) 92%, transparent); border: 1px solid var(--vien); border-bottom: 2px solid var(--mau, var(--nhan));
+  box-shadow: 0 2px 8px rgba(30, 20, 10, .14);
+}
+.vp-ref .ten-3d:focus-visible { outline: 2px solid var(--nhan); outline-offset: 2px; }
+.vp-ref .ten-3d b { font-weight: 800; }
+.vp-ref .ten-3d small { font-size: 11px; color: var(--chu-phu); }
+.vp-ref .ten-3d small.canh-bao { color: color-mix(in srgb, var(--vang) 75%, var(--chu)); font-weight: 700; }
+.vp-ref .viec-cho:not(:empty) { font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: var(--nhan); color: var(--nhan-chu); }
+.vp-ref .cham-3d { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--xanh); box-shadow: 0 0 0 2px color-mix(in srgb, var(--xanh) 25%, transparent); }
+.vp-ref .nguoi-3d.tt-dang-lam .cham-3d { background: var(--mau, var(--nhan)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mau, var(--nhan)) 30%, transparent); animation: tho-mic 1.2s ease-in-out infinite; }
+.vp-ref .nguoi-3d.tt-loi .cham-3d { background: var(--do); box-shadow: 0 0 0 2px color-mix(in srgb, var(--do) 25%, transparent); }
+.vp-ref .nguoi-3d.tt-ngu .cham-3d { background: var(--chu-phu); box-shadow: none; }
+.vp-ref .nguoi-3d.tt-cho .cham-3d, .vp-ref .nguoi-3d.tt-cho-duyet .cham-3d { background: var(--vang); box-shadow: 0 0 0 2px color-mix(in srgb, var(--vang) 25%, transparent); }
+.vp-ref .nguoi-3d.tt-ngu .ten-3d { opacity: .82; }
+.vp-ref .nguoi-3d.hover .ten-3d { border-color: var(--mau, var(--nhan)); }
+.vp-ref .bong-3d {
+  display: none; pointer-events: auto; position: relative; max-width: 220px; padding: 6px 10px; border-radius: 12px;
+  background: var(--be-mat); border: 1px solid var(--vien); box-shadow: 0 3px 12px rgba(30, 20, 10, .16);
+  font-size: 12px; line-height: 1.4; color: var(--chu); text-align: center;
+}
+.vp-ref .bong-3d::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: var(--be-mat);
+  border-right: 1px solid var(--vien); border-bottom: 1px solid var(--vien); transform: translateX(-50%) rotate(45deg);
+}
+.vp-ref .bong-3d .bb { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.vp-ref .bong-3d a { color: var(--nhan); font-weight: 700; }
+.vp-ref .nguoi-3d.co-bong .bong-3d, .vp-ref .nguoi-3d.hover .bong-3d, .vp-ref .nguoi-3d:hover .bong-3d { display: block; }
+.vp-ref .nguoi-3d.tt-dang-lam .bong-3d, .vp-ref .nguoi-3d.tt-dang-nghi .bong-3d { border-color: color-mix(in srgb, var(--mau, var(--nhan)) 55%, var(--vien)); }
+.vp-ref .nguoi-3d.tt-loi .bong-3d { border-color: color-mix(in srgb, var(--do) 55%, var(--vien)); }
+.vp-ref .nguoi-3d.tt-xong .bong-3d { border-color: color-mix(in srgb, var(--xanh) 55%, var(--vien)); }
+.vp-ref .nguoi-3d.thu-ky .bong-3d { max-width: 280px; font-size: 12.5px; }
+.vp-ref .nguoi-3d.thu-ky .bong-3d .bb { -webkit-line-clamp: 4; }
+.vp-ref .nguoi-3d.thu-ky .ten-3d { font-size: 12.5px; padding: 4px 11px 4px 8px; }
+.vp-ref .zzz-3d {
+  display: none; align-items: flex-end; gap: 1px; padding: 1px 9px 3px; border-radius: 999px; font-weight: 900; line-height: 1;
+  color: #6b78f0; background: color-mix(in srgb, var(--be-mat) 92%, transparent); border: 1px solid var(--vien); box-shadow: 0 2px 8px rgba(30, 20, 10, .14);
+}
+.vp-ref .nguoi-3d.tt-ngu .zzz-3d { display: inline-flex; }
+.vp-ref .zzz-3d span { font-size: 16px; animation: zzz-3d 1.8s ease-in-out infinite; }
+.vp-ref .zzz-3d span:nth-child(2) { font-size: 13px; animation-delay: .3s; }
+.vp-ref .zzz-3d span:nth-child(3) { font-size: 10px; animation-delay: .6s; }
+@keyframes zzz-3d { 50% { transform: translateY(-4px); opacity: .55; } }
+/* Nhìn từ xa: gọn bảng tên cho đỡ rối */
+.vp-ref .vp3d-nhan.xa .ten-3d small, .vp-ref .vp3d-nhan.xa .viec-cho { display: none; }
+.vp-ref .vp3d-nhan.xa .nguoi-3d:not(.thu-ky):not(.hover) .bong-3d { display: none; }
+.vp-ref .vp3d-nhan.xa .ten-3d { font-size: 11px; padding: 2px 7px 2px 6px; }
+.vp-ref .nhan-phong-3d {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; pointer-events: none;
+  padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 13px;
+  color: color-mix(in srgb, var(--mau, var(--chu-phu)) 75%, var(--chu));
+  background: color-mix(in srgb, var(--mau, var(--chu-phu)) 14%, var(--be-mat));
+  border: 1px solid color-mix(in srgb, var(--mau, var(--chu-phu)) 40%, var(--vien)); box-shadow: 0 2px 8px rgba(30, 20, 10, .12);
+}
+.vp-ref .nhan-phong-3d i { width: 9px; height: 9px; border-radius: 2px; background: var(--mau, var(--chu-phu)); transform: rotate(45deg); }
+
+/* ours: names are not clickable here (the reference used them for voice call-by-name) */
+.vp-ref .ten-3d { cursor: default; }
+.stage-vp > .vp3d-stage { position: absolute; inset: 0; }
