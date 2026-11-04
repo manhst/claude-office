@@ -1,5 +1,5 @@
 // One-off asset prep (not run in CI): node prune-model.mjs <UAL1_Standard.glb> <out.glb>
-// Needs: npm i --no-save @gltf-transform/core @gltf-transform/functions @gltf-transform/extensions
+// Uses the @gltf-transform devDependencies of web/ (npm install in web/ first). Run from web/: node scripts/prune-model.mjs <in> <out>
 // Keeps the 5 clips the office uses, drops orphaned animation data, then resamples, dedups and quantizes.
 import { NodeIO } from '@gltf-transform/core';
 import { prune, resample, dedup, quantize } from '@gltf-transform/functions';

@@ -112,15 +112,22 @@ export function clipFor(phase: Phase, state: AgentUI['state']): Clip {
 }
 
 /** Screen-space label de-overlap. Name labels ("fixed") are placed first and only move to clear another name
- *  (e.g. a visitor standing next to its host); bubbles/cards/results are then pushed up until clear of everything. */
+ *  (e.g. a visitor standing next to its host); bubbles/cards/results are then pushed up until clear of everything,
+ *  but never above minY (the canvas top): a stack that would leave the canvas continues below its blocker instead. */
 export interface LabelBox { id: string; x: number; y: number; w: number; h: number; fixed: boolean }
-export function resolveOverlaps(boxes: LabelBox[], gap = 4, maxIter = 40): Record<string, number> {
+export function resolveOverlaps(boxes: LabelBox[], gap = 4, maxIter = 40, minY = -Infinity): Record<string, number> {
   const dy: Record<string, number> = {}; const placed: LabelBox[] = [];
   const ov = (a: LabelBox, b: LabelBox) => a.x < b.x + b.w + gap && a.x + a.w + gap > b.x && a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
   const byLowest = (a: LabelBox, b: LabelBox) => b.y - a.y || a.x - b.x;
   for (const b0 of [...boxes.filter((b) => b.fixed).sort(byLowest), ...boxes.filter((b) => !b.fixed).sort(byLowest)]) {
     const b = { ...b0 };
-    for (let i = 0; i < maxIter; i++) { const hit = placed.find((p) => ov(b, p)); if (!hit) break; b.y = hit.y - b.h - gap; }
+    let down = false; // stack upward; once that would leave the canvas, keep going below the blockers instead
+    for (let i = 0; i < maxIter; i++) {
+      const hit = placed.find((p) => ov(b, p)); if (!hit) break;
+      const up = hit.y - b.h - gap;
+      if (!down && (up >= minY || b.fixed)) b.y = up; else { down = true; b.y = hit.y + hit.h + gap; }
+    }
+    if (!b.fixed && b.y < minY) b.y = minY;
     placed.push(b); dy[b.id] = b.y - b0.y;
   }
   return dy;

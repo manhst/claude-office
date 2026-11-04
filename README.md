@@ -71,3 +71,9 @@ fails to load, each avatar falls back to a capsule.
 
 To add or swap a model: put a CC0 skinned GLB in `web/public/models/` that has clips with the names above, then point `modelUrl()` in
 `web/src/Character.tsx` at it. For testing, `?model=<file>.glb` in the URL overrides the file name. Only use CC0 assets.
+
+## Known issues
+
+- Message arcs are drawn desk-to-desk (seat to seat), not from the walking agent's current position, so while an agent is
+  visiting a colleague the arc still starts at its empty seat.
+- The sitting pose hovers slightly above the simple box chair; the chair and seat height are not fitted to the animation.

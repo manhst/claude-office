@@ -51,7 +51,8 @@ function useLabelLayout(stage: React.RefObject<HTMLElement | null>) {
       const els = [...(stage.current?.querySelectorAll<HTMLElement>('[data-lbl]') ?? [])];
       const boxes: LabelBox[] = els.map((el, i) => { const r = el.getBoundingClientRect(), cur = Number(el.dataset.dy ?? 0);
         return { id: String(i), x: r.left, y: r.top - cur, w: r.width, h: r.height, fixed: el.dataset.lbl === 'fixed' }; }).filter((b) => b.w > 0);
-      const dy = resolveOverlaps(boxes);
+      const top = stage.current?.getBoundingClientRect().top ?? 0;
+      const dy = resolveOverlaps(boxes, 4, 40, top + 4);
       boxes.forEach((b) => { const el = els[Number(b.id)], v = Math.round(dy[b.id] ?? 0); if (Number(el.dataset.dy ?? 0) !== v) { el.dataset.dy = String(v); el.style.transform = `translateY(${v}px)`; } });
     }, 120);
     return () => clearInterval(t);

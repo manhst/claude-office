@@ -76,6 +76,15 @@ describe('label layout', () => {
     expect(dy.name).toBe(0); expect(dy.far).toBe(0);
     expect(105 + dy.card1 + 30).toBeLessThanOrEqual(100); expect(100 + dy.card2 + 30).toBeLessThanOrEqual(105 + dy.card1);
   });
+  it('stacks never leave the canvas: with minY, cards that would go above it drop below the blocker', () => {
+    const boxes = [{ id: 'name', x: 0, y: 40, w: 100, h: 20, fixed: true },
+      { id: 'c1', x: 0, y: 35, w: 100, h: 30, fixed: false }, { id: 'c2', x: 0, y: 30, w: 100, h: 30, fixed: false }];
+    const dy = resolveOverlaps(boxes, 4, 40, 0);
+    const placed = boxes.map((b) => ({ ...b, y: b.y + dy[b.id] }));
+    expect(placed.every((b) => b.y >= 0)).toBe(true);
+    const hit = (a: any, b: any) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    expect(placed.some((a, i) => placed.some((b, j) => j > i && hit(a, b)))).toBe(false);
+  });
   it('two names at the same spot (visitor beside host) are stacked, not overlapped', () => {
     const dy = resolveOverlaps([{ id: 'host', x: 0, y: 100, w: 80, h: 20, fixed: true }, { id: 'visitor', x: 30, y: 98, w: 80, h: 20, fixed: true }]);
     expect(dy.host).toBe(0); expect(98 + dy.visitor + 20).toBeLessThanOrEqual(100);
