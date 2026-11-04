@@ -17,3 +17,4 @@ export const IconState = (p: P) => <Svg {...p}><path d="M3 8h4l1.5-3 2 6L12 8h1"
 export const IconDot = (p: P) => <Svg {...p}><circle cx="8" cy="8" r="4" fill="currentColor" stroke="none" /></Svg>;
 export const IconGrid = (p: P) => <Svg {...p}><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1" /><rect x="2.5" y="9" width="4.5" height="4.5" rx="1" /><rect x="9" y="9" width="4.5" height="4.5" rx="1" /></Svg>;
 export const IconCube = (p: P) => <Svg {...p}><path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5z" /><path d="M2.5 5 8 8.2 13.5 5M8 8.2v6" /></Svg>;
+export const IconOffice = (p: P) => <Svg {...p}><path d="M2.5 13.5h11M3.5 13.5V6l4.5-3 4.5 3v7.5" /><path d="M6.5 13.5V10h3v3.5" /></Svg>;

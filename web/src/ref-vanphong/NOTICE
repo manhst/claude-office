@@ -1,0 +1,12 @@
+Source: VanphongAI by Phuc, shared with Manh, no license, used at Manh's direction. Do not publish until Phuc's permission is confirmed.
+
+Origin of the files in this folder (reference copy: /workspace/vo-ref/src/VanphongAI-main/app/public, read-only):
+- characters.ts  <- van_phong_3d.js (dungNguoi, toc, phuKien, khoi) + nhan_vat.js (chuanHoa, tronMau, presets).
+                    Geometry, colours and hair/accessory recipes copied verbatim; converted to a typed ES module using npm `three`.
+- scene.ts       <- van_phong_3d.js (anhSan, cayCanh, cuaSo, dungNen, choNgoi, dungPhong, capNhatNguoi, bayPhieu,
+                    datNgayDem, camera/zoom helpers). Copied with adaptations: driven by our reducer state, our walker
+                    (web/src/walk.ts) instead of the help-desk route map, no server room / store-room door / reception / lobby.
+- vanphong.css   <- style.css (:root palette, .nguoi-3d / .ten-3d / .bong-3d / .zzz-3d / .nhan-phong-3d / .nut-3d / .vp3d-*),
+                    scoped under .vp-ref. Copied verbatim except scoping and dropped selectors.
+- adapter.ts     <- new code (ours): maps our AgentUI/MessageUI to the reference's display states.
+The reference's vendored three.js (MIT, see its LICENSE) is NOT copied; we use our npm `three` (MIT).

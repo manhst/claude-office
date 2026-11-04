@@ -5,8 +5,9 @@ import type { OfficeEvent } from './types';
 import { STATE_COLORS, loadView, saveView, type ViewMode } from './layout';
 import { Office2D } from './Office2D';
 import { EventLog } from './EventLog';
-import { IconCube, IconDot, IconGrid } from './icons';
+import { IconCube, IconDot, IconGrid, IconOffice } from './icons';
 const Office3D = lazy(() => import('./Office3D')); // separate chunk: three/R3F/drei only load in 3D view
+const VanphongView = lazy(() => import('./ref-vanphong/VanphongView')); // ported reference visuals, own chunk (see ref-vanphong/NOTICE)
 function useNow(ms = 250) { const [n, set] = useState(Date.now()); useEffect(() => { const t = setInterval(() => set(Date.now()), ms); return () => clearInterval(t); }, [ms]); return n; }
 const store = typeof localStorage === 'undefined' ? undefined : localStorage;
 export function App() {
@@ -25,10 +26,12 @@ export function App() {
         <div className="toggle" role="group" aria-label="View">
           <button aria-pressed={view === '2d'} onClick={() => pick('2d')} data-testid="view-2d"><IconGrid />2D</button>
           <button aria-pressed={view === '3d'} onClick={() => pick('3d')} data-testid="view-3d"><IconCube />3D</button>
+          <button aria-pressed={view === 'vanphong'} onClick={() => pick('vanphong')} data-testid="view-vanphong"><IconOffice />Vanphong</button>
         </div><Legend /></header>
       <main>
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
           : view === '3d' ? <Suspense fallback={<div className="empty stage3d">Loading 3D…</div>}><Office3D s={s} now={now} /></Suspense>
+          : view === 'vanphong' ? <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} /></Suspense>
           : <Office2D s={s} now={now} />}
         <EventLog s={s} />
       </main>
