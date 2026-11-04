@@ -1,4 +1,3 @@
-import type { AgentUI, MessageUI } from './reducer';
 export const STATE_COLORS: Record<string, string> = { idle: '#94a3b8', thinking: '#a78bfa', working: '#f59e0b', talking: '#38bdf8', done: '#22c55e', error: '#ef4444' };
 export const MSG_MS = 4000, BUBBLE_MS = 8000, DESK_COLS = 3, DESK_COUNT = 6;
 export type Vec3 = [number, number, number];
@@ -11,14 +10,6 @@ export const allDesks = (): { x: number; y: number }[] => Array.from({ length: D
 /** Avatar sits on the camera side of its desk, facing the monitor (+z = toward camera). */
 export const SEAT_OFFSET: Vec3 = [0, 0, 0.95];
 export const DOOR: Vec3 = [0, 0, -7];
-/** Where an avatar should be now: at its seat, or leaning ~45% of the way toward a colleague while its question is in flight. */
-export function avatarTarget(a: AgentUI, agents: Record<string, AgentUI>, messages: MessageUI[], now: number): Vec3 {
-  const seat = add(deskWorld(a.desk), SEAT_OFFSET);
-  const m = [...messages].reverse().find((x) => x.from === a.id && x.kind === 'ask' && now - x.ts < MSG_MS && agents[x.to]);
-  if (!m) return seat;
-  const other = add(deskWorld(agents[m.to].desk), SEAT_OFFSET);
-  return lerp3(seat, other, 0.45);
-}
 export const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];

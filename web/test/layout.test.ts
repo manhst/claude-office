@@ -1,24 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { deskWorld, allDesks, avatarTarget, damp, damp3, lerp3, clampTarget, cardPosition, loadView, saveView, SEAT_OFFSET, add, MSG_MS } from '../src/layout';
-import type { AgentUI } from '../src/reducer';
-const ag = (id: string, x: number, y = 0): AgentUI => ({ id, role: id, name: id, state: 'idle', desk: { x, y }, tools: [] });
+import { deskWorld, allDesks, damp, damp3, lerp3, clampTarget, cardPosition, loadView, saveView } from '../src/layout';
 describe('3D layout', () => {
   it('6 desks, centred grid, unique positions', () => {
     const ps = allDesks().map(deskWorld);
     expect(ps).toHaveLength(6); expect(new Set(ps.map((p) => p.join())).size).toBe(6);
     expect(ps.reduce((s, p) => s + p[0], 0)).toBeCloseTo(0); expect(ps.reduce((s, p) => s + p[2], 0)).toBeCloseTo(0);
     expect(ps.every((p) => p[1] === 0)).toBe(true);
-  });
-  it('avatar sits at its seat, leans toward the colleague while asking, then returns', () => {
-    const agents = { a: ag('a', 0), b: ag('b', 2) };
-    const seatA = add(deskWorld({ x: 0, y: 0 }), SEAT_OFFSET), seatB = add(deskWorld({ x: 2, y: 0 }), SEAT_OFFSET);
-    expect(avatarTarget(agents.a, agents, [], 0)).toEqual(seatA);
-    const msgs = [{ from: 'a', to: 'b', text: 'q', kind: 'ask' as const, ts: 1000 }];
-    const t = avatarTarget(agents.a, agents, msgs, 1500);
-    expect(t[0]).toBeGreaterThan(seatA[0]); expect(t[0]).toBeLessThan(seatB[0]);
-    expect(avatarTarget(agents.a, agents, msgs, 1000 + MSG_MS + 1)).toEqual(seatA);
-    expect(avatarTarget(agents.b, agents, msgs, 1500)).toEqual(seatB); // only the asker moves
-    expect(avatarTarget(agents.a, agents, [{ ...msgs[0], kind: 'reply' }], 1500)).toEqual(seatA);
   });
 });
 describe('lerp / damp', () => {

@@ -52,9 +52,9 @@ export class OfficeServer {
       if (!file.startsWith(this.opts.staticDir + sep)) { res.writeHead(403, sec).end(); return; }
       try {
         const data = await readFile(file);
-        const types: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+        const types: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.glb': 'model/gltf-binary', '.txt': 'text/plain; charset=utf-8' };
         res.writeHead(200, { ...sec, 'content-type': types[extname(file)] ?? 'application/octet-stream',
-          'content-security-policy': "default-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }).end(data);
+          'content-security-policy': "default-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:" }).end(data);
         return;
       } catch { /* fallthrough */ }
     }
