@@ -277,6 +277,7 @@ export class VanphongScene {
       const cho = a.state === 'working' && a.tool ? (a.tool.ok === false ? 'failed' : a.tool.ok ? 'ok' : 'tool') : '';
       if (n.choEl.textContent !== cho) n.choEl.textContent = cho;
     }
+    for (const [id, n] of this.nguoi) if (!s.agents[id]) { this.nhom.remove(n.ngoi.goc, n.dung.goc); n.el.remove(); this.nguoi.delete(id); } // session left
     const nAgents = s.order.length; this.roomLabel.textContent = nAgents ? `${nAgents} ${nAgents === 1 ? 'person' : 'people'}` : 'empty';
     for (const m of newFlights(s, this.lastMsg)) this.bayPhieu(m.from, m.to);
     if (s.messages.length) this.lastMsg = Math.max(this.lastMsg, ...s.messages.map((m) => m.ts));

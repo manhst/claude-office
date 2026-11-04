@@ -1,12 +1,12 @@
-import type { AgentState, OfficeEvent } from './types';
+import type { AgentState, OfficeEvent, SessionView } from './types';
 export type ConnStatus = 'no-token' | 'connecting' | 'open' | 'reconnecting';
 export interface ToolChip { callId: string; name: string; summary: string; ok?: boolean; ts: number }
-export interface AgentUI { id: string; role: string; name: string; state: AgentState; desk: { x: number; y: number }; tools: string[]; text?: string; textTs?: number; tool?: ToolChip; result?: string; costUsd?: number; error?: string }
+export interface AgentUI { id: string; role: string; name: string; state: AgentState; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string; text?: string; textTs?: number; tool?: ToolChip; result?: string; costUsd?: number; error?: string }
 export interface MessageUI { from: string; to: string; text: string; kind: 'ask' | 'reply'; ts: number }
-export interface OfficeState { conn: ConnStatus; retries: number; agents: Record<string, AgentUI>; order: string[]; messages: MessageUI[]; log: OfficeEvent[]; notices: { text: string; ts: number }[] }
+export interface OfficeState { conn: ConnStatus; retries: number; agents: Record<string, AgentUI>; order: string[]; messages: MessageUI[]; log: OfficeEvent[]; sessions: SessionView[]; notices: { text: string; ts: number }[] }
 export type Action = { type: 'event'; e: OfficeEvent } | { type: 'conn'; status: ConnStatus; retries?: number };
 export const MAX_LOG = 200, MAX_MSG = 30, BUBBLE_MAX = 140;
-export const initialState = (conn: ConnStatus = 'connecting'): OfficeState => ({ conn, retries: 0, agents: {}, order: [], messages: [], log: [], notices: [] });
+export const initialState = (conn: ConnStatus = 'connecting'): OfficeState => ({ conn, retries: 0, agents: {}, order: [], messages: [], log: [], sessions: [], notices: [] });
 export const truncate = (s: string, n = BUBBLE_MAX) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
 const push = <T,>(arr: T[], x: T, max: number) => (arr.length >= max ? [...arr.slice(arr.length - max + 1), x] : [...arr, x]);
 function patch(s: OfficeState, id: string, p: Partial<AgentUI>): OfficeState {
@@ -18,17 +18,24 @@ export function reduce(s: OfficeState, act: Action): OfficeState {
   if (act.type === 'conn') return { ...s, conn: act.status, retries: act.retries ?? (act.status === 'open' ? 0 : s.retries) };
   const e = act.e;
   if (!e || typeof e !== 'object' || typeof (e as any).t !== 'string') return s;
-  const logged = e.t === 'office.snapshot' ? s : { ...s, log: push(s.log, e, MAX_LOG) };
+  const logged = e.t === 'office.snapshot' || e.t === 'sessions.update' ? s : { ...s, log: push(s.log, e, MAX_LOG) };
   switch (e.t) {
     case 'office.snapshot': {
       const agents: Record<string, AgentUI> = {};
       for (const v of e.agents) agents[v.id] = { ...s.agents[v.id], tools: s.agents[v.id]?.tools ?? [], id: v.id, role: v.role, name: v.name, state: v.state, desk: v.desk };
-      return { ...s, agents, order: e.agents.map((v) => v.id) };
+      for (const ss of e.sessions ?? []) for (const id of ss.agentIds) if (agents[id]) agents[id].sessionId = ss.sid;
+      return { ...s, agents, order: e.agents.map((v) => v.id), sessions: e.sessions ?? s.sessions };
     }
     case 'agent.spawned': {
       const prev = logged.agents[e.id];
-      return { ...logged, agents: { ...logged.agents, [e.id]: { ...prev, id: e.id, role: e.role, name: e.name, desk: e.desk, tools: e.tools, state: prev?.state ?? 'idle' } },
+      return { ...logged, agents: { ...logged.agents, [e.id]: { ...prev, id: e.id, role: e.role, name: e.name, desk: e.desk, tools: e.tools, sessionId: e.sessionId, model: e.model, state: prev?.state ?? 'idle' } },
         order: logged.order.includes(e.id) ? logged.order : [...logged.order, e.id] };
+    }
+    case 'sessions.update': return { ...s, sessions: e.sessions };
+    case 'agent.left': {
+      if (!logged.agents[e.id]) return logged;
+      const { [e.id]: _gone, ...agents } = logged.agents;
+      return { ...logged, agents, order: logged.order.filter((x) => x !== e.id) };
     }
     case 'agent.state': return patch(logged, e.id, { state: e.state });
     case 'agent.text': return patch(logged, e.id, { text: truncate(e.text), textTs: e.ts });

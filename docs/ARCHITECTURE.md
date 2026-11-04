@@ -1,5 +1,7 @@
 # Văn phòng ảo (Virtual Office) — Architecture (draft, Step A)
 
+> **Superseded (2026-11-04):** the office no longer spawns `claude -p` or defines roles. Sessions are reported by the `office` mod (`mod/`); see README. This doc is kept for history.
+
 ## 0. Mods API verdict (checked 2026-11-04)
 Claude Code **Mods are real and documented** (plugins/mods):
 - API (`$.command.register`, `$.tool.register`, `$.agent.spawn`, `$.session.send`, `$.ui.status/toast`, `$.process.spawn`, `$.http.fetch`): https://code.claude.com/docs/en/plugins/mods/api

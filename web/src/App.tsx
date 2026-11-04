@@ -5,6 +5,8 @@ import type { OfficeEvent } from './types';
 import { STATE_COLORS, loadView, saveView, type ViewMode } from './layout';
 import { Office2D } from './Office2D';
 import { EventLog } from './EventLog';
+import { SessionPanel } from './SessionPanel';
+import { pickSelected } from './sessionView';
 import { IconCube, IconDot, IconGrid, IconOffice } from './icons';
 const Office3D = lazy(() => import('./Office3D')); // separate chunk: three/R3F/drei only load in 3D view
 const VanphongView = lazy(() => import('./ref-vanphong/VanphongView')); // ported reference visuals, own chunk (see ref-vanphong/NOTICE)
@@ -19,6 +21,8 @@ export function App() {
     return connect(boot.wsUrl, boot.token, (e) => dispatch({ type: 'event', e: e as OfficeEvent }), (status, retries) => dispatch({ type: 'conn', status, retries }));
   }, [boot]);
   const now = useNow();
+  const [picked, setPicked] = useState<string>();
+  const selected = pickSelected(s.sessions, picked);
   const pick = (v: ViewMode) => { setView(v); saveView(store, v); };
   return (
     <div className="app">
@@ -32,8 +36,8 @@ export function App() {
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
           : view === '3d' ? <Suspense fallback={<div className="empty stage3d">Loading 3D…</div>}><Office3D s={s} now={now} /></Suspense>
           : view === 'vanphong' ? <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} /></Suspense>
-          : <Office2D s={s} now={now} />}
-        <EventLog s={s} />
+          : <Office2D s={s} now={now} selected={selected} onSelect={setPicked} />}
+        <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><EventLog s={s} /></div>
       </main>
     </div>
   );

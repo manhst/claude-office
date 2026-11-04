@@ -9,9 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -p .",
-    "screens": "vite build && node scripts/screens.mjs",
-    "screens3": "vite build && node scripts/screens3.mjs",
-    "screens4": "vite build && node scripts/screens4.mjs"
+    "screens": "vite build && node scripts/screens-sessions.mjs"
   },
   "keywords": [],
   "author": "",

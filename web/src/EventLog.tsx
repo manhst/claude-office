@@ -12,6 +12,7 @@ export function describe(e: OfficeEvent, s: OfficeState): { icon: ReactNode; tex
     case 'agent.message': return { icon: e.kind === 'reply' ? <IconReply /> : <IconMail />, text: `${n(e.from)} to ${n(e.to)}: ${e.text}` };
     case 'agent.done': return { icon: <IconCheck />, text: `${n(e.id)} done${e.costUsd != null ? ` ($${e.costUsd.toFixed(3)})` : ''}` };
     case 'agent.error': return { icon: <IconCross />, text: `${n(e.id)} ERROR ${e.error}` };
+    case 'agent.left': return { icon: <IconCross />, text: `${n(e.id)} left` };
     case 'office.notice': return { icon: <IconWarn />, text: e.text };
     default: return null;
   }
