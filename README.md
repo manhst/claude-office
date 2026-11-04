@@ -34,7 +34,7 @@ orchestrator/node_modules/.bin/tsx orchestrator/src/cli.ts start --office --keep
 
 From inside Claude Code you can run `/office-start <task>` instead (set `OFFICE_MOCK=1` for the mock driver).
 
-Open the UI by copying the URL from `orchestrator/.run/ui-url.txt` (mode 600) into your browser. The URL carries the per-run
+Easiest: double-click `start.cmd` (Windows) or `start.command` (Mac), or run `start.cmd mock "task"` / `./start.command mock "task"`; it installs, builds and opens the browser with the token URL. Otherwise, open the UI by copying the URL from `orchestrator/.run/ui-url.txt` (mode 600) into your browser. The URL carries the per-run
 token in its fragment, and that token is never printed or logged. Useful flags: `--port`, `--mock-delay <ms>`,
 `--start-delay <ms>`, and `--role`.
 
