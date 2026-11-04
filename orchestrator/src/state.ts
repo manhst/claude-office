@@ -1,12 +1,13 @@
 import type { AgentState } from './types.js';
-export type StateInput = 'task' | 'tool_use' | 'tool_result' | 'text' | 'quiet' | 'ask' | 'reply' | 'result' | 'fail';
+export type StateInput = 'task' | 'tool_use' | 'tool_result' | 'text' | 'quiet' | 'ask' | 'reply' | 'result' | 'fail' | 'resume';
 /** Pure transition function for the per-agent state machine (ARCHITECTURE §3). Returns same state if input is ignored. */
 export function transition(s: AgentState, i: StateInput): AgentState {
-  if (s === 'done' || s === 'error') return s; // terminal
+  if (s === 'done' && i === 'resume') return 'thinking'; // new turn (message delivered via --resume)
+  if (s === 'done' || s === 'error') return s; // terminal otherwise
   if (i === 'result') return 'done';
   if (i === 'fail') return 'error';
   switch (s) {
-    case 'idle': return i === 'task' ? 'thinking' : s;
+    case 'idle': return i === 'task' || i === 'resume' ? 'thinking' : s;
     case 'thinking':
       if (i === 'tool_use') return 'working';
       if (i === 'text' || i === 'ask') return 'talking';
@@ -14,6 +15,7 @@ export function transition(s: AgentState, i: StateInput): AgentState {
     case 'working':
       if (i === 'tool_result') return 'thinking';
       if (i === 'tool_use') return 'working';
+      if (i === 'ask') return 'talking';
       return s;
     case 'talking':
       if (i === 'quiet' || i === 'reply') return 'thinking';

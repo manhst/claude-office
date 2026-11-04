@@ -23,3 +23,9 @@ describe('agent state machine', () => {
     sm.feed('task'); sm.feed('tool_result'); sm.feed('quiet'); expect(n).toBe(1);
   });
 });
+describe('phase-2 transitions', () => {
+  it('done → thinking only on resume; error stays', () => {
+    expect(transition('done', 'resume')).toBe('thinking'); expect(transition('error', 'resume')).toBe('error');
+    expect(transition('working', 'ask')).toBe('talking'); expect(transition('idle', 'resume')).toBe('thinking');
+  });
+});
