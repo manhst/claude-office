@@ -64,13 +64,25 @@ function send($: Any, st: State, type: string): Promise<void> {
   return st.queue;
 }
 function setState($: Any, st: State, s: string, t: State['tool'], type = t ? 'tool' : 'state') { st.state = s; st.tool = t; void send($, st, type); }
-async function heartbeat($: Any, st: State) { await readTitle($, st); await send($, st, 'heartbeat'); }
+async function heartbeat($: Any, st: State) { await follow($, st); await readTitle($, st); await send($, st, 'heartbeat'); }
+/** Per-session fields. The module lives as long as the process, which can move to another session (/resume, /clear) after session.end. */
+function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined }); }
+/** If the engine now reports another session id, start reporting that session. */
+async function follow($: Any, st: State) {
+  if (st.quiet || !st.sid) return;
+  let id = ''; try { id = String(await $.session.id()); } catch { return; }
+  if (id && id !== st.sid) { reset(st, id); await begin($, st); }
+}
 async function start($: Any, st: State, e: Any) {
   st.quiet = ((await $.env.get('CLAUDE_CODE_ENTRYPOINT')) ?? '') === 'sdk-cli'; // headless claude -p
   if (st.quiet) return;
-  st.sid = String(await $.session.id());
+  const sid = String(await $.session.id());
+  if (sid !== st.sid) reset(st, sid); else st.ended = false;
   st.cwd = String(e?.cwd ?? '');
   try { st.root = (await $.session.repo())?.root ?? st.cwd; } catch { st.root = st.cwd; }
+  await begin($, st);
+}
+async function begin($: Any, st: State) {
   const home = (await $.env.get('USERPROFILE')) || (await $.env.get('HOME')) || '';
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '');
   if (!st.transcript) st.transcript = config && st.cwd ? transcriptPath(config, st.cwd, st.sid) : '';
@@ -95,7 +107,11 @@ export const register: Register = (on: Any, options: Any) => {
     } catch { /* never break the session */ }
     return next(e);
   });
-  on('turn.start', ($: Any, e: Any, next: Any) => { if (e?.agentId === undefined) setState($, st, 'thinking', null); else void send($, st, 'subagents'); return next(e); });
+  on('turn.start', async ($: Any, e: Any, next: Any) => {
+    try { await follow($, st); } catch { /* never break the session */ }
+    if (e?.agentId === undefined) setState($, st, 'thinking', null); else void send($, st, 'subagents');
+    return next(e);
+  });
   on('tool.call', async ($: Any, e: Any, next: Any) => {
     if (next?.origin?.plugin === 'engine') {
       const name = String(e?.tool ?? 'tool');

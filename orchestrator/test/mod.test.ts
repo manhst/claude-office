@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { register, toolDetail, titleFromJsonl, transcriptPath } from '../../mod/office/hooks/register.js';
 // Fake engine matching the API used by usage-esp: register(on, options); on(name, ($, e, next) => ...) returns { catch }.
 function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' }, files: Record<string, string> = {}) {
-  const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; let beat: (() => any) | undefined; let everyCalls = 0;
+  const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; let beat: (() => any) | undefined; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
   const on = (n: string, fn: any) => { h[n] = fn; return { catch: () => {} }; };
   const $ = {
     env: { get: async (k: string) => env[k] },
-    session: { id: async () => '3f2a9c1e-1111-2222-3333-444455556666', repo: async () => ({ root: 'C:/Users/m/proj' }), usage: async () => ({ cost: { usd: 0.42 } }) },
+    session: { id: async () => sid, repo: async () => ({ root: 'C:/Users/m/proj' }), usage: async () => ({ cost: { usd: 0.42 } }) },
     agent: { list: async () => [{ type: 'coder', description: 'step 1', status: 'running' }] },
     http: { fetch: async (url: string, o: any) => { posts.push({ url, ...JSON.parse(o.body), ct: o.headers['content-type'] }); return { ok: true, text: async () => '' }; } },
     fs: { exists: async (p: string) => p in files, read: async (p: string) => files[p], list: async () => [] },
@@ -14,7 +14,7 @@ function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' },
   };
   const next: any = (e: any) => e; next.origin = { plugin: 'engine' };
   const fire = (n: string, e: any = {}, nx = next) => h[n]($, e, nx);
-  return { on, posts, fire, beat: () => beat?.(), next, everyCalls: () => everyCalls };
+  return { on, posts, fire, beat: () => beat?.(), next, everyCalls: () => everyCalls, setSid: (s: string) => { sid = s; } };
 }
 const flush = () => new Promise((r) => setTimeout(r, 20));
 import { readFileSync } from 'node:fs';
@@ -71,6 +71,15 @@ describe('office mod (usage-esp API)', () => {
     await f.fire('session.start', { cwd: '/p' }); expect(f.everyCalls()).toBe(1); // heartbeat registered once
     await f.beat(); await flush();
     expect(f.posts.at(-1)).toMatchObject({ type: 'heartbeat', title: 'Named', transcript: '/t.jsonl', url: 'http://127.0.0.1:7777/event' });
+  });
+  it('follows the next session after session.end in the same process (/resume, /clear)', async () => {
+    const f = fakeEngine(); register(f.on, {});
+    await f.fire('session.start', { cwd: 'C:/Users/m/proj' }); await f.fire('session.end', {}); await flush();
+    f.setSid('9e8d7c6b-aaaa-bbbb-cccc-ddddeeeeffff'); await f.fire('turn.start', {}); await flush();
+    expect(f.posts.map((p) => [p.type, p.sid.slice(0, 4)])).toEqual([['start', '3f2a'], ['end', '3f2a'], ['start', '9e8d'], ['state', '9e8d']]);
+    expect(f.posts[2]).toMatchObject({ project: 'proj', transcript: transcriptPath('C:/Users/m/.claude', 'C:/Users/m/proj', '9e8d7c6b-aaaa-bbbb-cccc-ddddeeeeffff') });
+    await f.fire('session.end', {}); f.setSid('1234abcd-0000-0000-0000-000000000000'); await f.beat(); await flush(); // no turn yet: the heartbeat picks it up
+    expect(f.posts.slice(-2).map((p) => [p.type, p.sid.slice(0, 4)])).toEqual([['start', '1234'], ['heartbeat', '1234']]);
   });
   it('skips headless sdk-cli sessions and non-loopback endpoints', async () => {
     const a = fakeEngine({ CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' }); register(a.on, {}); await a.fire('session.start', { cwd: '/p' }); await a.fire('turn.start', {}); await flush();
