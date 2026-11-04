@@ -1,0 +1,14 @@
+{
+  "name": "office",
+  "version": "0.1.0",
+  "description": "Shows this Claude Code session in the virtual office: state, current tool, subagents. Posts only to a loopback endpoint.",
+  "author": { "name": "Manh" },
+  "userConfig": {
+    "endpoint": {
+      "type": "string",
+      "title": "Office endpoint",
+      "description": "Where to POST session events. Must be a loopback URL (the office server only accepts 127.0.0.1).",
+      "default": "http://127.0.0.1:7777/event"
+    }
+  }
+}

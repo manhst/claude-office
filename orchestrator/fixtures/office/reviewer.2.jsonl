@@ -1,2 +1,0 @@
-{"type": "assistant", "message": {"id": "msg_rev21", "type": "message", "role": "assistant", "model": "claude-sonnet-4-5", "content": [{"type": "text", "text": "Understood, the org-wide disable question is out of my lane; noting it for the researcher's summary."}]}, "session_id": "c41d9f07-9e5a-4b8c-a3f2-61e0d7b5c903"}
-{"type": "result", "subtype": "success", "is_error": false, "duration_ms": 2100, "result": "Noted; no further action.", "session_id": "c41d9f07-9e5a-4b8c-a3f2-61e0d7b5c903", "total_cost_usd": 0.004}

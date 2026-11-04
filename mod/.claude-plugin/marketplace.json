@@ -1,0 +1,7 @@
+{
+  "name": "office-mods",
+  "owner": { "name": "Manh" },
+  "plugins": [
+    { "name": "office", "source": "./office", "description": "Reports this Claude Code session's activity to the local virtual office (127.0.0.1:7777)." }
+  ]
+}
