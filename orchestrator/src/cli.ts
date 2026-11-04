@@ -1,59 +1,47 @@
 import { resolve, dirname, join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { CliDriver, MockDriver } from './driver.js';
-import { Orchestrator } from './orchestrator.js';
-import { OfficeServer, newToken, redactUrl } from './server.js';
+import { SessionTracker } from './sessions.js';
+import { OfficeServer, newToken } from './server.js';
 import { JsonlLog } from './log.js';
-import { ROLES } from './types.js';
+import { simulate } from './simulate.js';
 const here = dirname(fileURLToPath(import.meta.url));
-export interface StartOpts { task: string; mock: boolean; role: string; port: number; logDir: string; fixture: string; keepAlive: boolean; printToken: boolean; mockDelay: number; startDelay: number; office: boolean; webDir: string }
+export interface StartOpts { demo: boolean; port: number; logDir: string; printToken: boolean; webDir: string; stepMs: number; userAgentsDir?: string }
 export function parseArgs(argv: string[]): StartOpts {
-  const o: StartOpts = { task: '', mock: process.env.OFFICE_MOCK === '1', role: 'researcher', port: 7777, logDir: resolve(here, '../logs'),
-    fixture: resolve(here, '../fixtures/researcher.stream.jsonl'), keepAlive: false, printToken: false, mockDelay: 150, startDelay: 150, office: false, webDir: resolve(here, '../../web/dist') };
-  const rest: string[] = [];
+  const o: StartOpts = { demo: process.env.OFFICE_DEMO === '1', port: 7777, logDir: resolve(here, '../logs'), printToken: false, webDir: resolve(here, '../../web/dist'), stepMs: 1500,
+    userAgentsDir: process.env.OFFICE_USER_AGENTS_DIR ?? join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'agents') };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--mock') o.mock = true; else if (a === '--role') o.role = argv[++i];
-    else if (a === '--port') o.port = Number(argv[++i]); else if (a === '--log-dir') o.logDir = resolve(argv[++i]);
-    else if (a === '--fixture') o.fixture = resolve(argv[++i]); else if (a === '--keep-alive') o.keepAlive = true;
-    else if (a === '--print-token') o.printToken = true; else if (a === '--mock-delay') o.mockDelay = Number(argv[++i]); else if (a === '--start-delay') o.startDelay = Number(argv[++i]);
-    else if (a === '--office') o.office = true; else if (a === '--single') o.office = false; else rest.push(a);
+    if (a === '--demo' || a === '--mock') o.demo = true; else if (a === '--port') o.port = Number(argv[++i]);
+    else if (a === '--log-dir') o.logDir = resolve(argv[++i]); else if (a === '--print-token') o.printToken = true;
+    else if (a === '--step-ms') o.stepMs = Number(argv[++i]); else if (a === '--user-agents') o.userAgentsDir = argv[++i] || undefined;
   }
-  o.task = rest.join(' ').trim();
+  if (o.demo && !process.env.OFFICE_USER_AGENTS_DIR && !argv.includes('--user-agents')) o.userAgentsDir = undefined; // demo stays deterministic (A/B/C fixtures only)
   return o;
 }
-export async function start(o: StartOpts, onReady?: (wsUrl: string, uiUrl: string) => void) {
-  const role = ROLES[o.role]; if (!role) throw new Error(`unknown role ${o.role}`);
-  if (!o.task) throw new Error('usage: start "task" [--mock] [--role researcher|coder|reviewer] [--port 7777]');
-  // --office: multi-agent mock fixtures (fixtures/office/<role>.<turn>.jsonl); default single fixture keeps phase-1 behaviour
-  const fixtures = o.office ? (r: string, t: number) => resolve(here, `../fixtures/office/${r}.${t}.jsonl`) : o.fixture;
-  const orch = new Orchestrator(o.mock ? new MockDriver(fixtures, o.mockDelay) : new CliDriver());
+/** Starts the office server. Sessions come from the `office` Claude Code mod (POST /event); --demo runs the built-in simulator. */
+export async function start(o: StartOpts) {
+  const tracker = new SessionTracker({ userAgentsDir: o.userAgentsDir });
   const token = newToken();
-  const server = new OfficeServer(token, () => orch.snapshot(), { onHook: (p) => orch.ingestHook(p), staticDir: existsSync(o.webDir) ? o.webDir : undefined });
+  const server = new OfficeServer(token, () => tracker.snapshot(), { onEvent: (p) => tracker.ingest(p), staticDir: existsSync(o.webDir) ? o.webDir : undefined });
   const log = new JsonlLog(join(o.logDir, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`));
-  orch.on((e) => { log.write(e); server.broadcast(e); console.log(JSON.stringify(e)); });
+  tracker.on((e) => { if (e.t !== 'sessions.update') log.write(e); server.broadcast(e); });
+  const sweep = setInterval(() => tracker.sweep(), 5000); sweep.unref();
   const port = await server.listen(o.port);
-  const wsUrl = `ws://127.0.0.1:${port}/ws?token=${token}`;
-  console.error(`[office] driver=${o.mock ? 'mock' : 'cli'} role=${role.role} log=${log.path}`);
   const uiUrl = `http://127.0.0.1:${port}/#token=${token}`;
   const runDir = resolve(here, '../.run'); mkdirSync(runDir, { recursive: true, mode: 0o700 });
   writeFileSync(join(runDir, 'ui-url.txt'), uiUrl + '\n', { mode: 0o600 });
-  console.error(`[office] WebSocket: ${o.printToken ? wsUrl : redactUrl(wsUrl)}  hook: POST http://127.0.0.1:${port}/hook (X-Office-Token)`);
+  console.error(`[office] mod events: POST http://127.0.0.1:${port}/event   log=${log.path}${o.demo ? '   (demo sessions)' : ''}`);
   console.error(`[office] UI: ${o.printToken ? uiUrl : uiUrl.replace(/#token=.*/, '#token=[REDACTED]')} (full URL in orchestrator/.run/ui-url.txt, mode 600)`);
-  onReady?.(wsUrl, uiUrl);
-  const stop = () => { orch.cancelAll(); server.close().then(() => process.exit(130)); };
-  process.once('SIGINT', stop);
-  await new Promise((r) => setTimeout(r, o.startDelay)); // let already-open UIs connect before the first event
-  const result = await orch.run(o.task, role.role);
-  console.error(`[office] agent finished: ${result}`);
-  if (!o.keepAlive) await server.close(); else console.error('[office] keep-alive: Ctrl-C to stop');
-  return { result, logPath: log.path };
+  if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
+  const close = async () => { clearInterval(sweep); await server.close(); };
+  return { port, token, tracker, server, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const [cmd, ...rest] = process.argv.slice(2);
-  if (cmd !== 'start') { console.error('usage: cli.ts start "task" [--mock]'); process.exit(2); }
-  const opts = parseArgs(rest);
-  start(opts).then((r) => { if (!opts.keepAlive) process.exit(r.result === 'done' ? 0 : 1); }, (e) => { console.error(`[office] ${e.message}`); process.exit(2); });
+  if (cmd !== 'start') { console.error('usage: cli.ts start [--demo] [--port 7777]'); process.exit(2); }
+  start(parseArgs(rest)).then((r) => { console.error('[office] running: Ctrl-C to stop'); process.once('SIGINT', () => r.close().then(() => process.exit(130))); },
+    (e) => { console.error(`[office] ${e.message}`); process.exit(2); });
 }

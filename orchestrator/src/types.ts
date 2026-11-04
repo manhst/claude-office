@@ -1,5 +1,22 @@
+// Wire schema shared with the web UI (web/src/types.ts re-exports these types).
 export type AgentState = 'idle' | 'thinking' | 'working' | 'talking' | 'done' | 'error';
 export interface AgentView { id: string; role: string; name: string; state: AgentState; desk: { x: number; y: number } }
+
+/** Agent profile loaded from markdown on this PC. source: A = .claude/agents, B = CLAUDE.md, C = default placeholder. */
+export type ProfileSource = 'agents' | 'claude-md' | 'default';
+export interface AgentProfile { name: string; description: string; tools: string[]; model?: string; body: string; file?: string; scope?: 'project' | 'user' }
+
+/** Session state as reported by the `office` mod. */
+export type SessionState = 'idle' | 'thinking' | 'tool' | 'waiting-permission' | 'done';
+export interface SubagentInfo { id?: string; type?: string; description?: string; status: string }
+export interface SessionView {
+  sid: string; project: string; cwd: string; title?: string; transcript?: string; state: SessionState;
+  tool?: { name: string; detail?: string; ts: number }; subagents: SubagentInfo[]; prompt?: string; costUsd?: number;
+  startedAt: number; lastSeen: number; source: ProfileSource; profiles: AgentProfile[];
+  /** office agent ids (desks) that belong to this session, same order as profiles (may be shorter when desks run out) */
+  agentIds: string[];
+}
+
 type Base = { ts: number };
 export type OfficeEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }
@@ -11,12 +28,7 @@ export type OfficeEvent = Base & (
   | { t: 'office.notice'; level: 'info' | 'warn'; text: string; id?: string }
   | { t: 'agent.done'; id: string; result: string; costUsd?: number; durationMs: number }
   | { t: 'agent.error'; id: string; error: string }
-  | { t: 'office.snapshot'; agents: AgentView[] }
+  | { t: 'agent.left'; id: string }
+  | { t: 'sessions.update'; sessions: SessionView[] }
+  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[] }
 );
-export interface RoleDef { role: string; name: string; tools: string[]; systemPrompt: string }
-export const ASK_PROTOCOL = ' Colleagues: researcher, coder, reviewer. To ask one, write a line `@@ASK <role>: <question>` and end your turn; the reply arrives as your next message.';
-export const ROLES: Record<string, RoleDef> = {
-  researcher: { role: 'researcher', name: 'Researcher', tools: ['WebSearch', 'WebFetch', 'Read'], systemPrompt: 'You are the Researcher in a virtual office.' + ASK_PROTOCOL },
-  coder: { role: 'coder', name: 'Coder', tools: ['Read', 'Edit', 'Write', 'Bash(npm test:*)', 'Bash(git diff:*)'], systemPrompt: 'You are the Coder in a virtual office.' + ASK_PROTOCOL },
-  reviewer: { role: 'reviewer', name: 'Reviewer', tools: ['Read', 'Grep', 'Glob'], systemPrompt: 'You are the Reviewer in a virtual office.' + ASK_PROTOCOL },
-};

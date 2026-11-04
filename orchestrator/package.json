@@ -7,7 +7,7 @@
     "test": "vitest run",
     "typecheck": "tsc",
     "start": "tsx src/cli.ts start",
-    "demo": "tsx src/demo.ts"
+    "demo": "tsx src/cli.ts start --demo"
   },
   "keywords": [],
   "author": "",

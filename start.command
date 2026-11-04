@@ -1,11 +1,9 @@
 #!/bin/bash
-# Usage: ./start.command "task"        (real Claude agents)
-#        ./start.command mock "task"   (mock agents, no API calls)
+# Usage: ./start.command        (live: shows Claude Code sessions reported by the "office" mod)
+#        ./start.command demo   (3 simulated sessions, no Claude needed)
 cd "$(dirname "$0")" || exit 1
-MOCK=""
-if [ "$1" = "mock" ]; then MOCK="--mock"; shift; fi
-TASK="$1"
-[ -z "$TASK" ] && read -r -p "Task: " TASK
+DEMO=""
+if [ "$1" = "demo" ] || [ "$1" = "mock" ]; then DEMO="--demo"; fi
 [ -d orchestrator/node_modules ] || (cd orchestrator && npm install)
 [ -d web/node_modules ] || (cd web && npm install)
 [ -f web/dist/index.html ] || (cd web && npm run build)
@@ -17,4 +15,4 @@ rm -f orchestrator/.run/ui-url.txt
       exit 0
     fi; sleep 1
   done ) &
-exec orchestrator/node_modules/.bin/tsx orchestrator/src/cli.ts start $MOCK --office --keep-alive "$TASK"
+exec orchestrator/node_modules/.bin/tsx orchestrator/src/cli.ts start $DEMO
