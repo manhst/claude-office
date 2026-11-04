@@ -1,4 +1,4 @@
-Source: VanphongAI by Phuc, shared with Manh, no license, used at Manh's direction. Do not publish until Phuc's permission is confirmed.
+Source: VanphongAI by Phuc, shared with Manh, no license, used at Manh's direction. Published with Phuc's permission (confirmed by Manh, 2026-11-04).
 
 Origin of the files in this folder (reference copy: /workspace/vo-ref/src/VanphongAI-main/app/public, read-only):
 - characters.ts  <- van_phong_3d.js (dungNguoi, toc, phuKien, khoi) + nhan_vat.js (chuanHoa, tronMau, presets).
