@@ -56,6 +56,12 @@ The Vanphong view (the only view) puts the voxel office inside a small town. Ses
 
 Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kiosk, with no fake alerts. If the API can't be read, the error itself is reported.
 `--demo` with no URL runs a monitor labelled **(demo)** that alternates ok and `DEMO HighLatency` every 15 s.
+**Xuka Mát xa** sits across the back street from Crossian Cafe; NPCs drop in now and then, lie on a bed and chat about massages (PG, comedic).
+
+**Main-road traffic** (front street, `web/src/town/traffic.ts`, at most 5 vehicles plus responders): 22 voxel vehicle types (xe máy, xe đạp, xe ôm Grab, ô tô con, taxi, bán tải, xe buýt, ô tô tải, container, trộn bê tông, xe rác, xe cẩu, xe lu, máy xúc, máy ủi, xe tăng, ba gác, cứu thương, cứu hỏa, cảnh sát, xe kiểm tra đường, xe bán kem). Vehicles sometimes knock a pedestrian over (they get back up), rear-end each other (both drivers get out and argue in turns; police come), or catch fire and explode (fire truck comes; the wreck is cleared after a while). Comedic only.
+
+**Dialogue** lives in `web/src/town/dialogue.ts`: 31 line categories plus two-sided argument pairs (work arguments, crash arguments); `web/test/dialogue.test.ts` checks every category has at least 30 unique lines.
+
 Screenshots: `docs/screens/town-*.png` (`cd web && npm run build && node scripts/screens-town.mjs`).
 
 ## Which agents a session shows
@@ -158,7 +164,7 @@ event ingest auth (loopback, Origin, Content-Type, preflight), payload sanitizin
 
 Demo mode (`npm run screens` in `web/`, headless Chrome):
 - `docs/screens/session-1280-vanphong.png`, `session-1280-vanphong-claude-md.png`, `session-390-vanphong.png`
-- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build)
+- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`)
 
 The old 2D (SVG) and 3D (React Three Fiber + Quaternius model) views were removed; the Vanphong view replaces both.
 

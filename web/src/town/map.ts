@@ -3,7 +3,8 @@
 export interface Pt { x: number; y: number }
 export interface Box { x: number; y: number; w: number; h: number }
 export const PX = 37.5;
-export const TOWN = { w: 1600, h: 940 };
+/** Town plan bounds: y0 < 0 makes room for Xuka Mát xa north of the back street. */
+export const TOWN = { y0: -250, w: 1600, h: 940 };
 export const BUILDING: Box = { x: 290, y: 120, w: 960, h: 600 }; // = BIEN x -12.8..12.8, z -8.4..7.6
 export const ROADS: Box[] = [
   { x: 0, y: 30, w: TOWN.w, h: 70 }, // back street
@@ -12,6 +13,11 @@ export const ROADS: Box[] = [
   { x: 1270, y: 30, w: 70, h: 800 }, // right avenue
 ];
 export const CAFE: Box = { x: 1365, y: 140, w: 215, h: 250 };
+/** Xuka Mát xa: across the back street from Crossian Cafe (same x span), door facing the street. */
+export const MASSAGE: Box = { x: 1365, y: -215, w: 215, h: 215 };
+export const MASSAGE_BEDS: Pt[] = [{ x: 1405, y: -95 }, { x: 1472, y: -95 }, { x: 1540, y: -95 }];
+/** Main road lanes (front street): eastbound top lane, westbound bottom lane. */
+export const LANES = [{ y: 778, dir: 1 }, { y: 812, dir: -1 }] as const;
 export const TRADA: Box = { x: 1370, y: 470, w: 190, h: 120 };
 export const POND = { cx: 105, cy: 420, rx: 85, ry: 170 };
 export const NOC: Pt = { x: 1180, y: 752 }; // IT Ops monitoring kiosk, in front of the building

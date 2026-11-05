@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { LINES } from '../src/town/dialogue';
 import { initialWorld, step, throwIntoPond, problemKey, problemText, type World } from '../src/town/sim';
 import { ARCHITECT_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld } from '../src/town/map';
 import { BIEN } from '../src/ref-vanphong/adapter';
@@ -38,7 +39,7 @@ describe('town sim', () => {
   it('dog barks, cat picks fights with the dog, NPCs go to the cafe / trà đá', () => {
     const w0 = initialWorld(0);
     const w = step({ ...w0, t: 0 }, 2000, seq([0.1]));
-    expect(ent(w, 'dog').act).toBe('bark'); expect(ent(w, 'dog').say).toMatch(/GÂU/);
+    expect(ent(w, 'dog').act).toBe('bark'); expect(LINES.dogBark).toContain(ent(w, 'dog').say);
     expect(ent(w, 'cat').next).toBe('fight');
     const npc = ent(w, 'npc-1'); expect(npc.next).toBe('drink');
     expect(npc.tx).toBeGreaterThan(CAFE.x); expect(npc.ty).toBeLessThan(CAFE.y + CAFE.h);

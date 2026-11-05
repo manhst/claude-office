@@ -1,4 +1,5 @@
 // Adapter (our code): maps OUR reducer state onto the display states used by the Vanphong visuals. Pure, unit-tested.
+import { LINES, PAIRS } from '../town/dialogue';
 import type { AgentUI, MessageUI, OfficeState } from '../reducer';
 import { BUBBLE_MS, DESK_COLS, add, allDesks, DOOR, type Vec3 } from '../layout';
 import { BODY_R, BOUNDS, DESK_HALF, findPath, visiting, type Goal, type Rect } from '../walk';
@@ -124,24 +125,34 @@ export function idlePlans(agents: Record<string, AgentUI>, order: string[], mess
   }
   return out;
 }
-export const CHAT_LINES = ['Trưa nay ăn gì?', 'Bug này lạ thật', 'Test xanh hết rồi', 'Review giúp tao cái PR', 'Ai merge vào stable thế?', 'Deploy thứ Sáu à?',
-  'Opus nghĩ lâu quá', 'Haiku nhanh ghê', 'Cuối tuần đi đâu?', 'Ticket này ai nhận?', 'Cà phê không?', 'Prod vẫn ổn chứ?'];
-export const FIGHT_LINES = ['Tab hay space?!', 'Ai force push đấy?!', 'Conflict tại mày!', 'Trả lại cái branch!', 'Code mày bẩn!', 'Đừng sửa file của tao!'];
-const COFFEE_LINES = ['Thêm đá nha', 'Máy hết sữa rồi', 'Ly thứ ba rồi đấy'], POOL_LINES = ['Bi số 8!', 'Trượt rồi...', 'Xem tao đánh nè'];
+export const CHAT_LINES = LINES.agentChat;
+/** Fights are two-sided: the first speaker says pair[0], the partner answers pair[1]. */
+export const FIGHT_PAIRS = PAIRS.workArgue;
+const COFFEE_LINES = LINES.agentCoffee, POOL_LINES = LINES.agentPool;
 /** Line shown in the bubble right now, or '' (silent). Pairs take turns; solo activities only speak now and then. */
 export function idleLine(id: string, p: IdlePlan, now: number): string {
   const beat = p.kind === 'fight' ? 1800 : 3200, turn = Math.floor(now / beat), h = hash(`${p.key}:${turn}`);
   if (p.kind === 'chat' || p.kind === 'fight') {
     if ((turn % 2 === 0) !== !!p.first) return '';
-    const lines = p.kind === 'fight' ? FIGHT_LINES : CHAT_LINES; return lines[h % lines.length];
+    if (p.kind === 'fight') { const pair = FIGHT_PAIRS[hash(`${p.key}:${Math.floor(turn / 2)}`) % FIGHT_PAIRS.length]; return pair[turn % 2]; }
+    return CHAT_LINES[h % CHAT_LINES.length];
   }
   if (h % 3 !== 0) return '';
   const lines = p.kind === 'coffee' ? COFFEE_LINES : POOL_LINES; return lines[hash(`${id}:${turn}`) % lines.length];
 }
 
+/** Vanphong only: a state quip fills an otherwise empty / generic bubble (thinking or working with no text, done / error with no detail). */
+export function stateQuip(a: AgentUI, now: number): string {
+  const lines = a.state === 'thinking' ? LINES.thinking : a.state === 'working' ? LINES.working : a.state === 'done' ? LINES.done : a.state === 'error' ? LINES.error : undefined;
+  return lines ? lines[hash(`${a.id}:${Math.floor(now / 6000)}`) % lines.length] : '';
+}
+function withQuip(a: AgentUI, b: BubbleView, now: number): BubbleView {
+  const generic = (b.show && !b.text) || (a.state === 'done' && !a.result) || (a.state === 'error' && !a.error);
+  return generic ? { ...b, text: stateQuip(a, now) || b.text } : b;
+}
 /** Bubble in the Vanphong view: once arrived at an idle activity only its small talk (or nothing; a done result stays in the panel), else bubbleFor. */
 export function vpBubble(a: AgentUI, idle: IdlePlan | undefined, arrived: boolean, now: number): BubbleView {
-  if (!idle || !arrived) return bubbleFor(a, now);
+  if (!idle || !arrived) return withQuip(a, bubbleFor(a, now), now);
   const line = idleLine(a.id, idle, now); return line ? { text: line, show: true, dots: false } : { text: '', show: false, dots: false };
 }
 

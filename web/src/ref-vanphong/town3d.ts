@@ -4,8 +4,10 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { ItOpsStatus } from '../types';
-import { CAFE, NOC, POND, PX, ROADS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
-import { initialWorld, step, throwIntoPond, type Ent, type World } from '../town/sim';
+import { CAFE, MASSAGE, MASSAGE_BEDS, NOC, POND, PX, ROADS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
+import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
+import { TrafficLayer } from './vehicles3d';
+import { initialWorld, knockDown, step, throwIntoPond, type Ent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
@@ -16,13 +18,14 @@ export interface TownCtx {
   plant: (cha: THREE.Object3D, x: number, z: number, co?: number) => void;
 }
 /** World bounds of the whole town (camera fit + pan limits). */
-const [TX0, TZ0] = toWorld({ x: 0, y: 0 }), [TX1, TZ1] = toWorld({ x: TOWN.w, y: TOWN.h });
+const [TX0, TZ0] = toWorld({ x: 0, y: TOWN.y0 }), [TX1, TZ1] = toWorld({ x: TOWN.w, y: TOWN.h });
 export const CANH = { x0: TX0, x1: TX1, z0: TZ0, z1: TZ1 };
 export const presetLook = (id?: string): NgoaiHinh | undefined => (PRESETS as { id: string; ngoai_hinh: NgoaiHinh }[]).find((p) => p.id === id)?.ngoai_hinh;
 const ICON = {
   coffee: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h8v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM11 7h1a2 2 0 0 1 0 4h-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   glass: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h8l-1.2 10H5.2zM4.4 6.5h7.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   croc: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 9.5c2-2 5-2.5 8-2l4.5-1.5-1 2.5 1 1.5-4.5-.5c-3 1.5-6 1.5-8 0z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  spa: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2c2 2.5 2 5 0 7-2-2-2-4.5 0-7zM2 8c2.5 0 4.5 1.2 6 3.5C9.5 9.2 11.5 8 14 8c0 3.5-2.7 6-6 6S2 11.5 2 8z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   pulse: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.5-3 2 6 1.5-3h5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
 };
 const boxW = (b: Box) => { const [x0, z0] = toWorld(b), [x1, z1] = toWorld({ x: b.x + b.w, y: b.y + b.h }); return { x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 }; };
@@ -81,6 +84,33 @@ function cafe(ctx: TownCtx) {
   for (const x of [-1, 1]) khoi(g, 0.3, 0.2, 0.3, chao, x, H - 0.25, 0, false); ctx.shades.push(chao);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffd9a0', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
   sign(ctx, ICON.coffee, 'Crossian Cafe', 'cà phê · bạc xỉu', '#2f7d6d', b.cx, H + 0.6, b.cz - D / 2 + 0.2, 'vp-cafe');
+}
+/** Xuka Mát xa: across the back street from Crossian Cafe, open front facing the street. Beds + towels + lanterns, PG. */
+function massage(ctx: TownCtx) {
+  const b = boxW(MASSAGE), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  const W = b.w, D = b.d, H = 2.6, tuong = '#f3d9e4', vien = '#b0476f';
+  khoi(g, W, 0.08, D, '#e9dcc7', 0, 0.04, 0, false);
+  for (let i = 0; i < 6; i++) khoi(g, W, 0.004, 0.02, '#d6c4a8', 0, 0.082, -D / 2 + (i + 0.5) * D / 6, false);
+  khoi(g, W, H, 0.18, tuong, 0, H / 2, -D / 2 + 0.09);
+  for (const s of [-1, 1]) khoi(g, 0.18, H, D, tuong, s * (W / 2 - 0.09), H / 2, 0);
+  khoi(g, W + 0.3, 0.14, D + 0.3, vien, 0, H + 0.07, 0, false);
+  const N = 8; for (let i = 0; i < N; i++) { const a = khoi(g, W / N, 0.06, 1.1, i % 2 ? vien : '#fbe7ef', -W / 2 + (i + 0.5) * W / N, H - 0.25, D / 2 + 0.35); a.rotation.x = 0.35; }
+  // massage beds with towels and pillows, curtains between them
+  for (const p of MASSAGE_BEDS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    khoi(g, 0.8, 0.5, 1.9, '#8d5a3b', lx, 0.3, lz); khoi(g, 0.82, 0.1, 1.92, '#ffffff', lx, 0.6, lz); khoi(g, 0.5, 0.1, 0.3, '#f8bbd0', lx, 0.7, lz - 0.7, false);
+    khoi(g, 0.84, 0.04, 0.5, '#b0476f', lx, 0.66, lz + 0.4, false);
+  }
+  for (const s of [-1, 1]) khoi(g, 0.04, 1.8, 1.8, vatLieu('#f8bbd0', { transparent: true, opacity: 0.55 }), s * 0.9, 1, -0.3, false);
+  // reception, towel shelf, aroma candles, lotus pots
+  khoi(g, 1.4, 0.9, 0.5, '#8d5a3b', -W / 2 + 1.1, 0.45, D / 2 - 0.9); khoi(g, 1.5, 0.06, 0.6, '#5d3a26', -W / 2 + 1.1, 0.93, D / 2 - 0.9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) khoi(g, 0.3, 0.14, 0.3, ['#ffffff', '#f8bbd0', '#b2dfdb'][j], W / 2 - 0.5, 0.4 + i * 0.4 + j * 0.13, -D / 2 + 0.6 + j * 0.02, false);
+  for (const x of [-0.6, 0.6]) { khoi(g, 0.08, 0.14, 0.08, '#fff3e0', x, 1.0, D / 2 - 0.9, false); khoi(g, 0.04, 0.06, 0.04, vatLieuSang('#ffb74d'), x, 1.1, D / 2 - 0.9, false); }
+  ctx.plant(g, -W / 2 + 0.4, D / 2 - 0.3, 0.8); ctx.plant(g, W / 2 - 0.4, D / 2 - 0.3, 0.8);
+  const chao = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd6e6', emissive: '#ff8fb8', emissiveIntensity: 0 }));
+  for (const x of [-1.2, 0, 1.2]) khoi(g, 0.26, 0.34, 0.26, chao, x, H - 0.3, 0.6, false); ctx.shades.push(chao);
+  if (!ctx.soft) { const l = new THREE.PointLight('#ffc2da', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
+  sign(ctx, ICON.spa, 'Xuka Mát xa', 'cổ vai gáy · ngâm chân', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-massage');
 }
 function trada(ctx: TownCtx) {
   const b = boxW(TRADA), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
@@ -154,15 +184,17 @@ function petMesh(meo: boolean): Pet {
 }
 interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá / bia', chat: 'tán gẫu', bark: 'sủa', fight: 'đánh nhau', report: 'báo sự cố', fall: 'rơi xuống hồ', eaten: 'bị ăn' };
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá / bia', chat: 'tán gẫu', bark: 'sủa', fight: 'đánh nhau', report: 'báo sự cố', fall: 'rơi xuống hồ', eaten: 'bị ăn', massage: 'mát xa', knocked: 'bị xe đâm' };
 const ROLE: Partial<Record<Ent['kind'], string>> = { itops: 'IT Ops', architect: 'Architect', dog: 'chó', cat: 'mèo' };
 
 export class TownLayer {
   private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
-  private p: ReturnType<typeof pond>; private k: ReturnType<typeof noc>; private nocKey = '';
+  private p: ReturnType<typeof pond>; private traffic: Traffic; private cars: TrafficLayer; private k: ReturnType<typeof noc>; private nocKey = '';
   constructor(private ctx: TownCtx, now = Date.now()) {
-    ground(ctx); cafe(ctx); trada(ctx); this.p = pond(ctx); this.k = noc(ctx);
-    this.world = initialWorld(now); this.lastStep = now;
+    ground(ctx); cafe(ctx); massage(ctx); trada(ctx); this.p = pond(ctx); this.k = noc(ctx);
+    this.world = initialWorld(now); this.lastStep = now; this.traffic = initialTraffic(now); this.cars = new TrafficLayer(ctx.nhom);
+    // Screenshot/debug hook, opt-in via localStorage 'vp-debug' = '1': trigger a crash or a fire on the main road now.
+    try { if (localStorage.getItem('vp-debug') === '1') (window as unknown as Record<string, unknown>).__vpTraffic = { crash: (x = 700) => { this.traffic = forceCrash(this.traffic, Date.now(), x); }, fire: (x = 1000) => { this.traffic = forceFire(this.traffic, Date.now(), x); } }; } catch { /* no storage */ }
     for (const e of this.world.ents) this.figs.set(e.id, this.fig(e));
     this.setItops(undefined);
   }
@@ -171,6 +203,9 @@ export class TownLayer {
   /** Crocodiles chomp + splash for a while (an agent was thrown in). */
   eat(nowMs: number, ms = 2600) { this.eatUntil = Math.max(this.eatUntil, nowMs + ms); }
   throwEnt(id: string, nowMs = Date.now()) { this.world = throwIntoPond(this.world, id, nowMs); }
+  /** Traffic state (screenshots / debugging can inject incidents). */
+  get road() { return this.traffic; }
+  set road(t: Traffic) { this.traffic = t; }
   ent(id: string) { return this.world.ents.find((e) => e.id === id); }
   setItops(s?: ItOpsStatus) {
     this.itops = s;
@@ -203,7 +238,13 @@ export class TownLayer {
   }
   /** Advance the simulation (every 200 ms) and animate every frame. */
   tick(t: number, dt: number, nowMs: number) {
-    if (nowMs - this.lastStep >= 200) { this.world = step(this.world, nowMs, Math.random, this.itops); this.lastStep = nowMs; }
+    if (nowMs - this.lastStep >= 200) {
+      this.world = step(this.world, nowMs, Math.random, this.itops); this.lastStep = nowMs;
+      const peds = this.world.ents.filter((e) => (e.act === 'walk' || e.act === 'idle') && onRoad(e));
+      const o = stepTraffic(this.traffic, nowMs, Math.random, peds); this.traffic = o.traffic;
+      for (const id of o.hits) this.world = knockDown(this.world, id, nowMs, Math.random);
+    }
+    this.cars.update(this.traffic, t, dt);
     let eating = nowMs < this.eatUntil;
     for (const e of this.world.ents) {
       const f = this.figs.get(e.id)!; const prev = f.e.act; f.e = e; this.relook(f);
@@ -221,6 +262,8 @@ export class TownLayer {
       f.g.rotation.y = THREE.MathUtils.lerp(f.g.rotation.y, f.heading, Math.min(1, dt * 8));
       let y = 0;
       if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
+      if (e.act === 'knocked') { f.g.rotation.x = THREE.MathUtils.lerp(f.g.rotation.x, -Math.PI / 2, 1); y = 0.15; }
+      if (e.act === 'massage') { f.g.rotation.x = -Math.PI / 2; y = 0.72; f.heading = 0; }
       f.g.position.set(f.x, y, f.z);
       this.pose(f, t, dt, moving);
       // label + bubble
@@ -275,5 +318,5 @@ export class TownLayer {
     splash.visible = eating;
     if (eating) { const p = (t * 1.3) % 1; splash.scale.setScalar(0.4 + p * 1.6); (splash.material as THREE.MeshBasicMaterial).opacity = 1 - p; }
   }
-  dispose() { for (const f of this.figs.values()) f.el.remove(); }
+  dispose() { for (const f of this.figs.values()) f.el.remove(); this.cars.dispose(); }
 }
