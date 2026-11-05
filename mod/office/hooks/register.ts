@@ -49,10 +49,39 @@ export function usagePayload(rateLimits: Any, context: Any, cost: Any, ts: numbe
 type State = {
   endpoint: string; loopback: boolean; quiet: boolean; ended: boolean; sid: string; cwd: string; root: string; transcript: string;
   title?: string; sessionTitle?: string; state: string; tool: { name: string; detail?: string } | null; prompt?: string; queue: Promise<void>;
+  /** Main turn answered but $.agent.list() still has busy subagents — keep posting working until clear (esp pendingDone). */
+  pendingDone: boolean;
 };
 
+/** running|pending|waiting = still doing work (same filter as esp-claude). */
+const AGENT_BUSY = /^(running|pending|waiting)$/i;
+/** Map whatever $.agent.list() returns into a stable desk payload (id/name/type/description/status). */
+function mapListedAgent(a: Any) {
+  if (!a || typeof a !== 'object') return null;
+  const id = a.id ?? a.agentId;
+  const type = a.type ?? a.agentType;
+  const out: Any = { status: typeof a.status === 'string' && a.status ? a.status : 'running' };
+  if (id != null && String(id)) out.id = String(id);
+  if (typeof a.name === 'string' && a.name) out.name = a.name;
+  if (typeof type === 'string' && type) out.type = type;
+  if (typeof a.description === 'string' && a.description) out.description = a.description;
+  return out;
+}
+async function listAgents($: Any) {
+  try { return ((await $.agent.list()) ?? []).map(mapListedAgent).filter(Boolean); } catch { return []; }
+}
+async function busyAgents($: Any) {
+  return (await listAgents($)).filter((a: Any) => AGENT_BUSY.test(String(a.status ?? '')));
+}
+/** Full list (busy + recently finished) so the orchestrator can clear desks that went idle. */
 async function subagents($: Any) {
-  try { return ((await $.agent.list()) ?? []).map((a: Any) => ({ type: a.type, description: a.description, status: a.status })); } catch { return []; }
+  return listAgents($);
+}
+function agentsDetail(busy: Any[]) {
+  const n = busy.length;
+  const head = `${n} agent${n === 1 ? '' : 's'}`;
+  const task = busy.map((a: Any) => a.description).find((d: Any) => typeof d === 'string' && d);
+  return task ? `${head}: ${String(task).slice(0, 80)}` : head;
 }
 async function readTitle($: Any, st: State) {
   if (st.sessionTitle) { st.title = st.sessionTitle; return; } // classic events give it directly
@@ -87,7 +116,7 @@ async function readUsage($: Any, st: State) { try { await sendUsage($, st, await
 function setState($: Any, st: State, s: string, t: State['tool'], type = t ? 'tool' : 'state') { st.state = s; st.tool = t; void send($, st, type); }
 async function heartbeat($: Any, st: State) { await follow($, st); await readTitle($, st); await send($, st, 'heartbeat'); await readUsage($, st); }
 /** Per-session fields. The module lives as long as the process, which can move to another session (/resume, /clear) after session.end. */
-function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined }); }
+function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined, pendingDone: false }); }
 /** If the engine now reports another session id, start reporting that session. */
 async function follow($: Any, st: State) {
   if (st.quiet || !st.sid) return;
@@ -118,7 +147,7 @@ export const register: Register = (on: Any, options: Any) => {
   const endpoint = String(options?.endpoint || DEFAULT_ENDPOINT);
   const st: State = {
     endpoint, loopback: /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//.test(endpoint), // by design: never post off this PC
-    quiet: false, ended: false, sid: '', cwd: '', root: '', transcript: '', state: 'idle', tool: null, queue: Promise.resolve(),
+    quiet: false, ended: false, sid: '', cwd: '', root: '', transcript: '', state: 'idle', tool: null, queue: Promise.resolve(), pendingDone: false,
   };
   let beating = false;
   on('session.start', async ($: Any, e: Any, next: Any) => {
@@ -130,13 +159,25 @@ export const register: Register = (on: Any, options: Any) => {
   });
   on('turn.start', async ($: Any, e: Any, next: Any) => {
     try { await follow($, st); } catch { /* never break the session */ }
-    if (e?.agentId === undefined) setState($, st, 'thinking', null); else void send($, st, 'subagents');
+    if (e?.agentId === undefined) { st.pendingDone = false; setState($, st, 'thinking', null); }
+    else void send($, st, 'subagents'); // subagent turn: refresh list so desks light up
     return next(e);
   });
   on('tool.call', async ($: Any, e: Any, next: Any) => {
     if (next?.origin?.plugin === 'engine') {
       const name = String(e?.tool ?? 'tool');
-      if (e?.agentId === undefined) setState($, st, 'tool', { name, detail: toolDetail(name, e) }); else void send($, st, 'subagents'); // subagent calls: refresh list only
+      if (e?.agentId === undefined) setState($, st, 'tool', { name, detail: toolDetail(name, e) });
+      else {
+        // Subagent tool: refresh full agent list (and keep pendingDone sessions looking busy).
+        if (st.pendingDone) {
+          try {
+            const busy = await busyAgents($);
+            st.state = 'tool';
+            st.tool = { name: 'Task', detail: agentsDetail(busy) };
+          } catch { /* list failed */ }
+        }
+        void send($, st, 'subagents');
+      }
     }
     return await next(e);
   }).catch(($: Any, e: Any, next: Any) => next(e));
@@ -153,7 +194,33 @@ export const register: Register = (on: Any, options: Any) => {
     return next(e);
   }).catch(($: Any, e: Any, next: Any) => next(e));
   on('turn.complete', async ($: Any, e: Any, next: Any) => {
-    if (e?.agentId === undefined) { await readTitle($, st); setState($, st, e?.reason === 'aborted' ? 'idle' : 'done', null); } else void send($, st, 'subagents');
+    try {
+      if (e?.agentId === undefined) {
+        await readTitle($, st);
+        if (e?.reason === 'aborted') { st.pendingDone = false; setState($, st, 'idle', null); }
+        else {
+          // Main answered: if subagents still busy, stay in tool/busy and keep refreshing (esp pendingDone).
+          const busy = await busyAgents($);
+          if (busy.length > 0) {
+            st.pendingDone = true;
+            st.state = 'tool';
+            st.tool = { name: 'Task', detail: agentsDetail(busy) };
+            void send($, st, 'tool');
+          } else {
+            st.pendingDone = false;
+            setState($, st, 'done', null);
+          }
+        }
+      } else if (st.pendingDone) {
+        const busy = await busyAgents($);
+        if (busy.length === 0) { st.pendingDone = false; setState($, st, 'done', null); }
+        else {
+          st.state = 'tool';
+          st.tool = { name: 'Task', detail: agentsDetail(busy) };
+          void send($, st, 'subagents');
+        }
+      } else void send($, st, 'subagents');
+    } catch { /* never break the session */ }
     return next(e);
   });
   // Raised after each turn and whenever a limit moves a whole point (same hook as usage-esp).
@@ -161,5 +228,5 @@ export const register: Register = (on: Any, options: Any) => {
     try { void sendUsage($, st, e, Date.now()); } catch { /* never break the session */ }
     return next(e);
   });
-  on('session.end', async ($: Any, e: Any, next: Any) => { await send($, st, 'end'); st.ended = true; return next(e); });
+  on('session.end', async ($: Any, e: Any, next: Any) => { st.pendingDone = false; await send($, st, 'end'); st.ended = true; return next(e); });
 };

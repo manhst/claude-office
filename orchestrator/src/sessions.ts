@@ -24,7 +24,8 @@ export function parseModEvent(p: any): ModEvent | null {
   if (p.tool === null) e.tool = null;
   else if (p.tool && typeof p.tool === 'object') e.tool = { name: str(p.tool.name, 40) ?? 'tool', detail: str(p.tool.detail, 120) };
   if (Array.isArray(p.subagents)) e.subagents = p.subagents.slice(0, 20).filter((s: any) => s && typeof s === 'object').map((s: any) => ({
-    id: str(s.id, 64), type: str(s.type, 60), description: str(s.description, 120), status: str(s.status, 20) ?? 'running' }));
+    id: str(s.id ?? s.agentId, 64), name: str(s.name, 60), type: str(s.type ?? s.agentType, 60),
+    description: str(s.description, 120), status: str(s.status, 20) ?? 'running' }));
   if (typeof p.costUsd === 'number' && Number.isFinite(p.costUsd)) e.costUsd = p.costUsd;
   return e;
 }
@@ -98,22 +99,70 @@ export class SessionTracker {
     this.emit({ t: 'office.notice', level: 'info', text: `Session left: ${s.project}`, ts });
     this.emit({ t: 'sessions.update', sessions: this.list(), ts });
   }
-  /** Push live session activity onto its desks: main activity → first agent; running subagents → agent named like the subagent type, else first agent. */
+  /** Push live session activity onto desks: busy subagents claim distinct desks (name match, else free); main turn on lead / first free. */
   private project(s: SessionView, ts: number) {
     const desks = s.agentIds.map((id) => this.desks.get(id)!).filter(Boolean);
     if (!desks.length) return;
     const want = new Map<Desk, { state: AgentState; text?: string; tool?: { name: string; detail?: string } }>();
-    const main = desks[0];
-    want.set(main, { state: MAIN_STATE[s.state], text: s.state === 'waiting-permission' ? `Waiting for permission${s.tool ? `: ${s.tool.name}` : ''}` : undefined, tool: s.state === 'tool' ? s.tool : undefined });
-    const extra: string[] = [];
-    for (const sub of s.subagents.filter((x) => ACTIVE_SUB.has(x.status))) {
-      const t = (sub.type ?? '').toLowerCase();
-      const d = desks.find((x) => x.profile.name.toLowerCase() === t);
-      if (d === main) extra.push(sub.description ?? sub.status);
-      else if (d) want.set(d, { state: 'working', text: sub.description, tool: { name: sub.type ?? 'Task', detail: sub.description } });
-      else extra.push(`${sub.type ?? 'subagent'}: ${sub.description ?? sub.status}`);
+    const lead = desks[0];
+    const busy = s.subagents.filter((x) => ACTIVE_SUB.has(x.status));
+    const claimed = new Set<Desk>();
+    const placed = new Set<number>();
+    const leftover: string[] = [];
+    const norm = (v?: string) => (v ?? '').trim().toLowerCase();
+    const matches = (d: Desk, sub: SubagentInfo) => {
+      const pname = norm(d.profile.name);
+      if (!pname) return false;
+      if (norm(sub.type) === pname || norm(sub.name) === pname) return true;
+      const desc = norm(sub.description);
+      return !!desc && (desc === pname || desc.includes(pname) || pname.includes(desc));
+    };
+    const assign = (d: Desk, sub: SubagentInfo) => {
+      claimed.add(d);
+      want.set(d, {
+        state: 'working',
+        text: sub.description,
+        tool: { name: sub.type ?? sub.name ?? 'Task', detail: sub.description },
+      });
+    };
+    busy.forEach((sub, i) => {
+      const d = desks.find((x) => !claimed.has(x) && matches(x, sub));
+      if (!d) return;
+      assign(d, sub);
+      placed.add(i);
+    });
+    busy.forEach((sub, i) => {
+      if (placed.has(i)) return;
+      // Next free desk in profile order (stable); leftover text only when none remain.
+      const free = desks.find((x) => !claimed.has(x));
+      if (!free) {
+        leftover.push(`${sub.type ?? sub.name ?? 'subagent'}: ${sub.description ?? sub.status}`);
+        return;
+      }
+      assign(free, sub);
+      placed.add(i);
+    });
+    // Main turn stays on the lead desk when free; if a subagent already claimed it, only fold tool/permission text in.
+    // Busy sub desks alone keep the office looking active when state is done (esp pendingDone) — do not park "working" on a random idle desk.
+    let mainState = MAIN_STATE[s.state];
+    if (busy.length > 0 && s.state === 'done') mainState = 'working';
+    const mainWant = {
+      state: mainState,
+      text: s.state === 'waiting-permission' ? `Waiting for permission${s.tool ? `: ${s.tool.name}` : ''}` : undefined,
+      tool: s.state === 'tool' ? s.tool : undefined,
+    };
+    if (!claimed.has(lead)) want.set(lead, mainWant);
+    else if (s.state === 'tool' || s.state === 'waiting-permission') {
+      const cur = want.get(lead)!;
+      if (mainWant.tool) cur.tool = mainWant.tool;
+      if (mainWant.text) cur.text = [cur.text, mainWant.text].filter(Boolean).join(' · ');
     }
-    if (extra.length) { const m = want.get(main)!; if (m.state === 'idle' || m.state === 'done') m.state = 'working'; m.text = [m.text, `Subagents: ${extra.join('; ')}`].filter(Boolean).join(' · '); }
+    if (leftover.length) {
+      const m = want.get(lead) ?? { state: 'working' as AgentState };
+      if (m.state === 'idle' || m.state === 'done') m.state = 'working';
+      m.text = [m.text, `Subagents: ${leftover.join('; ')}`].filter(Boolean).join(' · ');
+      want.set(lead, m);
+    }
     for (const d of desks) {
       const w = want.get(d) ?? { state: 'idle' as AgentState };
       const key = w.tool ? `${w.tool.name}|${w.tool.detail ?? ''}` : undefined;

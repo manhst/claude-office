@@ -8,7 +8,7 @@ export interface AgentProfile { name: string; description: string; tools: string
 
 /** Session state as reported by the `office` mod. */
 export type SessionState = 'idle' | 'thinking' | 'tool' | 'waiting-permission' | 'done';
-export interface SubagentInfo { id?: string; type?: string; description?: string; status: string }
+export interface SubagentInfo { id?: string; name?: string; type?: string; description?: string; status: string }
 export interface SessionView {
   sid: string; project: string; cwd: string; title?: string; transcript?: string; state: SessionState;
   tool?: { name: string; detail?: string; ts: number }; subagents: SubagentInfo[]; prompt?: string; costUsd?: number;

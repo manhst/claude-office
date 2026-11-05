@@ -103,9 +103,10 @@ user agents with the same name. Files over 64 KB are ignored; at most 6 desks pe
 (extra sessions are still listed in the panel, with a "no free desk" notice).
 
 Live activity is pushed onto those desks so it looks like the agents are working:
-- the session's own state/tool goes to the **first** agent (thinking / working + tool chip / talking = waiting for permission / done);
-- each running **subagent** goes to the agent whose `name` equals the subagent type (e.g. a `coder` subagent lights up the `coder` desk);
-  unmatched subagents are shown on the first agent's bubble.
+- the session's own state/tool goes to the **lead** desk (first profile, or the first desk not claimed by a subagent);
+- each **busy** subagent (`running` / `pending` / `waiting` from `$.agent.list()`) claims its own desk: prefer a profile whose `name` matches the subagent `type`, `name`, or `description`, otherwise the next free desk in that session (so N parallel Task/Explore agents light up N characters);
+- only when every desk is already taken does leftover subagent text collapse onto the lead bubble (`Subagents: …`);
+- when the main turn is `done` but busy subagents remain, desks stay working until the list clears (the mod keeps sending updates — same idea as esp-claude's pendingDone).
 
 Click a session in the panel to see its live activity (state, tool, prompt first sentence, subagents, cost). Agent profiles are
 not listed in the UI any more; they still decide who sits at the desks. The map takes about 80% of the width, the session
@@ -137,9 +138,9 @@ and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they nev
 | `on('tool.call')`: `e.tool` + tool args on `e`, `e.agentId`, `next.origin.plugin === 'engine'` | current tool (model's own calls only) |
 | `on('classic.PermissionRequest')`: `e.tool_name`, `e.tool_input` | waiting for permission |
 | `on('classic.SessionStart')`, `on('classic.UserPromptSubmit')`: `e.session_title`, `e.transcript_path`, `e.prompt` (if a string) | title, prompt |
-| `on('turn.complete')`: `e.agentId`, `e.reason` (`aborted` → idle, otherwise done) | done |
+| `on('turn.complete')`: `e.agentId`, `e.reason` (`aborted` → idle; else done, or stay `tool` while busyAgents remain) | done / pendingDone |
 | `on('session.end')` | end |
-| `$.agent.list()` → `{type, description, status}` | subagents |
+| `$.agent.list()` → `{id?, name?, type?, description?, status}` (busy = running|pending|waiting); full list on heartbeat / tool / turn when `agentId` set; main `turn.complete` stays `tool` while busy remain | subagents / pendingDone |
 | `$.session.usage()` → `cost.usd`, `rateLimits`, `context` | cost; usage on start/heartbeat |
 | `on('session.measure')`: `e.rateLimits[{kind, percentUsed, resetsAt}]`, `e.context.percent`, `e.cost.usd` | usage bars |
 | `$.http.fetch(url, {method: 'POST', headers, body})` | posting events |

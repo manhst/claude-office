@@ -56,12 +56,85 @@ describe('session tracking', () => {
     const st = Object.fromEntries((t.snapshot() as any).agents.map((a: any) => [a.name, a.state]));
     expect(st).toEqual({ planner: 'thinking', coder: 'working' });
     expect(ev.some((e) => e.t === 'tool.result' && e.id === s.agentIds[0])).toBe(true);
-    // unknown subagent type goes to the main agent
+    // unmatched subagent type claims the next free desk (lead first); not collapsed into a Subagents: text line
     t.ingest({ type: 'subagents', sid: 's1', state: 'idle', subagents: [{ type: 'Explore', description: 'look', status: 'running' }] });
     expect((t.snapshot() as any).agents.map((a: any) => a.state)).toEqual(['working', 'idle']);
-    expect(ev.filter((e) => e.t === 'agent.text').at(-1)).toMatchObject({ id: s.agentIds[0], text: expect.stringContaining('Explore: look') });
+    expect(ev.filter((e) => e.t === 'agent.text').at(-1)).toMatchObject({ id: s.agentIds[0], text: 'look' });
     t.ingest({ type: 'state', sid: 's1', state: 'done', subagents: [] });
     expect(ev.filter((e) => e.t === 'agent.done')).toMatchObject([{ id: s.agentIds[0], result: 'Fix bug' }]);
+  });
+
+  it('maps 4 parallel busy subagents onto 4 distinct desks', () => {
+    const root = tmp();
+    for (const n of ['alpha', 'beta', 'gamma', 'delta']) agent(join(root, '.claude/agents'), `${n}.md`, `---\nname: ${n}\n---\n`);
+    let now = 1000; const ev: OfficeEvent[] = [];
+    const t = new SessionTracker({ now: () => now, desks: 6 }); t.on((e) => ev.push(e));
+    t.ingest({ type: 'start', sid: 's4', cwd: root, title: 'parallel' });
+    const [s] = t.list(); expect(s.agentIds).toHaveLength(4);
+    t.ingest({
+      type: 'subagents', sid: 's4', state: 'tool',
+      tool: { name: 'Task', detail: 'fan out' },
+      subagents: [
+        { id: '1', type: 'Explore', description: 'scan A', status: 'running' },
+        { id: '2', type: 'general-purpose', description: 'scan B', status: 'running' },
+        { id: '3', type: 'Explore', description: 'scan C', status: 'pending' },
+        { id: '4', type: 'Bash', description: 'scan D', status: 'waiting' },
+      ],
+    });
+    const states = (t.snapshot() as any).agents.map((a: any) => a.state);
+    expect(states.filter((x: string) => x === 'working')).toHaveLength(4);
+    expect(states).toEqual(['working', 'working', 'working', 'working']);
+  });
+
+  it('matches subagent by profile name ≈ type, name, or description', () => {
+    const { t, root } = setup();
+    t.ingest({ type: 'start', sid: 's1', cwd: root });
+    const [s] = t.list();
+    t.ingest({ type: 'subagents', sid: 's1', state: 'thinking', subagents: [
+      { type: 'other', name: 'coder', description: 'impl', status: 'running' },
+    ]});
+    expect(Object.fromEntries((t.snapshot() as any).agents.map((a: any) => [a.name, a.state]))).toEqual({ planner: 'thinking', coder: 'working' });
+    t.ingest({ type: 'subagents', sid: 's1', state: 'thinking', subagents: [
+      { type: 'Task', description: 'planner draft', status: 'running' },
+    ]});
+    expect(Object.fromEntries((t.snapshot() as any).agents.map((a: any) => [a.name, a.state]))).toEqual({ planner: 'working', coder: 'idle' });
+  });
+
+  it('puts leftover subagent text on the lead only when desks are exhausted', () => {
+    const root = tmp();
+    agent(join(root, '.claude/agents'), 'only.md', '---\nname: only\n---\n');
+    const t = new SessionTracker({ now: () => 1000, desks: 1, perSession: 1 });
+    const ev: OfficeEvent[] = []; t.on((e) => ev.push(e));
+    t.ingest({ type: 'start', sid: 's1', cwd: root });
+    const [s] = t.list(); expect(s.agentIds).toHaveLength(1);
+    t.ingest({ type: 'subagents', sid: 's1', state: 'idle', subagents: [
+      { type: 'Explore', description: 'one', status: 'running' },
+      { type: 'Explore', description: 'two', status: 'running' },
+    ]});
+    const a = (t.snapshot() as any).agents[0];
+    expect(a.state).toBe('working');
+    expect(ev.filter((e) => e.t === 'agent.text').at(-1)).toMatchObject({
+      id: s.agentIds[0],
+      text: expect.stringContaining('Subagents: Explore: two'),
+    });
+  });
+
+  it('keeps desks working when main is done but subagents are still busy', () => {
+    const { t, root } = setup();
+    t.ingest({ type: 'start', sid: 's1', cwd: root, title: 'still going' });
+    const [s] = t.list();
+    t.ingest({ type: 'state', sid: 's1', state: 'done', subagents: [
+      { type: 'coder', description: 'finish patch', status: 'running' },
+      { type: 'Explore', description: 'extra', status: 'running' },
+    ]});
+    const st = Object.fromEntries((t.snapshot() as any).agents.map((a: any) => [a.name, a.state]));
+    expect(st).toEqual({ planner: 'working', coder: 'working' });
+    // finished subagent clears that desk; remaining busy keeps the other working
+    t.ingest({ type: 'subagents', sid: 's1', state: 'done', subagents: [
+      { type: 'coder', description: 'finish patch', status: 'completed' },
+      { type: 'Explore', description: 'extra', status: 'running' },
+    ]});
+    expect(Object.fromEntries((t.snapshot() as any).agents.map((a: any) => [a.name, a.state]))).toEqual({ planner: 'working', coder: 'idle' });
   });
   it('drops sessions on end and after 60s without heartbeat; frees desks', () => {
     const { t, ev, tick } = setup();
