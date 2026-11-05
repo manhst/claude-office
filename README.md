@@ -69,6 +69,9 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 
 **Session dump (left sidebar).** Selecting a session shows a CLI-like field list (sid, cwd, transcript, tool, prompt, cost, started/lastSeen, source, all subagents — not agent profile markdown bodies). Session dump and Events are collapsible (localStorage `vp-collapse`). Screenshot: `docs/screens/session-dump.png` (`cd web && npm run build && node scripts/screens-session-dump.mjs`).
 
+**Responses (left sidebar).** Collapsible list of agent answers from the event log (`agent.text`, `agent.done` result, non-empty `tool.result`, `agent.error`) — newest first, same style as Events; no agent profile markdown. Pref in localStorage `vp-collapse.responses`. Screenshot: `docs/screens/session-responses.png` (`cd web && npm run build && node scripts/screens-session-responses.mjs`).
+
+
 
 Screenshot: `docs/screens/settings.png` (`cd web && npm run build && node scripts/screens-settings.mjs`).
 

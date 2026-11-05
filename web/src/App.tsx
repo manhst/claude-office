@@ -4,6 +4,7 @@ import { takeToken, connect } from './connection';
 import type { OfficeEvent } from './types';
 import { UsageBars } from './UsageBars';
 import { EventLog } from './EventLog';
+import { ResponseLog } from './ResponseLog';
 import { SessionPanel } from './SessionPanel';
 import { pickSelected } from './sessionView';
 import { IconDot } from './icons';
@@ -30,7 +31,7 @@ export function App() {
       <main>
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
           : <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} /></Suspense>}
-        <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><EventLog s={s} /></div>
+        <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><ResponseLog s={s} /><EventLog s={s} /></div>
       </main>
       {settingsOpen && boot.token ? <SettingsPanel token={boot.token} onClose={() => setSettingsOpen(false)} /> : null}
     </div>

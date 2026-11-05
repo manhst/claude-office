@@ -111,7 +111,7 @@ describe('collapse prefs', () => {
     setCollapse('events', true);
     expect(loadCollapse().events).toBe(true);
     expect(loadCollapse().session).toBe(false);
-    saveCollapse({ session: true, events: true });
-    expect(loadCollapse()).toEqual({ session: true, events: true });
+    saveCollapse({ session: true, responses: true, events: true });
+    expect(loadCollapse()).toEqual({ session: true, responses: true, events: true });
   });
 });

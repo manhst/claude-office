@@ -1,9 +1,9 @@
-/** Persist left-sidebar section collapse (Session dump / Events). Client-only localStorage. */
+/** Persist left-sidebar section collapse (Session / Responses / Events). Client-only localStorage. */
 export const VP_COLLAPSE_KEY = 'vp-collapse';
 
-export type CollapsePrefs = { session: boolean; events: boolean };
+export type CollapsePrefs = { session: boolean; responses: boolean; events: boolean };
 
-export const DEFAULT_COLLAPSE: CollapsePrefs = { session: false, events: false }; // false = expanded
+export const DEFAULT_COLLAPSE: CollapsePrefs = { session: false, responses: false, events: false }; // false = expanded
 
 function storage(): Storage | undefined {
   try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; }
@@ -16,6 +16,7 @@ export function loadCollapse(): CollapsePrefs {
     if (!raw) return out;
     const j = JSON.parse(raw) as Partial<CollapsePrefs>;
     if (typeof j.session === 'boolean') out.session = j.session;
+    if (typeof j.responses === 'boolean') out.responses = j.responses;
     if (typeof j.events === 'boolean') out.events = j.events;
   } catch { /* keep defaults */ }
   return out;
