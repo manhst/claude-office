@@ -4,10 +4,10 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { ItOpsStatus } from '../types';
-import { BBQ, BBQ_SEATS, CAFE, GARDEN, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POND, PX, ROADS, ROMANCE_SPOTS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
+import { ATM, BBQ, BBQ_SEATS, CAFE, GATE, GARDEN, GYM, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POD, POND, PRINT, PX, ROADS, ROMANCE_SPOTS, SMOKE, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
-import { forceLayoff, forceRomance, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
+import { forceDrama, forceLayoff, forceRomance, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
@@ -30,6 +30,12 @@ const ICON = {
   pulse: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.5-3 2 6 1.5-3h5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   grill: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h10v1.5H3zm1 2.5h8v5H4zm2-4.5h4v1.5H6z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 5.5V3.5M8 5.5V2.5M11 5.5V3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   flower: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor"/><path d="M8 2.5c1.2 1.5 1.2 3.2 0 4.5-1.2-1.3-1.2-3 0-4.5zm0 6.5c1.2 1.5 1.2 3.2 0 4.5-1.2-1.3-1.2-3 0-4.5zM2.5 8c1.5-1.2 3.2-1.2 4.5 0-1.3 1.2-3 1.2-4.5 0zm6.5 0c1.5-1.2 3.2-1.2 4.5 0-1.3 1.2-3 1.2-4.5 0z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+  smoke: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12h8M5 10c1-2 2-3 3-3s2 1 3 3M6.5 7c.5-1.5 1.2-2.5 1.5-2.5S9.5 5.5 10 7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  gym: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h2v2H2zm10 0h2v2h-2zM5 8.5h6v1H5zM3.5 6.5v5M12.5 6.5v5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  atm: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h10v10H3zm2 2h6v3H5zm1 5h2v1H6zm3 0h2v1H9z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  gate: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13V4l6-2 6 2v9M5 13V7m3 6V6.5m3 6.5V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  pod: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12V6l5-3 5 3v6H3zm2-1h6V7.2L8 5.5 5 7.2V11z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  print: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v3H4zm-1 4h10v5H3zm2 2h2v1H5zm6-5v8H5V3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
 };
 const boxW = (b: Box) => { const [x0, z0] = toWorld(b), [x1, z1] = toWorld({ x: b.x + b.w, y: b.y + b.h }); return { x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 }; };
 function sign(ctx: TownCtx, html: string, text: string, sub: string, mau: string, x: number, y: number, z: number, testid: string) {
@@ -225,6 +231,99 @@ function noc(ctx: TownCtx) {
   return { man, den, el, b };
 }
 
+
+/** Smoking / cooler corner west of the pond. */
+function smokeCorner(ctx: TownCtx) {
+  const b = boxW(SMOKE), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  khoi(g, b.w, 0.04, b.d, '#8a9a7a', 0, 0.02, 0, false);
+  // cooler
+  khoi(g, 0.42, 1.0, 0.42, '#e8edf2', -1.2, 0.5, -0.2); khoi(g, 0.34, 0.4, 0.34, vatLieu('#8fc9ff', { transparent: true, opacity: 0.7 }), -1.2, 1.2, -0.2, false);
+  for (const [dz, c] of [[-0.08, '#3b82f6'], [0.08, '#ef4444']] as const) khoi(g, 0.05, 0.05, 0.05, c, -1.0, 0.8, dz, false);
+  // ashtray stand + benches
+  khoi(g, 0.12, 0.9, 0.12, '#5d5f6b', 0.4, 0.45, 0.3); khoi(g, 0.28, 0.06, 0.28, '#3a3a44', 0.4, 0.92, 0.3);
+  for (const lx of [-0.3, 1.1]) { khoi(g, 1.0, 0.08, 0.36, '#6d4c35', lx, 0.4, 0.9); for (const s of [-1, 1]) khoi(g, 0.06, 0.38, 0.06, '#4e342e', lx + s * 0.4, 0.19, 0.9); }
+  // cigarette butt tray hint
+  khoi(g, 0.2, 0.04, 0.2, '#c4cad3', 0.4, 0.96, 0.3, false);
+  ctx.plant(g, b.w / 2 - 0.3, -b.d / 2 + 0.3, 0.7);
+  sign(ctx, ICON.smoke, 'Góc hút thuốc', 'cooler · tin đồn', '#64748b', b.cx, 1.8, b.cz, 'vp-smoke');
+}
+/** Outdoor gym + table tennis in the south yard. */
+function gymYard(ctx: TownCtx) {
+  const b = boxW(GYM), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  khoi(g, b.w, 0.05, b.d, '#c4b89a', 0, 0.02, 0, false);
+  // table tennis
+  khoi(g, 2.4, 0.06, 1.3, '#1e88e5', -2.2, 0.76, 0); khoi(g, 0.06, 0.72, 0.06, '#5d5f6b', -3.2, 0.36, -0.5); khoi(g, 0.06, 0.72, 0.06, '#5d5f6b', -1.2, 0.36, -0.5);
+  khoi(g, 0.06, 0.72, 0.06, '#5d5f6b', -3.2, 0.36, 0.5); khoi(g, 0.06, 0.72, 0.06, '#5d5f6b', -1.2, 0.36, 0.5);
+  khoi(g, 0.04, 0.28, 1.28, '#ffffff', -2.2, 0.92, 0, false);
+  // rack of dumbbells
+  khoi(g, 1.4, 0.5, 0.4, '#3a3a44', 1.8, 0.25, -0.6);
+  for (let i = 0; i < 4; i++) { khoi(g, 0.08, 0.08, 0.55, '#8a8f99', 1.3 + i * 0.3, 0.55, -0.6); khoi(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.85); khoi(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.35); }
+  // mat
+  khoi(g, 1.6, 0.03, 1.0, '#ef5350', 2.0, 0.04, 0.8, false);
+  sign(ctx, ICON.gym, 'Gym ngoài trời', 'bóng bàn · tạ', '#1565c0', b.cx, 1.7, b.cz - b.d / 2 + 0.2, 'vp-gym');
+}
+/** ATM + snack machine near trà đá. */
+function atmSnack(ctx: TownCtx) {
+  const b = boxW(ATM), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  khoi(g, b.w, 0.03, b.d, '#b0b8c0', 0, 0.015, 0, false);
+  // ATM
+  khoi(g, 0.7, 1.5, 0.45, '#2a2f3a', -0.9, 0.75, -0.2); khoi(g, 0.5, 0.35, 0.04, vatLieuSang('#4fc3f7'), -0.9, 1.15, 0.04, false);
+  khoi(g, 0.35, 0.08, 0.08, '#1a1f28', -0.9, 0.7, 0.05, false); khoi(g, 0.2, 0.05, 0.05, '#66bb6a', -0.9, 0.55, 0.05, false);
+  // snack machine
+  khoi(g, 0.85, 1.7, 0.55, '#e53935', 0.7, 0.85, -0.15); khoi(g, 0.7, 1.2, 0.04, vatLieu('#81d4fa', { transparent: true, opacity: 0.55 }), 0.7, 0.95, 0.14, false);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) khoi(g, 0.14, 0.14, 0.1, ['#ffeb3b', '#8bc34a', '#ff9800', '#e91e63', '#fff', '#2196f3'][(r * 3 + c) % 6], 0.4 + c * 0.22, 1.35 - r * 0.3, 0.1, false);
+  khoi(g, 0.35, 0.08, 0.12, '#1a1a1a', 0.7, 0.25, 0.15, false);
+  sign(ctx, ICON.atm, 'ATM · Snack', 'rút tiền · mì tôm', '#c62828', b.cx, 2.1, b.cz, 'vp-atm');
+}
+/** Parking / security gate SW. */
+function securityGate(ctx: TownCtx) {
+  const b = boxW(GATE), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  khoi(g, b.w, 0.03, b.d, '#9e9e9e', 0, 0.015, 0, false);
+  // booth
+  khoi(g, 1.2, 2.0, 1.2, '#eceff1', -1.3, 1.0, 0); khoi(g, 1.3, 0.1, 1.3, '#37474f', -1.3, 2.05, 0, false);
+  khoi(g, 0.7, 0.5, 0.05, vatLieu('#81d4fa', { transparent: true, opacity: 0.5 }), -1.3, 1.3, 0.6, false);
+  khoi(g, 0.3, 0.08, 0.08, '#fdd835', -1.3, 1.7, 0.62, false);
+  // barrier arm
+  khoi(g, 0.15, 0.9, 0.15, '#455a64', 0.2, 0.45, 0); khoi(g, 2.4, 0.1, 0.12, '#fdd835', 1.4, 0.95, 0); khoi(g, 2.4, 0.1, 0.04, '#212121', 1.4, 0.95, 0.02, false);
+  // parking lines
+  for (let i = 0; i < 3; i++) khoi(g, 0.08, 0.02, 1.0, '#ffffff', 0.6 + i * 0.9, 0.03, 0.3, false);
+  sign(ctx, ICON.gate, 'Cổng bảo vệ', 'đỗ xe · xin vào', '#455a64', b.cx, 2.4, b.cz, 'vp-gate');
+}
+/** Glass outdoor meeting pod — fake meetings / naps. */
+function meetingPod(ctx: TownCtx) {
+  const b = boxW(POD), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  const glass = vatLieu('#b3e5fc', { transparent: true, opacity: 0.35 });
+  khoi(g, b.w, 0.06, b.d, '#cfd8dc', 0, 0.03, 0, false);
+  // glass walls
+  khoi(g, b.w, 2.2, 0.08, glass, 0, 1.1, -b.d / 2 + 0.04, false);
+  khoi(g, b.w, 2.2, 0.08, glass, 0, 1.1, b.d / 2 - 0.04, false);
+  for (const s of [-1, 1]) khoi(g, 0.08, 2.2, b.d, glass, s * (b.w / 2 - 0.04), 1.1, 0, false);
+  khoi(g, b.w + 0.2, 0.1, b.d + 0.2, '#90a4ae', 0, 2.25, 0, false);
+  // table + chairs
+  khoi(g, 1.4, 0.06, 0.8, '#eceff1', 0, 0.72, 0); khoi(g, 0.08, 0.7, 0.08, '#78909c', 0, 0.35, 0);
+  for (const [dx, dz] of [[-0.7, 0.55], [0.7, 0.55], [-0.7, -0.55], [0.7, -0.55]]) {
+    khoi(g, 0.4, 0.06, 0.4, '#42a5f5', dx, 0.45, dz); khoi(g, 0.05, 0.42, 0.05, '#546e7a', dx, 0.21, dz);
+  }
+  // laptop decoy
+  khoi(g, 0.35, 0.02, 0.25, '#263238', 0.15, 0.78, 0.1, false); khoi(g, 0.35, 0.22, 0.02, vatLieuSang('#4fc3f7'), 0.15, 0.9, -0.02, false);
+  sign(ctx, ICON.pod, 'Pod họp ngoài', 'meeting giả · ngủ', '#0288d1', b.cx, 2.6, b.cz, 'vp-pod');
+}
+/** Photocopy / printer kiosk on the front sidewalk. */
+function printKiosk(ctx: TownCtx) {
+  const b = boxW(PRINT), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  khoi(g, b.w, 0.03, b.d, '#bdbdbd', 0, 0.015, 0, false);
+  // printer
+  khoi(g, 1.1, 0.85, 0.7, '#eceff1', -0.6, 0.45, 0); khoi(g, 0.9, 0.08, 0.5, '#90a4ae', -0.6, 0.92, 0);
+  khoi(g, 0.5, 0.05, 0.35, '#ffffff', -0.6, 0.98, 0.05, false); // paper out
+  khoi(g, 0.2, 0.08, 0.08, '#66bb6a', -0.2, 0.7, 0.36, false);
+  // photocopy stand
+  khoi(g, 0.9, 1.1, 0.65, '#78909c', 1.0, 0.55, 0); khoi(g, 0.7, 0.5, 0.04, vatLieu('#81d4fa', { transparent: true, opacity: 0.45 }), 1.0, 0.9, 0.34, false);
+  khoi(g, 0.5, 0.02, 0.4, '#fafafa', 1.0, 1.12, 0.05, false);
+  // paper stack mess
+  for (let i = 0; i < 3; i++) khoi(g, 0.35, 0.02, 0.28, '#fff', -0.1 + i * 0.05, 0.2 + i * 0.03, 0.5, false);
+  sign(ctx, ICON.print, 'Máy in · photocopy', 'kẹt giấy · lương sếp?', '#546e7a', b.cx, 1.9, b.cz, 'vp-print');
+}
+
 // ---------- side characters ----------
 interface Pet { goc: THREE.Group; dau: THREE.Group; duoi: THREE.Group; chan: THREE.Group[] }
 function petMesh(meo: boolean): Pet {
@@ -270,7 +369,7 @@ function trexMesh(): Trex {
 interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; trex?: Trex; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
 /** Short act bit under the name — only when it adds info beyond the name. */
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò', hunt: 'săn', chomp: 'ăn', carry: 'tha', carried: 'bị tha' };
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò', smoke: 'hút thuốc', gym: 'gym', atm: 'ATM', gate: 'cổng', pod: 'pod họp', print: 'máy in', drama: 'drama', hunt: 'săn', chomp: 'ăn', carry: 'tha', carried: 'bị tha' };
 const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo', trex: 'T-Rex' };
 
 export class TownLayer {
@@ -279,7 +378,7 @@ export class TownLayer {
   private p: ReturnType<typeof pond>; private traffic: Traffic; private cars: TrafficLayer; private k: ReturnType<typeof noc>; private nocKey = '';
   private hearts: HeartFX; private heartCd = 0;
   constructor(private ctx: TownCtx, now = Date.now()) {
-    ground(ctx); cafe(ctx); massage(ctx); xemNuong(ctx); garden(ctx); trada(ctx); this.p = pond(ctx); this.k = noc(ctx);
+    ground(ctx); cafe(ctx); massage(ctx); xemNuong(ctx); garden(ctx); trada(ctx); smokeCorner(ctx); gymYard(ctx); atmSnack(ctx); securityGate(ctx); meetingPod(ctx); printKiosk(ctx); this.p = pond(ctx); this.k = noc(ctx);
     this.hearts = new HeartFX(ctx.nhom);
     this.world = initialWorld(now); this.lastStep = now; this.traffic = initialTraffic(now); this.cars = new TrafficLayer(ctx.nhom);
     // Screenshot/debug hook, opt-in via localStorage 'vp-debug' = '1': trigger a crash/fire or a garden affair.
@@ -288,6 +387,7 @@ export class TownLayer {
       w.__vpTraffic = { crash: (x = 700) => { this.traffic = forceCrash(this.traffic, Date.now(), x); }, fire: (x = 1000) => { this.traffic = forceFire(this.traffic, Date.now(), x); } };
       w.__vpTown = {
         romance: () => { this.world = forceRomance(this.world, Date.now(), Math.random); },
+        drama: (kind: 'smoke' | 'gym' | 'atm' | 'print' | 'pod' | 'gate' = 'smoke') => { this.world = forceDrama(this.world, Date.now(), kind, Math.random); },
         hearts: (x = 0, z = -14.5) => { this.hearts.burst(x, z, Date.now(), true); },
         layoff: (mode: 'eat' | 'pond' | 'hunt' = 'hunt') => { this.world = forceLayoff(this.world, Date.now(), mode, Math.random); },
         layoffEat: () => { this.world = forceLayoff(this.world, Date.now(), 'eat', Math.random); },
@@ -419,7 +519,9 @@ export class TownLayer {
     else if (a === 'chat') { tP = -0.7 + 0.35 * Math.sin(w * 3); tT = -0.25 + 0.2 * Math.sin(w * 2.3); }
     else if (a === 'fall') { tT = tP = -2.9; }
     else if (a === 'massage') { tT = tP = -0.2; }
-    else if (a === 'bbq') { tP = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); tT = -0.3; dau = -0.05; }
+    else if (a === 'bbq' || a === 'atm' || a === 'print') { tP = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); tT = -0.3; dau = -0.05; }
+    else if (a === 'gym') { tT = -1.4 + 0.4 * Math.sin(w * 5); tP = -1.4 + 0.4 * Math.sin(w * 5 + Math.PI); }
+    else if (a === 'smoke' || a === 'gate' || a === 'pod' || a === 'drama') { tP = -0.9 + 0.2 * Math.sin(w * 2); tT = -0.35; dau = -0.05; }
     else if (a === 'romance') { tP = -0.9; tT = -0.9; than = 0.15; dau = -0.12; }
     else if (f.e.kind === 'itops') { tT = tP = -1.1; dau = 0.15; } // typing at the indoor panel
     h.chan[0].rotation.x = THREE.MathUtils.lerp(h.chan[0].rotation.x, chan, k); h.chan[1].rotation.x = THREE.MathUtils.lerp(h.chan[1].rotation.x, -chan, k);

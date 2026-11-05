@@ -1,6 +1,6 @@
 // Adapter (our code): maps OUR reducer state onto the display states used by the Vanphong visuals. Pure, unit-tested.
 import { LINES, PAIRS } from '../town/dialogue';
-import { BBQ_SEATS, MASSAGE_BEDS, ROMANCE_SPOTS, toWorld } from '../town/map';
+import { ATM_SPOTS, BBQ_SEATS, GATE_SPOTS, GYM_SPOTS, MASSAGE_BEDS, POD_SPOTS, PRINT_SPOTS, ROMANCE_SPOTS, SMOKE_SPOTS, toWorld } from '../town/map';
 import type { AgentUI, MessageUI, OfficeState } from '../reducer';
 import { BUBBLE_MS, DESK_COLS, add, allDesks, DOOR, type Vec3 } from '../layout';
 import { BODY_R, BOUNDS, DESK_HALF, findPath, visiting, type Goal, type Rect } from '../walk';
@@ -68,8 +68,8 @@ export const vpDeskRects = (): Rect[] => allDesks().map(vpDesk).map(([x, , z]) =
 // ---- Our additions: a pantry (left) and a game room (right) around the work room, and what free agents do there. ----
 /** Building floor drawn by the scene; walkers plan inside VP_BOUNDS (grid-aligned so x = 0, the door gap, is a cell). */
 export const BIEN = { x0: -12.8, x1: 12.8, z0: -8.4, z1: 7.6 };
-/** Walk grid covers the office floor plus the north strip out to Xuka, the garden, and Xém Nướng (agents leave through the door). */
-export const VP_BOUNDS: Rect = { x0: -20.5, x1: 21.5, z0: -18.5, z1: 7.25 };
+/** Walk grid covers the office floor, north strip (Xuka / garden / Xém Nướng), and south yard amenities (gym / pod / gate / ATM / print). */
+export const VP_BOUNDS: Rect = { x0: -20.5, x1: 21.5, z0: -18.5, z1: 13.5 };
 export const PANTRY_X1 = -8, GAME_X0 = 8;
 /** Furniture footprints (centre + half extents, x/z). The scene builds each piece here; walkers path around them. */
 export interface Item { x: number; z: number; hx: number; hz: number }
@@ -113,8 +113,17 @@ export const MASSAGE_SPOTS: Spot[] = MASSAGE_BEDS.map((p) => { const [x, z] = to
 export const BBQ_SPOTS: Spot[] = BBQ_SEATS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: Math.PI }; });
 /** Garden affair meet points (plan → world). */
 export const ROMANCE_CENTERS: Vec3[] = ROMANCE_SPOTS.map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
+const amenitySpot = (p: { x: number; y: number }): Spot => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: Math.PI }; };
+export const SMOKE_AGENT_SPOTS: Spot[] = SMOKE_SPOTS.map(amenitySpot);
+export const GYM_AGENT_SPOTS: Spot[] = GYM_SPOTS.map(amenitySpot);
+export const ATM_AGENT_SPOTS: Spot[] = ATM_SPOTS.map(amenitySpot);
+export const GATE_AGENT_SPOTS: Spot[] = GATE_SPOTS.map(amenitySpot);
+export const POD_AGENT_SPOTS: Spot[] = POD_SPOTS.map(amenitySpot);
+export const PRINT_AGENT_SPOTS: Spot[] = PRINT_SPOTS.map(amenitySpot);
+/** Outdoor amenity meet centers for gossip / drama pairs. */
+export const DRAMA_CENTERS: Vec3[] = [...SMOKE_SPOTS, ...POD_SPOTS].map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
 
-export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage' | 'bbq' | 'romance';
+export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print';
 export interface IdlePlan { kind: IdleKind; key: string; to: Vec3; face: number; partner?: string; first?: boolean }
 /** Free agents pick a new activity every slot. Longer slots = fewer chatter bursts. */
 export const IDLE_SLOT_MS = 36_000;
@@ -129,19 +138,27 @@ export function idlePlans(agents: Record<string, AgentUI>, order: string[], mess
   const hosts = new Set(order.map((x) => agents[x] && visiting(agents[x], agents, messages)).filter(Boolean)); // someone is at their desk
   const ids = order.filter((id) => agents[id] && isFree(agents[id]) && !visiting(agents[id], agents, messages) && !hosts.has(id) && (!freeSince || (freeSince[id] ?? Infinity) <= cut))
     .sort((x, y) => hash(`${x}:${slot}`) - hash(`${y}:${slot}`));
-  const taken = new Set<string>(); let coffee = 0, pool = 0, massage = 0, bbq = 0, pairs = 0;
+  const taken = new Set<string>(); let coffee = 0, pool = 0, massage = 0, bbq = 0, smoke = 0, gym = 0, atm = 0, gate = 0, pod = 0, print = 0, pairs = 0;
   for (const id of ids) {
     if (taken.has(id)) continue; taken.add(id);
     const r = hash(`${slot}:${id}`) % 100;
-    if (r < 30) continue; // stays at the desk (more quiet time)
-    if (r < 42) { if (coffee < COFFEE_SPOTS.length) out[id] = { kind: 'coffee', key: `coffee:${slot}:${coffee}`, ...COFFEE_SPOTS[coffee++] }; continue; }
-    if (r < 52) { if (pool < POOL_SPOTS.length) out[id] = { kind: 'pool', key: `pool:${slot}:${pool}`, ...POOL_SPOTS[pool++] }; continue; }
-    if (r < 62) { if (massage < MASSAGE_SPOTS.length) out[id] = { kind: 'massage', key: `massage:${slot}:${massage}`, ...MASSAGE_SPOTS[massage++] }; continue; }
-    if (r < 74) { if (bbq < BBQ_SPOTS.length) out[id] = { kind: 'bbq', key: `bbq:${slot}:${bbq}`, ...BBQ_SPOTS[bbq++] }; continue; }
+    if (r < 24) continue; // stays at the desk (more quiet time)
+    if (r < 34) { if (coffee < COFFEE_SPOTS.length) out[id] = { kind: 'coffee', key: `coffee:${slot}:${coffee}`, ...COFFEE_SPOTS[coffee++] }; continue; }
+    if (r < 42) { if (pool < POOL_SPOTS.length) out[id] = { kind: 'pool', key: `pool:${slot}:${pool}`, ...POOL_SPOTS[pool++] }; continue; }
+    if (r < 50) { if (massage < MASSAGE_SPOTS.length) out[id] = { kind: 'massage', key: `massage:${slot}:${massage}`, ...MASSAGE_SPOTS[massage++] }; continue; }
+    if (r < 58) { if (bbq < BBQ_SPOTS.length) out[id] = { kind: 'bbq', key: `bbq:${slot}:${bbq}`, ...BBQ_SPOTS[bbq++] }; continue; }
+    if (r < 63) { if (smoke < SMOKE_AGENT_SPOTS.length) out[id] = { kind: 'smoke', key: `smoke:${slot}:${smoke}`, ...SMOKE_AGENT_SPOTS[smoke++] }; continue; }
+    if (r < 68) { if (gym < GYM_AGENT_SPOTS.length) out[id] = { kind: 'gym', key: `gym:${slot}:${gym}`, ...GYM_AGENT_SPOTS[gym++] }; continue; }
+    if (r < 72) { if (atm < ATM_AGENT_SPOTS.length) out[id] = { kind: 'atm', key: `atm:${slot}:${atm}`, ...ATM_AGENT_SPOTS[atm++] }; continue; }
+    if (r < 75) { if (gate < GATE_AGENT_SPOTS.length) out[id] = { kind: 'gate', key: `gate:${slot}:${gate}`, ...GATE_AGENT_SPOTS[gate++] }; continue; }
+    if (r < 78) { if (pod < POD_AGENT_SPOTS.length) out[id] = { kind: 'pod', key: `pod:${slot}:${pod}`, ...POD_AGENT_SPOTS[pod++] }; continue; }
+    if (r < 81) { if (print < PRINT_AGENT_SPOTS.length) out[id] = { kind: 'print', key: `print:${slot}:${print}`, ...PRINT_AGENT_SPOTS[print++] }; continue; }
     const partner = ids.find((x) => !taken.has(x)); if (!partner) continue;
     taken.add(partner);
-    const kind: IdleKind = r >= 93 ? 'romance' : r >= 85 ? 'fight' : 'chat';
-    const spots = kind === 'fight' ? FIGHT_SPOTS : kind === 'romance' ? ROMANCE_CENTERS : CHAT_SPOTS;
+    const kind: IdleKind = r >= 95 ? 'romance' : r >= 90 ? 'fight' : r >= 85 ? 'chat' : 'chat';
+    // 81-100: pairs — occasionally gossip at smoke/pod (drama chat) via DRAMA_CENTERS when r in 81..84 range already handled; use smoke-ish for mid
+    const useDrama = r >= 81 && r < 85;
+    const spots = kind === 'fight' ? FIGHT_SPOTS : kind === 'romance' ? ROMANCE_CENTERS : useDrama ? DRAMA_CENTERS : CHAT_SPOTS;
     const gap = kind === 'fight' ? PAIR_GAP.fight : kind === 'romance' ? PAIR_GAP.romance : PAIR_GAP.chat;
     const si = (pairs++ + slot) % spots.length, c = spots[si], key = `${kind}:${slot}:${si}:${id}:${partner}`;
     out[id] = { kind, key, to: [c[0] - gap, 0, c[2]], face: Math.PI / 2, partner, first: true };
@@ -160,10 +177,22 @@ export function idleLine(id: string, p: IdlePlan, now: number): string {
     if ((turn % 2 === 0) !== !!p.first) return '';
     if (p.kind === 'fight') { const pair = FIGHT_PAIRS[hash(`${p.key}:${Math.floor(turn / 2)}`) % FIGHT_PAIRS.length]; return pair[turn % 2]; }
     if (p.kind === 'romance') return LINES.romance[h % LINES.romance.length];
+    // chat at drama centers (key contains smoke/pod coords via DRAMA) sometimes gossip
+    if (p.key.includes('chat') && (h % 3 === 0)) {
+      const pack = [LINES.gossipBoss, LINES.trollPR, LINES.ghostWork, LINES.gossipColleague, LINES.remoteWar][h % 5];
+      return pack[hash(`${id}:${turn}`) % pack.length];
+    }
     return CHAT_LINES[h % CHAT_LINES.length];
   }
   if (h % 5 !== 0) return ''; // speak less often while sipping / playing / eating
-  const lines = p.kind === 'coffee' ? COFFEE_LINES : p.kind === 'massage' ? LINES.massageTalk : p.kind === 'bbq' ? LINES.bbqTalk : POOL_LINES;
+  const solo: Partial<Record<IdleKind, readonly string[]>> = {
+    coffee: COFFEE_LINES, pool: POOL_LINES, massage: LINES.massageTalk, bbq: LINES.bbqTalk,
+    smoke: LINES.smokeTalk, gym: LINES.gymTalk, atm: LINES.atmTalk, gate: LINES.gateTalk, pod: LINES.podTalk, print: LINES.printTalk,
+  };
+  const lines = solo[p.kind] ?? POOL_LINES;
+  // spice: occasionally gossip / drama at smoke & pod
+  if ((p.kind === 'smoke' || p.kind === 'pod') && h % 4 === 0) return LINES.gossipBoss[hash(`${id}:${turn}`) % LINES.gossipBoss.length];
+  if (p.kind === 'gym' && h % 6 === 0) { const pair = PAIRS.gymArgue[hash(`${id}:${turn}`) % PAIRS.gymArgue.length]; return pair[0]; }
   return lines[hash(`${id}:${turn}`) % lines.length];
 }
 

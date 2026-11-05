@@ -4,7 +4,7 @@ import { LANES } from '../src/town/map';
 import { PAIRS } from '../src/town/dialogue';
 import { initialWorld, knockDown, step } from '../src/town/sim';
 import { BBQ_SEATS, MASSAGE_BEDS } from '../src/town/map';
-import { forceRomance } from '../src/town/sim';
+import { forceDrama, forceRomance } from '../src/town/sim';
 
 const run = (t: Traffic, from: number, to: number, r: () => number = () => 0.5, peds: { id: string; x: number; y: number }[] = []) => {
   const hits: string[] = []; for (let n = from; n <= to; n += 200) { const o = stepTraffic(t, n, r, peds); t = o.traffic; hits.push(...o.hits); } return { t, hits };
@@ -60,5 +60,22 @@ describe('main-road traffic', () => {
     const a = w.ents.find((e) => e.id === 'npc-1')!, b = w.ents.find((e) => e.id === 'npc-2')!;
     expect(a.next).toBe('romance'); expect(b.next).toBe('romance');
     expect(a.partner).toBe('npc-2'); expect(b.partner).toBe('npc-1');
+  });
+  it('forceDrama sends two NPCs to an outdoor amenity', () => {
+    for (const kind of ['smoke', 'gym', 'atm', 'print', 'pod', 'gate'] as const) {
+      const w = forceDrama(initialWorld(0), 0, kind, () => 0.2);
+      const a = w.ents.find((e) => e.id === 'npc-1')!, b = w.ents.find((e) => e.id === 'npc-2')!;
+      expect(a.next).toBe(kind); expect(b.next).toBe(kind);
+      expect(a.partner).toBe('npc-2'); expect(b.partner).toBe('npc-1');
+      expect(a.say).toBeTruthy(); expect(b.say).toBeTruthy();
+    }
+  });
+  it('NPCs sometimes go to the smoking corner', () => {
+    const w = step(initialWorld(0), 2000, () => 0.60); const n = w.ents.find((e) => e.id === 'npc-1')!;
+    expect(n.next).toBe('smoke');
+  });
+  it('NPCs sometimes go to the outdoor gym', () => {
+    const w = step(initialWorld(0), 2000, () => 0.66); const n = w.ents.find((e) => e.id === 'npc-1')!;
+    expect(n.next).toBe('gym');
   });
 });

@@ -75,6 +75,8 @@ Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kio
 **Layoff** is a voxel T-Rex that occasionally roams the town hunting idle/useless staff (side NPCs chatting, coffee, BBQ, massage, romance, etc., and free office agents). Random outcome: eat on the spot (comedic chomp → respawn) or carry them to the crocodile pond. Dialogue in `web/src/town/dialogue.ts` (`layoffHunt` / `layoffEat` / `layoffThrow` / `victimPanic` / `layoffWitness`, ≥30 lines each). Debug: `localStorage vp-debug=1` then `__vpTown.layoffEat()` / `__vpTown.layoffPond()`. Screenshots: `docs/screens/layoff-*.png` (`cd web && npm run build && node scripts/screens-layoff.mjs`).
 
 **Flower garden** between Xuka and Xém Nướng: rarely two characters sneak there for a secret PG office-soap affair (stand close, kiss, flat SVG heart pops).
+
+**Outdoor amenities** on empty map edges (voxel, same style): smoking/cooler corner (west of pond), outdoor gym / table tennis (south yard), ATM + snack machine (east, by trà đá), parking/security gate (SW), glass outdoor meeting pod (south yard east of gym), photocopy/printer kiosk (front sidewalk). NPCs and free office agents visit occasionally. Office-drama dialogue packs (≥30 unique VN lines each) cover gossiping about the boss, trolling PR reviews, ghosting Slack, gossiping about colleagues (and getting caught), layoff/PIP rumors, fake sick leave (caught at Xém Nướng / Xuka), and remote vs onsite desk wars — plus amenity go/talk lines and two-sided `PAIRS`. Debug: `localStorage vp-debug=1` then `__vpTown.drama('smoke'|'gym'|'atm'|'print'|'pod'|'gate')`. Screenshots: `docs/screens/town-{smoke-corner,gym-yard,atm-snack,security-gate,meeting-pod,print-kiosk,drama-smoke}.png` (`cd web && npm run build && node scripts/screens-amenities.mjs`).
 Speech bubbles are paced slower (longer display + gaps, less idle chatter) so lines are readable.
 
 **Main-road traffic** (front street, `web/src/town/traffic.ts`, at most 5 vehicles plus responders): 22 voxel vehicle types (xe máy, xe đạp, xe ôm Grab, ô tô con, taxi, bán tải, xe buýt, ô tô tải, container, trộn bê tông, xe rác, xe cẩu, xe lu, máy xúc, máy ủi, xe tăng, ba gác, cứu thương, cứu hỏa, cảnh sát, xe kiểm tra đường, xe bán kem). Vehicles sometimes knock a pedestrian over (they get back up), rear-end each other (both drivers get out and argue in turns), or catch fire and explode. Police, fire truck and ambulance are dispatched to incidents; wrecks are cleared after a while. Comedic only.
@@ -84,7 +86,7 @@ Speech bubbles are paced slower (longer display + gaps, less idle chatter) so li
 
 **Character labels** show the name plus at most a short status bit, scaled to about 70% of the previous size.
 
-**Dialogue** lives in `web/src/town/dialogue.ts`: line categories (incl. BBQ / romance) plus two-sided argument pairs; `web/test/dialogue.test.ts` checks every category has at least 30 unique lines.
+**Dialogue** lives in `web/src/town/dialogue.ts`: line categories (incl. BBQ / romance / outdoor amenities / office drama) plus two-sided argument pairs; `web/test/dialogue.test.ts` checks every category has at least 30 unique lines.
 
 Screenshots: `docs/screens/town-*.png` (`cd web && npm run build && node scripts/screens-town.mjs`).
 
@@ -189,7 +191,7 @@ event ingest auth (loopback, Origin, Content-Type, preflight), payload sanitizin
 
 Demo mode (`npm run screens` in `web/`, headless Chrome):
 - `docs/screens/session-1280-vanphong.png`, `session-1280-vanphong-claude-md.png`, `session-390-vanphong.png`
-- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`); `town-office-itops.png`, `town-labels.png`, `town-agent-massage.png`, `town-ambulance.png` (`node scripts/screens-followup.mjs`); `town-xem-nuong.png`, `town-flower-garden.png`, `town-slower-talk.png` (`node scripts/screens-north.mjs`)
+- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`); `town-office-itops.png`, `town-labels.png`, `town-agent-massage.png`, `town-ambulance.png` (`node scripts/screens-followup.mjs`); `town-xem-nuong.png`, `town-flower-garden.png`, `town-slower-talk.png` (`node scripts/screens-north.mjs`); outdoor amenities + drama: `town-smoke-corner.png`, `town-gym-yard.png`, `town-atm-snack.png`, `town-security-gate.png`, `town-meeting-pod.png`, `town-print-kiosk.png`, `town-drama-smoke.png` (`node scripts/screens-amenities.mjs`)
 
 The old 2D (SVG) and 3D (React Three Fiber + Quaternius model) views were removed; the Vanphong view replaces both.
 

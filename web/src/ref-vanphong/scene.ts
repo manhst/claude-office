@@ -401,6 +401,12 @@ export class VanphongScene {
       tP = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); tT = -0.3; dau = -0.05; noi = n.noiIdle;
     } else if (n.idleKind === 'romance') { // ours: secret garden kiss lean
       tP = -0.95; tT = -0.95; than = 0.18; dau = -0.15; noi = n.noiIdle;
+    } else if (n.idleKind === 'gym') {
+      tT = -1.35 + 0.45 * Math.sin(w * 5); tP = -1.35 + 0.45 * Math.sin(w * 5 + Math.PI); noi = n.noiIdle;
+    } else if (n.idleKind === 'smoke' || n.idleKind === 'gate' || n.idleKind === 'pod') {
+      tP = -0.85 + 0.2 * Math.sin(w * 1.8); tT = -0.3; dau = -0.06; noi = n.noiIdle;
+    } else if (n.idleKind === 'atm' || n.idleKind === 'print') {
+      tP = -1.6 + 0.2 * Math.max(0, Math.sin(w * 1.2)); tT = -0.4; dau = -0.1; noi = n.noiIdle;
     } else if (n.idleKind === 'chat' && !n.noiIdle) { // ours: listening, arms down, nodding
       dau = 0.08 * Math.max(0, Math.sin(w * 2.4)); dauY = 0.05 * Math.sin(w * 0.9); than = 0.012 * Math.sin(w * 2);
     } else { // standing at a colleague's desk: the reference's "le_tan" chatting pose

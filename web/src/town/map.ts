@@ -34,6 +34,24 @@ export const TRADA_STOOLS: Pt[] = [{ x: 1395, y: 560 }, { x: 1445, y: 575 }, { x
 export const POND_EDGE: Pt[] = [{ x: 215, y: 320 }, { x: 215, y: 500 }, { x: 120, y: 230 }, { x: 110, y: 610 }];
 export const STREET: Pt[] = [{ x: 60, y: 65 }, { x: 700, y: 65 }, { x: 1550, y: 65 }, { x: 60, y: 795 }, { x: 1000, y: 795 }, { x: 1550, y: 795 }, { x: 235, y: 250 }, { x: 1305, y: 640 }, { x: 1305, y: 420 }, { x: 235, y: 700 }];
 export const YARD: Pt[] = [{ x: 400, y: 880 }, { x: 900, y: 890 }, { x: 1300, y: 880 }, { x: 1450, y: 700 }, { x: 1500, y: 650 }, { x: 60, y: 880 }, { x: 1440, y: 420 }];
+/** Smoking / water-cooler corner west of the pond (gossip + deadline vent). */
+export const SMOKE: Box = { x: 40, y: 620, w: 150, h: 90 };
+export const SMOKE_SPOTS: Pt[] = [{ x: 70, y: 655 }, { x: 115, y: 670 }, { x: 155, y: 650 }];
+/** Outdoor gym / table tennis in the south yard. */
+export const GYM: Box = { x: 480, y: 860, w: 340, h: 110 };
+export const GYM_SPOTS: Pt[] = [{ x: 520, y: 910 }, { x: 600, y: 900 }, { x: 680, y: 910 }, { x: 760, y: 900 }];
+/** ATM + snack machine east of the office, south of trà đá. */
+export const ATM: Box = { x: 1400, y: 690, w: 150, h: 100 };
+export const ATM_SPOTS: Pt[] = [{ x: 1430, y: 740 }, { x: 1480, y: 755 }, { x: 1520, y: 740 }];
+/** Parking / security gate at the SW approach (left avenue → front street). */
+export const GATE: Box = { x: 40, y: 690, w: 150, h: 70 };
+export const GATE_SPOTS: Pt[] = [{ x: 70, y: 720 }, { x: 120, y: 735 }, { x: 165, y: 720 }];
+/** Glass outdoor meeting pod in the south yard (east of gym) — fake meetings / naps. */
+export const POD: Box = { x: 900, y: 860, w: 170, h: 110 };
+export const POD_SPOTS: Pt[] = [{ x: 940, y: 910 }, { x: 990, y: 920 }, { x: 1040, y: 910 }];
+/** Photocopy / printer kiosk on the office front sidewalk. */
+export const PRINT: Box = { x: 680, y: 722, w: 160, h: 42 };
+export const PRINT_SPOTS: Pt[] = [{ x: 710, y: 742 }, { x: 760, y: 745 }, { x: 810, y: 742 }];
 export const pondCenter = (): Pt => ({ x: POND.cx, y: POND.cy });
 export const inPond = (p: Pt) => ((p.x - POND.cx) / POND.rx) ** 2 + ((p.y - POND.cy) / POND.ry) ** 2 <= 1;
 /** Plan px → world [x, z]. */

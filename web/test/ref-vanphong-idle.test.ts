@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentUI, MessageUI } from '../src/reducer';
-import { idleLine, idlePlans, vpGoal, vpObstacles, vpPlan, BBQ_SPOTS, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, ROMANCE_CENTERS, ROOM, VP_BOUNDS, type IdlePlan } from '../src/ref-vanphong/adapter';
+import { idleLine, idlePlans, vpGoal, vpObstacles, vpPlan, ATM_AGENT_SPOTS, BBQ_SPOTS, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, GATE_AGENT_SPOTS, GYM_AGENT_SPOTS, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POD_AGENT_SPOTS, POOL_SPOTS, PRINT_AGENT_SPOTS, ROMANCE_CENTERS, ROOM, SMOKE_AGENT_SPOTS, VP_BOUNDS, type IdlePlan } from '../src/ref-vanphong/adapter';
 import { clearLine, findPath, type Rect } from '../src/walk';
 import { DOOR, allDesks } from '../src/layout';
 
 const ag = (id: string, p: Partial<AgentUI> = {}): AgentUI => ({ id, role: 'coder', name: id, state: 'idle', desk: { x: 0, y: 0 }, tools: [], ...p });
 const pairPts = (cs: [number, number, number][], d: number) => cs.flatMap((c) => [[c[0] - d, 0, c[2]], [c[0] + d, 0, c[2]]] as [number, number, number][]);
-const allSpots = (): [number, number, number][] => [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to), ...BBQ_SPOTS.map((s) => s.to), ...pairPts(CHAT_SPOTS, PAIR_GAP.chat), ...pairPts(FIGHT_SPOTS, PAIR_GAP.fight)]; // romance pairs stand close on purpose
+const allSpots = (): [number, number, number][] => [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to), ...BBQ_SPOTS.map((s) => s.to), ...SMOKE_AGENT_SPOTS.map((s) => s.to), ...GYM_AGENT_SPOTS.map((s) => s.to), ...ATM_AGENT_SPOTS.map((s) => s.to), ...GATE_AGENT_SPOTS.map((s) => s.to), ...POD_AGENT_SPOTS.map((s) => s.to), ...PRINT_AGENT_SPOTS.map((s) => s.to), ...pairPts(CHAT_SPOTS, PAIR_GAP.chat), ...pairPts(FIGHT_SPOTS, PAIR_GAP.fight)]; // romance pairs stand close on purpose
 
 describe('idle behaviour gaps', () => {
   it('idle spots keep their distance so two people never overlap', () => {
@@ -92,7 +92,7 @@ describe('idle behaviour gaps', () => {
     }
   });
   it('idleLine is deterministic for the same inputs', () => {
-    const plans: IdlePlan[] = (['chat', 'fight', 'coffee', 'pool', 'massage', 'bbq', 'romance'] as const).map((kind) => ({ kind, key: `${kind}:3:x`, to: [0, 0, 0], face: 0, partner: 'y', first: true }));
+    const plans: IdlePlan[] = (['chat', 'fight', 'coffee', 'pool', 'massage', 'bbq', 'romance', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print'] as const).map((kind) => ({ kind, key: `${kind}:3:x`, to: [0, 0, 0], face: 0, partner: 'y', first: true }));
     for (const p of plans) for (let t = 0; t < 120_000; t += 700) expect(idleLine('x', { ...p }, t)).toBe(idleLine('x', p, t));
   });
 });

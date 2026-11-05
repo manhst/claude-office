@@ -1,13 +1,15 @@
 // Side characters around the office: IT Ops (indoors), mindless NPCs, the dog Chos An, the cat Meow,
 // and Layoff the T-Rex (occasional headcount "optimization"). Pure step function, rnd injected.
 import type { ItOpsStatus } from '../types';
-import { LINES } from './dialogue';
-import { BBQ_SEATS, CAFE_SEATS, ITOPS_SPOT, MASSAGE_BEDS, POND_EDGE, ROMANCE_SPOTS, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
+import { LINES, PAIRS } from './dialogue';
+import { ATM_SPOTS, BBQ_SEATS, CAFE_SEATS, GATE_SPOTS, GYM_SPOTS, ITOPS_SPOT, MASSAGE_BEDS, POD_SPOTS, POND_EDGE, PRINT_SPOTS, ROMANCE_SPOTS, SMOKE_SPOTS, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
 export type Kind = 'itops' | 'npc' | 'dog' | 'cat' | 'trex';
-export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked' | 'bbq' | 'romance' | 'hunt' | 'chomp' | 'carry' | 'carried';
+export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'drama' | 'hunt' | 'chomp' | 'carry' | 'carried';
 export interface Ent {
   id: string; kind: Kind; name: string; look?: string; x: number; y: number; tx: number; ty: number; speed: number;
   act: Act; next?: Act; until: number; say?: string; sayUntil?: number; reported?: string; partner?: string;
+  /** Pair dialogue topic while arguing / gossiping. */
+  topic?: 'bossGossip' | 'trollReview' | 'ghostSlack' | 'deskWar' | 'gymArgue' | 'atmArgue' | 'printArgue' | 'workArgue';
 }
 /** Free office agents Layoff may hunt (plan px). Scene feeds these each tick. */
 export interface AgentPrey { id: string; x: number; y: number }
@@ -19,7 +21,7 @@ const jitter = (p: Pt, r: () => number, d = 14): Pt => ({ x: p.x + (r() - 0.5) *
 /** Bubble display defaults — paced so a human can finish reading before the next line. */
 export const SAY_MS = 6000;
 /** NPC acts that count as idle/useless (not working a Claude session task). */
-export const USELESS_ACTS: ReadonlySet<Act> = new Set(['idle', 'drink', 'beer', 'chat', 'run', 'massage', 'bbq', 'romance']);
+export const USELESS_ACTS: ReadonlySet<Act> = new Set(['idle', 'drink', 'beer', 'chat', 'run', 'massage', 'bbq', 'romance', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'drama']);
 export function initialWorld(now: number): World {
   const e = (id: string, kind: Kind, name: string, p: Pt, look?: string, speed = 90): Ent => ({ id, kind, name, look, x: p.x, y: p.y, tx: p.x, ty: p.y, speed, act: 'idle', until: now + 1500 });
   return { t: now, ents: [
@@ -62,6 +64,20 @@ export function forceRomance(w: World, now: number, r: () => number = Math.rando
   return { ...w, ents: w.ents.map((e) => {
     if (e.id === a.id) return say(go({ ...e, partner: b.id }, { x: c.x - gap, y: c.y }, 'romance', 110), pick(LINES.romance, r), now, 7000);
     if (e.id === b.id) return say(go({ ...e, partner: a.id }, { x: c.x + gap, y: c.y }, 'romance', 110), pick(LINES.romance, r), now, 7000);
+    return e;
+  }) };
+}
+/** Force a two-sided office-drama exchange at a spot (screenshots / vp-debug). */
+export function forceDrama(w: World, now: number, kind: 'smoke' | 'gym' | 'atm' | 'print' | 'pod' | 'gate' = 'smoke', r: () => number = Math.random): World {
+  const free = w.ents.filter((e) => e.kind === 'npc' && e.act !== 'gone' && e.act !== 'eaten' && e.act !== 'fall' && e.act !== 'carried' && e.act !== 'chomp');
+  if (free.length < 2) return w;
+  const a = free[0], b = free[1];
+  const spots = kind === 'gym' ? GYM_SPOTS : kind === 'atm' ? ATM_SPOTS : kind === 'print' ? PRINT_SPOTS : kind === 'pod' ? POD_SPOTS : kind === 'gate' ? GATE_SPOTS : SMOKE_SPOTS;
+  const topic: NonNullable<Ent['topic']> = kind === 'gym' ? 'gymArgue' : kind === 'atm' ? 'atmArgue' : kind === 'print' ? 'printArgue' : kind === 'pod' ? 'bossGossip' : kind === 'gate' ? 'deskWar' : 'bossGossip';
+  const pair = pick(PAIRS[topic], r), c = pick(spots, r), gap = 16;
+  return { ...w, ents: w.ents.map((e) => {
+    if (e.id === a.id) return say(go({ ...e, partner: b.id, topic }, { x: c.x - gap, y: c.y }, kind, 110), pair[0], now, 7000);
+    if (e.id === b.id) return say(go({ ...e, partner: a.id, topic }, { x: c.x + gap, y: c.y }, kind, 110), pair[1], now, 7000);
     return e;
   }) };
 }
@@ -131,13 +147,20 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
     case 'npc': {
       if (e.act === 'carried') return e;
       const x = r();
+      // Keep cafe <0.18 / beer <0.34 / massage <0.46 / bbq <0.58 so existing tests (0.3 beer, 0.45 massage, 0.50 bbq) still hit.
       if (x < 0.18) return say(go(e, jitter(pick(CAFE_SEATS, r), r), 'drink'), pick(LINES.coffee, r), now);
       if (x < 0.34) return say(go(e, jitter(pick(TRADA_STOOLS, r), r), 'beer'), pick(LINES.beer, r), now);
-      if (x < 0.46) return say(go(e, jitter(pick(MASSAGE_BEDS, r), r, 6), 'massage'), pick(LINES.massageGo, r), now);
-      if (x < 0.58) return say(go(e, jitter(pick(BBQ_SEATS, r), r, 8), 'bbq'), pick(LINES.bbqGo, r), now);
-      if (x < 0.68) return say(go(e, pick(STREET, r), 'idle', 190), pick(LINES.run, r), now);
-      if (x < 0.8) { const o = pick(w.ents.filter((z) => z.kind === 'npc' && z.id !== e.id && z.act !== 'gone' && z.act !== 'carried'), r); return o ? go(e, jitter({ x: o.x + 28, y: o.y }, r, 6), 'chat') : e; }
-      if (x < 0.9) return go(e, pick(POND_EDGE, r), r() < 0.35 ? 'fall' : 'idle');
+      if (x < 0.46) return say(go(e, jitter(pick(MASSAGE_BEDS, r), r, 6), 'massage'), pick(r() < 0.18 ? LINES.fakeSick : LINES.massageGo, r), now);
+      if (x < 0.58) return say(go(e, jitter(pick(BBQ_SEATS, r), r, 8), 'bbq'), pick(r() < 0.18 ? LINES.fakeSick : LINES.bbqGo, r), now);
+      if (x < 0.64) return say(go(e, jitter(pick(SMOKE_SPOTS, r), r, 8), 'smoke'), pick(LINES.smokeGo, r), now);
+      if (x < 0.70) return say(go(e, jitter(pick(GYM_SPOTS, r), r, 8), 'gym'), pick(LINES.gymGo, r), now);
+      if (x < 0.75) return say(go(e, jitter(pick(ATM_SPOTS, r), r, 6), 'atm'), pick(LINES.atmGo, r), now);
+      if (x < 0.79) return say(go(e, jitter(pick(GATE_SPOTS, r), r, 6), 'gate'), pick(LINES.gateGo, r), now);
+      if (x < 0.83) return say(go(e, jitter(pick(POD_SPOTS, r), r, 6), 'pod'), pick(LINES.podGo, r), now);
+      if (x < 0.87) return say(go(e, jitter(pick(PRINT_SPOTS, r), r, 6), 'print'), pick(LINES.printGo, r), now);
+      if (x < 0.92) return say(go(e, pick(STREET, r), 'idle', 190), pick(LINES.run, r), now);
+      if (x < 0.96) { const o = pick(w.ents.filter((z) => z.kind === 'npc' && z.id !== e.id && z.act !== 'gone' && z.act !== 'carried'), r); return o ? go(e, jitter({ x: o.x + 28, y: o.y }, r, 6), 'chat') : e; }
+      if (x < 0.98) return go(e, pick(POND_EDGE, r), r() < 0.35 ? 'fall' : 'idle');
       return go({ ...e, partner: undefined }, pick(YARD, r), 'idle');
     }
     case 'dog': {
@@ -170,10 +193,17 @@ function arrive(e: Ent, now: number, r: () => number): Ent {
   switch (n) {
     case 'drink': return say({ ...e, act: 'drink', until: now + 8000 + r() * 5000 }, pick(LINES.coffee, r), now);
     case 'beer': return say({ ...e, act: 'beer', until: now + 8000 + r() * 5000 }, pick(LINES.beer, r), now);
-    case 'chat': return say({ ...e, act: 'chat', until: now + 7500 }, pick(r() < 0.2 ? LINES.massageTalk : r() < 0.4 ? LINES.bbqTalk : LINES.chat, r), now, 7500);
-    case 'massage': return say({ ...e, act: 'massage', until: now + 10000 + r() * 6000 }, pick(LINES.massageTalk, r), now, 6500);
-    case 'bbq': return say({ ...e, act: 'bbq', until: now + 10000 + r() * 6000 }, pick(LINES.bbqTalk, r), now, 6500);
+    case 'chat': return say({ ...e, act: 'chat', until: now + 7500 }, pick(r() < 0.15 ? LINES.gossipBoss : r() < 0.28 ? LINES.trollPR : r() < 0.4 ? LINES.ghostWork : r() < 0.5 ? LINES.remoteWar : LINES.chat, r), now, 7500);
+    case 'massage': return say({ ...e, act: 'massage', until: now + 10000 + r() * 6000 }, pick(e.say && /ốm|nghỉ|sốt|cúm|leave/i.test(e.say) ? LINES.sickCaught : LINES.massageTalk, r), now, 6500);
+    case 'bbq': return say({ ...e, act: 'bbq', until: now + 10000 + r() * 6000 }, pick(e.say && /ốm|nghỉ|sốt|cúm|leave/i.test(e.say) ? LINES.sickCaught : LINES.bbqTalk, r), now, 6500);
     case 'romance': return say({ ...e, act: 'romance', until: now + 14000 + r() * 6000 }, pick(LINES.romance, r), now, 7000);
+    case 'smoke': return say({ ...e, act: 'smoke', until: now + 9000 + r() * 5000 }, pick(r() < 0.45 ? LINES.gossipBoss : LINES.smokeTalk, r), now, 6500);
+    case 'gym': return say({ ...e, act: 'gym', until: now + 9000 + r() * 5000 }, pick(LINES.gymTalk, r), now, 6500);
+    case 'atm': return say({ ...e, act: 'atm', until: now + 8000 + r() * 4000 }, pick(LINES.atmTalk, r), now, 6000);
+    case 'gate': return say({ ...e, act: 'gate', until: now + 8000 + r() * 4000 }, pick(LINES.gateTalk, r), now, 6000);
+    case 'pod': return say({ ...e, act: 'pod', until: now + 11000 + r() * 6000 }, pick(r() < 0.35 ? LINES.gossipBoss : LINES.podTalk, r), now, 6500);
+    case 'print': return say({ ...e, act: 'print', until: now + 8000 + r() * 4000 }, pick(LINES.printTalk, r), now, 6000);
+    case 'drama': return say({ ...e, act: 'drama', until: now + 10000 + r() * 5000 }, pick(LINES.gossipColleague, r), now, 6500);
     case 'fall': return say({ ...e, tx: pondCenter().x, ty: pondCenter().y, act: 'fall', speed: 300, until: now + 4000 }, pick(LINES.slipPond, r), now, 2800);
     case 'fight': return { ...e, act: 'fight', until: now + 5500 };
     default: return { ...e, act: 'idle', until: now + 3000 + r() * 5000, partner: undefined };
@@ -226,7 +256,15 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     if (e.act === 'massage' && now <= e.until && !e.say && r() < 0.025) return say(e, pick(LINES.massageTalk, r), now, 5500);
     if (e.act === 'bbq' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.bbqTalk, r), now, 5500);
     if (e.act === 'romance' && now <= e.until && !e.say && r() < 0.04) return say(e, pick(LINES.romance, r), now, 6500);
-    if ((e.act === 'massage' || e.act === 'bbq' || e.act === 'romance') && now > e.until) return { ...e, act: 'idle' as const, until: now + 3000, partner: undefined, say: undefined };
+    if (e.act === 'smoke' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(r() < 0.5 ? LINES.gossipBoss : LINES.smokeTalk, r), now, 6000);
+    if (e.act === 'gym' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.gymTalk, r), now, 5500);
+    if (e.act === 'atm' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.atmTalk, r), now, 5500);
+    if (e.act === 'gate' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.gateTalk, r), now, 5500);
+    if (e.act === 'pod' && now <= e.until && !e.say && r() < 0.035) return say(e, pick(r() < 0.4 ? LINES.gossipBoss : LINES.podTalk, r), now, 6000);
+    if (e.act === 'print' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.printTalk, r), now, 5500);
+    if (e.act === 'drama' && now <= e.until && !e.say && r() < 0.04) return say(e, pick(r() < 0.5 ? LINES.gossipCaught : LINES.gossipColleague, r), now, 6000);
+    const lingerActs: Act[] = ['massage', 'bbq', 'romance', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'drama'];
+    if (lingerActs.includes(e.act) && now > e.until) return { ...e, act: 'idle' as const, until: now + 3000, partner: undefined, topic: undefined, say: undefined };
     if (e.act === 'walk' && arrived(e)) return arrive(e, now, r);
     if (e.kind === 'itops') {
       if (key && key !== reportedKey && e.act !== 'report' && itops) {
@@ -290,7 +328,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   }
 
   // Rare secret garden affair: two free idle NPCs sneak off together.
-  const free = ents.filter((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner && now > e.until - 50);
+  let free = ents.filter((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner && now > e.until - 50);
   if (free.length >= 2 && r() < 0.01) {
     const a = free[0], b = free[1], c = pick(ROMANCE_SPOTS, r), gap = 14;
     ents = ents.map((e) => {
@@ -299,6 +337,30 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
       return e;
     });
   }
+  // Occasional office-drama pair walk to an amenity and argue / gossip (paced bubbles).
+  free = ents.filter((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner && now > e.until - 50);
+  if (free.length >= 2 && r() < 0.012) {
+    const kinds = ['smoke', 'gym', 'atm', 'print', 'pod', 'gate'] as const;
+    const kind = pick(kinds, r);
+    const topic: NonNullable<Ent['topic']> = kind === 'gym' ? 'gymArgue' : kind === 'atm' ? 'atmArgue' : kind === 'print' ? 'printArgue' : kind === 'gate' ? 'deskWar' : r() < 0.5 ? 'bossGossip' : 'trollReview';
+    const spots = kind === 'gym' ? GYM_SPOTS : kind === 'atm' ? ATM_SPOTS : kind === 'print' ? PRINT_SPOTS : kind === 'pod' ? POD_SPOTS : kind === 'gate' ? GATE_SPOTS : SMOKE_SPOTS;
+    const a = free[0], b = free[1], c = pick(spots, r), gap = 16, pair = pick(PAIRS[topic], r);
+    ents = ents.map((e) => {
+      if (e.id === a.id) return say(go({ ...e, partner: b.id, topic }, { x: c.x - gap, y: c.y }, kind, 110), pair[0], now, 7000);
+      if (e.id === b.id) return say(go({ ...e, partner: a.id, topic }, { x: c.x + gap, y: c.y }, kind, 110), pair[1], now, 7000);
+      return e;
+    });
+  }
+  // Pair at smoke/trada/garden sometimes continues gossip / gets caught.
+  ents = ents.map((e) => {
+    if ((e.act === 'smoke' || e.act === 'beer' || e.act === 'pod') && e.partner && !e.say && r() < 0.02) {
+      return say(e, pick(r() < 0.35 ? LINES.gossipCaught : r() < 0.6 ? LINES.gossipBoss : LINES.gossipColleague, r), now, 6500);
+    }
+    if (e.act === 'gym' && e.partner && !e.say && r() < 0.025) {
+      const pair = pick(PAIRS.gymArgue, r); return say(e, e.partner < e.id ? pair[1] : pair[0], now, 6000);
+    }
+    return e;
+  });
   const cat = ents.find((e) => e.kind === 'cat');
   if (cat?.act === 'fight') ents = ents.map((e) => (e.kind === 'dog' && e.act !== 'fight' && e.act !== 'gone' && e.act !== 'eaten' && e.act !== 'fall' ? say({ ...e, act: 'fight', tx: e.x, ty: e.y, until: cat.until }, pick(LINES.dogFight, r), now, 5000) : e));
   const dog = ents.find((e) => e.kind === 'dog');
@@ -309,7 +371,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     const L = ents.find((e) => e.kind === 'trex');
     if (L && (L.act === 'hunt' || L.act === 'carry' || L.act === 'chomp')) {
       const n = ents.find((e) => e.kind === 'npc' && !e.say && e.act !== 'gone' && e.act !== 'eaten' && e.act !== 'carried' && e.id !== L.partner);
-      if (n) ents = ents.map((e) => (e.id === n.id ? say(e, pick(LINES.layoffWitness, r), now, 4500) : e));
+      if (n) ents = ents.map((e) => (e.id === n.id ? say(e, pick(r() < 0.45 ? LINES.rumorLayoff : LINES.layoffWitness, r), now, 4500) : e));
     }
   }
 
