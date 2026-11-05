@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { OfficeState } from './reducer';
 import type { OfficeEvent } from './types';
+import { loadCollapse, setCollapse } from './collapse';
 import { IconCall, IconCheck, IconCross, IconMail, IconPlus, IconReply, IconResult, IconWarn } from './icons';
+
 export function describe(e: OfficeEvent, s: OfficeState): { icon: ReactNode; text: string } | null {
   const n = (id?: string) => (id && s.agents[id]?.name) || id || '';
   switch (e.t) {
@@ -17,12 +19,29 @@ export function describe(e: OfficeEvent, s: OfficeState): { icon: ReactNode; tex
     default: return null;
   }
 }
+
 export function EventLog({ s }: { s: OfficeState }) {
   const items = s.log.filter((e) => e.t !== 'agent.state').slice(-60).reverse();
+  const [collapsed, setCollapsed] = useState(() => loadCollapse().events);
+  const toggle = () => setCollapsed(setCollapse('events', !collapsed).events);
   return (
-    <aside className="log" data-testid="log"><h2>Events <small>{s.log.length}</small></h2>
-      <ol>{items.map((e, i) => { const d = describe(e, s); if (!d) return null;
-        return <li key={s.log.length - i} className={`ev ev-${e.t.replace('.', '-')}`}><time>{new Date(e.ts).toLocaleTimeString([], { hour12: false })}</time><i>{d.icon}</i><span>{d.text}</span></li>; })}</ol>
+    <aside className="log" data-testid="log">
+      <button
+        type="button"
+        className="collapse-toggle log-collapse"
+        data-testid="events-collapse"
+        aria-expanded={!collapsed}
+        onClick={toggle}
+      >
+        <span className="collapse-caret" aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+        Events <small>{s.log.length}</small>
+      </button>
+      {!collapsed && (
+        <ol data-testid="events-list">{items.map((e, i) => {
+          const d = describe(e, s); if (!d) return null;
+          return <li key={s.log.length - i} className={`ev ev-${e.t.replace('.', '-')}`}><time>{new Date(e.ts).toLocaleTimeString([], { hour12: false })}</time><i>{d.icon}</i><span>{d.text}</span></li>;
+        })}</ol>
+      )}
     </aside>
   );
 }

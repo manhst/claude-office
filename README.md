@@ -67,6 +67,9 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 | `vp-debug` | Advanced → localStorage `vp-debug=1` | Enables `__vpTraffic` / `__vpTown` console hooks after reload. |
 | Structure labels | Settings → **Nhãn công trình** | localStorage `vp-labels`. Defaults: ON for Crossian / Xuka / Xém Nướng / trà đá / hồ cá sấu; OFF for other amenities & rooms; Monitor = chỉ khi lỗi/cảnh báo. |
 
+**Session dump (left sidebar).** Selecting a session shows a CLI-like field list (sid, cwd, transcript, tool, prompt, cost, started/lastSeen, source, all subagents — not agent profile markdown bodies). Session dump and Events are collapsible (localStorage `vp-collapse`). Screenshot: `docs/screens/session-dump.png` (`cd web && npm run build && node scripts/screens-session-dump.mjs`).
+
+
 Screenshot: `docs/screens/settings.png` (`cd web && npm run build && node scripts/screens-settings.mjs`).
 
 Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kiosk, with no fake alerts. If the API can't be read, the error itself is reported.

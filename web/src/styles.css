@@ -23,7 +23,11 @@ main{display:flex;gap:14px;padding:14px;align-items:flex-start}
 .sess{width:100%;display:grid;grid-template-columns:10px 16px 1fr auto;align-items:center;gap:6px;text-align:left;background:#0f172a;border:1px solid #23314f;border-radius:8px;color:inherit;font:inherit;padding:5px 8px;cursor:pointer}
 .sess.sel{border-color:#3b82f6;background:#132447}.sess .st{color:#94a3b8;font-size:11px}.sess .sub{grid-column:3/5;color:#94a3b8;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sdot{width:8px;height:8px;border-radius:50%}
-.sdetail{margin-top:8px;border-top:1px solid #23314f;padding-top:8px;font-size:12px}.kv{display:flex;gap:8px;padding:2px 0}.kv>span{flex:none;width:70px;color:#64748b}.kv b{font-weight:500;min-width:0;overflow-wrap:anywhere}.kv em{margin-left:auto;color:#64748b;font-style:normal}
+.sdetail{margin-top:8px;border-top:1px solid #23314f;padding-top:8px;font-size:12px}.kv{display:flex;gap:8px;padding:2px 0;align-items:flex-start}.kv>span{flex:none;width:78px;color:#64748b}.kv b{font-weight:500;min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}.kv em{margin-left:auto;color:#64748b;font-style:normal}
+.sdump{list-style:none;margin:6px 0 0;padding:0}.dump-lines{display:block;font-size:11px;line-height:1.45}
+.collapse-toggle{display:flex;align-items:center;gap:6px;width:100%;background:none;border:0;color:inherit;font:inherit;font-size:13px;font-weight:700;padding:2px 0;margin:0 0 4px;cursor:pointer;text-align:left}
+.collapse-toggle small{color:#64748b;font-weight:400}.collapse-caret{display:inline-block;width:12px;color:#94a3b8;font-weight:700}
+.log-collapse{margin:2px 0 8px}
 .sdetail h3{font-size:12px;margin:10px 0 4px;display:flex;align-items:center;gap:5px}.sdetail h3 small{color:#64748b;font-weight:400}
 .tag{display:inline-flex;align-items:center;gap:4px;padding:0 6px;margin:1px 4px 1px 0;border-radius:6px;background:#1e293b;color:#cbd5e1;font-size:11px}
 .profile{border:1px solid #23314f;border-radius:8px;padding:4px 8px;margin:4px 0;background:#0f172a}.profile summary{cursor:pointer;display:flex;gap:6px;align-items:center}.profile p{margin:4px 0;color:#cbd5e1}
