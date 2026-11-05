@@ -340,10 +340,10 @@ function biaHaiXom(ctx: TownCtx) {
   sign(ctx, ICON.glass, 'Bia Hải Xồm', 'bia hơi · lạc rang', accent, b.cx, 2.9, b.cz - b.d / 2 + 0.2, 'vp-bia', 'bia');
 }
 
-/** Photocopy / printer kiosk on the front sidewalk. */
+/** Printer + photocopier inside the office: pantry left wall, beside the fridge / kitchen counter; fronts face into the pantry. */
 function printKiosk(ctx: TownCtx) {
-  const b = boxW(PRINT), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
-  khoi(g, b.w, 0.03, b.d, '#bdbdbd', 0, 0.015, 0, false);
+  const b = boxW(PRINT), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); g.rotation.y = Math.PI / 2; ctx.nhom.add(g);
+  khoi(g, b.d, 0.012, b.w, '#bdbdbd', 0, 0.012, 0, false);
   // printer
   khoi(g, 1.1, 0.85, 0.7, '#eceff1', -0.6, 0.45, 0); khoi(g, 0.9, 0.08, 0.5, '#90a4ae', -0.6, 0.92, 0);
   khoi(g, 0.5, 0.05, 0.35, '#ffffff', -0.6, 0.98, 0.05, false); // paper out

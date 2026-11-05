@@ -78,6 +78,7 @@ export const FURNITURE = {
   table1: { x: -10.3, z: -4.6, hx: 1, hz: 1 }, table2: { x: -10.3, z: -0.4, hx: 1, hz: 1 }, shelf: { x: -12.5, z: 3.6, hx: 0.25, hz: 0.9 },
   pool: { x: 10.4, z: -2.2, hx: 0.85, hz: 1.45 }, sofa: { x: 10.4, z: 4.4, hx: 1.25, hz: 0.45 }, coffeeTable: { x: 10.4, z: 3, hx: 0.6, hz: 0.3 },
   arcade: { x: 12.15, z: -7.85, hx: 0.35, hz: 0.3 },
+  printer: { x: -12.4, z: -6.1, hx: 0.36, hz: 1.05 },
 } satisfies Record<string, Item>;
 export const COFFEE_MACHINE: Vec3 = [-8.7, 0, -8.1];
 const furnitureRects = (): Rect[] => Object.values(FURNITURE).map((f) => ({ x0: f.x - f.hx - BODY_R, x1: f.x + f.hx + BODY_R, z0: f.z - f.hz - BODY_R, z1: f.z + f.hz + BODY_R }));
@@ -123,7 +124,7 @@ export const GYM_AGENT_SPOTS: Spot[] = GYM_SPOTS.map(amenitySpot);
 export const ATM_AGENT_SPOTS: Spot[] = ATM_SPOTS.map(amenitySpot);
 export const GATE_AGENT_SPOTS: Spot[] = GATE_SPOTS.map(amenitySpot);
 export const POD_AGENT_SPOTS: Spot[] = POD_SPOTS.map(amenitySpot);
-export const PRINT_AGENT_SPOTS: Spot[] = PRINT_SPOTS.map(amenitySpot);
+export const PRINT_AGENT_SPOTS: Spot[] = PRINT_SPOTS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: faceTo([x, 0, z], [FURNITURE.printer.x, 0, z]) }; });
 /** Outdoor amenity meet centers for gossip / drama pairs. */
 export const DRAMA_CENTERS: Vec3[] = [...SMOKE_SPOTS, ...POD_SPOTS].map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
 

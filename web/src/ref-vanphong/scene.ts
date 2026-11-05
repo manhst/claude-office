@@ -184,14 +184,38 @@ export class VanphongScene {
     khoi(nhom, r + 0.4, CAO, 0.2, T, cx, CAO / 2, z0 - 0.1); // back
     khoi(nhom, 0.2, CAO, s + 0.2, T, x0 - 0.1, CAO / 2, cz + 0.1); // left
     khoi(nhom, 0.2, CAO, s + 0.2, T, x1 + 0.1, CAO / 2, cz + 0.1); // right (was missing)
-    // Front wall toward the road with a glass entrance gap (visual; walkers still use DOOR at back).
-    const frontDoor = 2.4, fw = (r - frontDoor) / 2;
-    khoi(nhom, fw + 0.2, CAO, 0.2, T, x0 + fw / 2, CAO / 2, z1 + 0.1);
-    khoi(nhom, fw + 0.2, CAO, 0.2, T, x1 - fw / 2, CAO / 2, z1 + 0.1);
-    const glass = vatLieu('#b3e5fc', { transparent: true, opacity: 0.4 });
-    khoi(nhom, frontDoor, CAO - 0.35, 0.06, glass, cx, (CAO - 0.35) / 2 + 0.1, z1 + 0.08, false);
-    khoi(nhom, frontDoor + 0.16, 0.12, 0.12, '#e2d5c4', cx, CAO - 0.1, z1 + 0.1, false); // lintel
-    for (const s of [-1, 1]) khoi(nhom, 0.12, CAO, 0.12, '#e2d5c4', cx + s * (frontDoor / 2), CAO / 2, z1 + 0.1); // jambs
+    // Front facade toward the road: clear aluminium-framed glass curtain wall with a framed main door (visual; walkers still use DOOR at back).
+    const frontDoor = 2.4, fz = z1 + 0.1, AL = '#9aa4ae', DF = '#37474f';
+    const glass = vatLieu('#e3f4fb', { transparent: true, opacity: 0.16, depthWrite: false });
+    for (const [a, b] of [[x0 - 0.2, cx - frontDoor / 2 - 0.12], [cx + frontDoor / 2 + 0.12, x1 + 0.2]]) {
+      const w = b - a, n = Math.max(1, Math.round(w / 1.6)), pw = w / n;
+      khoi(nhom, w, CAO - 0.2, 0.03, glass, (a + b) / 2, (CAO - 0.2) / 2 + 0.12, fz, false);
+      for (let i = 0; i <= n; i++) khoi(nhom, 0.07, CAO, 0.12, AL, a + i * pw, CAO / 2, fz, false); // mullions
+      for (const y of [0.06, 1.0, CAO - 0.06]) khoi(nhom, w, 0.07, 0.12, AL, (a + b) / 2, y, fz, false); // sill, transom rail, head
+    }
+    // main door: thick dark frame, double glass leaves with handles, transom above
+    const dh = CAO - 0.5;
+    for (const s of [-1, 1]) khoi(nhom, 0.18, CAO, 0.2, DF, cx + s * (frontDoor / 2 + 0.03), CAO / 2, fz); // jambs
+    khoi(nhom, frontDoor + 0.24, 0.16, 0.2, DF, cx, dh + 0.08, fz, false); // head
+    khoi(nhom, frontDoor + 0.24, 0.08, 0.2, DF, cx, CAO - 0.04, fz, false);
+    khoi(nhom, frontDoor - 0.1, CAO - dh - 0.24, 0.03, glass, cx, (dh + CAO) / 2 + 0.02, fz, false); // transom glass
+    for (const s of [-1, 1]) {
+      const lx = cx + s * frontDoor / 4;
+      khoi(nhom, frontDoor / 2 - 0.06, dh - 0.04, 0.03, glass, lx, dh / 2, fz + 0.02, false);
+      for (const y of [0.04, dh - 0.04]) khoi(nhom, frontDoor / 2 - 0.04, 0.07, 0.07, DF, lx, y, fz + 0.02, false);
+      khoi(nhom, 0.06, dh, 0.07, DF, cx + s * 0.03, dh / 2, fz + 0.02, false); // meeting stiles
+      khoi(nhom, 0.04, 0.6, 0.06, '#d7dde2', cx + s * 0.16, 1.05, fz + 0.1, false); // pull handles
+    }
+    khoi(nhom, frontDoor + 0.6, 0.03, 0.9, '#5a5f66', cx, 0.015, fz + 0.5, false); // entrance step
+    // "Crossian" company decal on the glass (blue lettering, rest of the pane stays clear)
+    {
+      const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const g = c.getContext('2d')!;
+      g.fillStyle = '#1e6bff'; g.font = 'bold 200px "Segoe UI", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Crossian', 512, 136);
+      const t = this.own(new THREE.CanvasTexture(c)); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+      const mat = this.own(new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      const decal = new THREE.Mesh(this.own(new THREE.PlaneGeometry(5.6, 1.4)), mat);
+      decal.position.set(cx - frontDoor / 2 - 3.6, 1.7, fz + 0.04); nhom.add(decal);
+    }
     // Caps / skirting
     khoi(nhom, r + 0.44, 0.06, 0.26, '#e2d5c4', cx, CAO + 0.03, z0 - 0.1, false);
     khoi(nhom, r + 0.44, 0.06, 0.26, '#e2d5c4', cx, CAO + 0.03, z1 + 0.1, false);
