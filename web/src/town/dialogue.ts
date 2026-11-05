@@ -119,12 +119,12 @@ export const LINES = {
     'GÂU! (tao báo chủ đấy)', 'Gâu gâu (đuổi theo!)', 'Grừ (lần này tao thắng)', 'Ẳng (thôi tao chạy)', 'GÂU GÂU GÂU!', 'Gâu (mèo không được lên bàn)', 'Grrr (cá khô là của tao)',
     'GÂU (mày 9 mạng thì sao)', 'Gâu! (đừng cào mặt)', 'GÂU (mèo hư mèo hư)', 'Ẳng ẳng (sao mày nhanh thế)', 'Gâu gâu (tao gọi bạn đến)', 'GRRR (nhìn cái gì)', 'Gâu! (về nhà đi)', 'GÂU (đây là sân của tao)',
   ],
-  /** IT Ops heading to the Architect (prefix before the real alert) */
+  /** IT Ops alert openers (spoken at the indoor desk) */
   itopsGo: [
-    'Có biến! Phải báo Architect', 'Đỏ lòm dashboard rồi!', 'Alert kêu như còi xe cứu hỏa!', 'Chạy đi báo sếp!', 'Prometheus gào thét rồi!', 'Toang rồi, báo gấp!', 'Ai đó gọi on-call!',
+    'Có biến! Phải báo cáo!', 'Đỏ lòm dashboard rồi!', 'Alert kêu như còi xe cứu hỏa!', 'Chạy đi báo sếp!', 'Prometheus gào thét rồi!', 'Toang rồi, báo gấp!', 'Ai đó gọi on-call!',
     'Biểu đồ dựng đứng!', 'P99 bay lên trời rồi!', 'Có cháy! Ý là cháy server!', 'Tránh đường, tôi đi báo sự cố!', 'Không phải tôi làm đâu!', 'CPU 100% rồi!', 'Error rate tăng vọt!',
     'Mau mau, khách đang kêu!', 'Pager kêu inh ỏi!', 'Đèn đỏ nhấp nháy!', 'Báo động cấp 1!', 'Lại là cái service đó!', 'Đĩa đầy rồi!', 'Memory leak!', 'Latency như rùa bò!',
-    'Monitor không nói dối đâu!', 'Sếp ơi chờ em!', 'Incident mới nóng hổi!', 'Ai deploy lúc nãy thế?!', 'Healthcheck fail liên tục!', 'Đồ thị như tàu lượn!', 'Có sự cố, có sự cố!', 'Gọi Architect ngay!',
+    'Monitor không nói dối đâu!', 'Sếp ơi chờ em!', 'Incident mới nóng hổi!', 'Ai deploy lúc nãy thế?!', 'Healthcheck fail liên tục!', 'Đồ thị như tàu lượn!', 'Có sự cố, có sự cố!', 'Gọi on-call ngay!',
     'Prod đang khóc!',
   ],
   /** IT Ops report prefix (followed by the alert name) */
@@ -133,14 +133,6 @@ export const LINES = {
     'Sếp, monitor đang hú:', 'Báo động:', 'Anh ơi cháy nhà rồi:', 'Sự cố mới:', 'Alert nóng hổi:', 'Có chuyện rồi anh:', 'Prometheus bảo:', 'Anh ơi, lại nữa:', 'Sếp ơi đừng giận:',
     'Mất ngủ rồi anh ơi:', 'Thông báo khẩn:', 'Em thề không phải em:', 'Pager vừa gọi:', 'Sếp nhìn này:', 'Đỏ hết rồi:', 'Anh ơi, khách đang chửi:', 'On-call ơi:', 'Báo cáo tình hình:',
     'Sếp ơi bình tĩnh nghe em nói:', 'Anh ơi đừng hoảng:', 'Incident cấp cao:',
-  ],
-  /** Architect's replies */
-  architectReply: [
-    'Ok, để anh xem. Gọi on-call ngay!', 'Bình tĩnh, rollback trước đã', 'Ai deploy lúc nãy? Gọi lên đây!', 'Mở war room ngay', 'Scale thêm pod đi', 'Đã bảo đừng deploy thứ Sáu mà!',
-    'Check log trước, đừng đoán mò', 'Bật feature flag tắt cái đó đi', 'Ok, anh lo. Em đi uống trà đá đi', 'Lại cái service legacy à?', 'Viết post-mortem sau nhé', 'Restart thử chưa?',
-    'Gọi team backend dậy!', 'Cache đâu? Bật cache lên!', 'Đừng hoảng, mình có backup... chắc vậy', 'Đẩy traffic sang region khác', 'Kiểm tra database connection pool', 'Ai đổi config không báo?',
-    'Anh biết ngay mà', 'Tăng timeout tạm thời', 'Ok, ghi vào incident channel', 'Tắt cron job đó đi', 'Check dashboard Grafana', 'Có ai đụng vào DNS không?', 'Rollback, rollback ngay!',
-    'Bình tĩnh, uống ngụm cà phê đã', 'Gọi vendor đi', 'Đây là lý do mình cần chaos testing', 'Anh đã dự đoán chuyện này trong design doc', 'Thông báo cho khách hàng đi', 'Được rồi, anh xuống liền',
   ],
   /** pedestrian knocked over by a vehicle */
   hit: [

@@ -20,8 +20,8 @@ export const MASSAGE_BEDS: Pt[] = [{ x: 1405, y: -95 }, { x: 1472, y: -95 }, { x
 export const LANES = [{ y: 778, dir: 1 }, { y: 812, dir: -1 }] as const;
 export const TRADA: Box = { x: 1370, y: 470, w: 190, h: 120 };
 export const POND = { cx: 105, cy: 420, rx: 85, ry: 170 };
-export const NOC: Pt = { x: 1180, y: 752 }; // IT Ops monitoring kiosk, in front of the building
-export const ARCHITECT_SPOT: Pt = { x: 770, y: 752 }; // in front of the office
+/** IT Ops desk corner inside the office (left / pantry side), not out on the street. */
+export const ITOPS_SPOT: Pt = { x: 340, y: 480 };
 export const CAFE_SEATS: Pt[] = [{ x: 1410, y: 300 }, { x: 1470, y: 330 }, { x: 1530, y: 300 }, { x: 1440, y: 240 }];
 export const TRADA_STOOLS: Pt[] = [{ x: 1395, y: 560 }, { x: 1445, y: 575 }, { x: 1500, y: 575 }, { x: 1545, y: 560 }];
 export const POND_EDGE: Pt[] = [{ x: 215, y: 320 }, { x: 215, y: 500 }, { x: 120, y: 230 }, { x: 110, y: 610 }];

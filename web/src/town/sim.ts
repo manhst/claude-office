@@ -1,8 +1,8 @@
-// Side characters around the office: IT Ops, Architect, mindless NPCs, the dog Chos An, the cat Meow. Pure step function, rnd injected.
+// Side characters around the office: IT Ops (indoors), mindless NPCs, the dog Chos An, the cat Meow. Pure step function, rnd injected.
 import type { ItOpsStatus } from '../types';
 import { LINES } from './dialogue';
-import { ARCHITECT_SPOT, CAFE_SEATS, MASSAGE_BEDS, NOC, POND_EDGE, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
-export type Kind = 'itops' | 'architect' | 'npc' | 'dog' | 'cat';
+import { CAFE_SEATS, ITOPS_SPOT, MASSAGE_BEDS, POND_EDGE, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
+export type Kind = 'itops' | 'npc' | 'dog' | 'cat';
 export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked';
 export interface Ent {
   id: string; kind: Kind; name: string; look?: string; x: number; y: number; tx: number; ty: number; speed: number;
@@ -14,7 +14,7 @@ const jitter = (p: Pt, r: () => number, d = 14): Pt => ({ x: p.x + (r() - 0.5) *
 export function initialWorld(now: number): World {
   const e = (id: string, kind: Kind, name: string, p: Pt, look?: string, speed = 90): Ent => ({ id, kind, name, look, x: p.x, y: p.y, tx: p.x, ty: p.y, speed, act: 'idle', until: now + 1500 });
   return { t: now, ents: [
-    e('itops', 'itops', 'IT Ops', NOC, 'nam_01', 150), e('architect', 'architect', 'Architect', ARCHITECT_SPOT, 'nam_03', 80),
+    e('itops', 'itops', 'IT Ops', ITOPS_SPOT, 'nam_01', 90),
     e('npc-1', 'npc', 'Tèo', YARD[0], 'nam_04'), e('npc-2', 'npc', 'Tý', CAFE_SEATS[0], 'nu_04'), e('npc-3', 'npc', 'Bờm', TRADA_STOOLS[1], 'nam_06'), e('npc-4', 'npc', 'Mít', STREET[1], 'nu_07'),
     e('dog', 'dog', 'Chos An', YARD[1], undefined, 170), e('cat', 'cat', 'Meow', YARD[2], undefined, 130),
   ] };
@@ -100,19 +100,20 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     if (e.act === 'massage' && now <= e.until && !e.say && r() < 0.06) return say(e, pick(LINES.massageTalk, r), now, 3500);
     if (e.act === 'walk' && arrived(e)) return arrive(e, now, r);
     if (e.kind === 'itops') {
-      if (key && key !== reportedKey && e.act !== 'report' && itops) { reportedKey = key; return say({ ...e, tx: ARCHITECT_SPOT.x + 80, ty: ARCHITECT_SPOT.y, act: 'report', speed: 220, reported: problemText(itops).replace(LINES.itopsReport[0], pick(LINES.itopsReport, r)), until: now + 20000 }, pick(LINES.itopsGo, r), now, 2000); }
-      if (e.act === 'report' && arrived(e)) return say({ ...e, act: 'chat', until: now + 7000 }, e.reported ?? 'Có sự cố', now, 7000);
-      if (e.act === 'chat' && now > e.until) return go(e, NOC, 'idle', 120);
-      if (e.act === 'idle' && Math.hypot(e.x - NOC.x, e.y - NOC.y) > 2) return go(e, NOC, 'idle', 120);
+      // Stay at the indoor desk; on alert, speak the report there (Architect is gone).
+      if (key && key !== reportedKey && e.act !== 'report' && itops) {
+        reportedKey = key;
+        const text = problemText(itops).replace(LINES.itopsReport[0], pick(LINES.itopsReport, r));
+        return say({ ...e, x: ITOPS_SPOT.x, y: ITOPS_SPOT.y, tx: ITOPS_SPOT.x, ty: ITOPS_SPOT.y, act: 'report', reported: text, until: now + 9000 }, text, now, 8000);
+      }
+      if (e.act === 'report' && now > e.until) return { ...e, act: 'idle' as const, until: now + 4000, say: undefined };
+      if (e.act === 'idle' && Math.hypot(e.x - ITOPS_SPOT.x, e.y - ITOPS_SPOT.y) > 2) return go(e, ITOPS_SPOT, 'idle', 100);
       return e;
     }
-    if (e.kind === 'architect') return e;
     if (e.act !== 'walk' && now > e.until) return decide(e, w, now, r);
     return e;
   });
-  // Architect answers when IT Ops arrives; the dog fights back when the cat starts it.
-  const it = ents.find((e) => e.kind === 'itops');
-  if (it?.act === 'chat' && it.reported && it.sayUntil && it.sayUntil - now > 6500) ents = ents.map((e) => (e.kind === 'architect' ? say(e, pick(LINES.architectReply, r), now, 6000) : e));
+  // The dog fights back when the cat starts it.
   const cat = ents.find((e) => e.kind === 'cat');
   if (cat?.act === 'fight') ents = ents.map((e) => (e.kind === 'dog' && e.act !== 'fight' && e.act !== 'gone' && e.act !== 'eaten' && e.act !== 'fall' ? say({ ...e, act: 'fight', tx: e.x, ty: e.y, until: cat.until }, pick(LINES.dogFight, r), now, 3000) : e));
   const dog = ents.find((e) => e.kind === 'dog');

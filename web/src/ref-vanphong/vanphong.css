@@ -81,19 +81,20 @@
 }
 .vp-ref .vp3d-cho { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-weight: 700; color: #5a6475; background: #dfe9f1; }
 /* Bảng tên + bong bóng lời nói trên đầu nhân viên */
-.vp-ref .nguoi-3d { display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
+.vp-ref .nguoi-3d { display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
 .vp-ref .ten-3d {
-  pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
-  padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 12px; color: var(--chu);
-  background: color-mix(in srgb, var(--be-mat) 92%, transparent); border: 1px solid var(--vien); border-bottom: 2px solid var(--mau, var(--nhan));
-  box-shadow: 0 2px 8px rgba(30, 20, 10, .14);
+  pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  padding: 2px 6px 2px 5px; border-radius: 999px; font-size: 8.5px; color: var(--chu);
+  background: color-mix(in srgb, var(--be-mat) 92%, transparent); border: 1px solid var(--vien); border-bottom: 1.5px solid var(--mau, var(--nhan));
+  box-shadow: 0 1px 5px rgba(30, 20, 10, .12);
 }
 .vp-ref .ten-3d:focus-visible { outline: 2px solid var(--nhan); outline-offset: 2px; }
 .vp-ref .ten-3d b { font-weight: 800; }
-.vp-ref .ten-3d small { font-size: 11px; color: var(--chu-phu); }
+.vp-ref .ten-3d small { font-size: 7.5px; color: var(--chu-phu); }
+.vp-ref .ten-3d small:empty { display: none; }
 .vp-ref .ten-3d small.canh-bao { color: color-mix(in srgb, var(--vang) 75%, var(--chu)); font-weight: 700; }
-.vp-ref .viec-cho:not(:empty) { font-size: 10.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: var(--nhan); color: var(--nhan-chu); }
-.vp-ref .cham-3d { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--xanh); box-shadow: 0 0 0 2px color-mix(in srgb, var(--xanh) 25%, transparent); }
+.vp-ref .viec-cho:not(:empty) { display: none; } /* dropped: tool badge cluttered labels */
+.vp-ref .cham-3d { width: 5.5px; height: 5.5px; border-radius: 50%; flex: none; background: var(--xanh); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--xanh) 25%, transparent); }
 .vp-ref .nguoi-3d.tt-dang-lam .cham-3d { background: var(--mau, var(--nhan)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mau, var(--nhan)) 30%, transparent); animation: tho-mic 1.2s ease-in-out infinite; }
 .vp-ref .nguoi-3d.tt-loi .cham-3d { background: var(--do); box-shadow: 0 0 0 2px color-mix(in srgb, var(--do) 25%, transparent); }
 .vp-ref .nguoi-3d.tt-ngu .cham-3d { background: var(--chu-phu); box-shadow: none; }
@@ -101,9 +102,9 @@
 .vp-ref .nguoi-3d.tt-ngu .ten-3d { opacity: .82; }
 .vp-ref .nguoi-3d.hover .ten-3d { border-color: var(--mau, var(--nhan)); }
 .vp-ref .bong-3d {
-  display: none; pointer-events: auto; position: relative; max-width: 220px; padding: 6px 10px; border-radius: 12px;
+  display: none; pointer-events: auto; position: relative; max-width: 180px; padding: 4px 8px; border-radius: 10px;
   background: var(--be-mat); border: 1px solid var(--vien); box-shadow: 0 3px 12px rgba(30, 20, 10, .16);
-  font-size: 12px; line-height: 1.4; color: var(--chu); text-align: center;
+  font-size: 10px; line-height: 1.35; color: var(--chu); text-align: center;
 }
 .vp-ref .bong-3d::after {
   content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: var(--be-mat);
@@ -119,7 +120,7 @@
 .vp-ref .nguoi-3d.cai-nhau .bong-3d { border-color: var(--do); color: var(--do); font-weight: 800; }
 .vp-ref .nguoi-3d.thu-ky .bong-3d { max-width: 280px; font-size: 12.5px; }
 .vp-ref .nguoi-3d.thu-ky .bong-3d .bb { -webkit-line-clamp: 4; }
-.vp-ref .nguoi-3d.thu-ky .ten-3d { font-size: 12.5px; padding: 4px 11px 4px 8px; }
+.vp-ref .nguoi-3d.thu-ky .ten-3d { font-size: 9px; padding: 2px 7px 2px 5px; }
 .vp-ref .zzz-3d {
   display: none; align-items: flex-end; gap: 1px; padding: 1px 9px 3px; border-radius: 999px; font-weight: 900; line-height: 1;
   color: #6b78f0; background: color-mix(in srgb, var(--be-mat) 92%, transparent); border: 1px solid var(--vien); box-shadow: 0 2px 8px rgba(30, 20, 10, .14);

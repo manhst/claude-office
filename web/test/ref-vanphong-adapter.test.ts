@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentUI, MessageUI } from '../src/reducer';
 import { bubbleFor, idleLine, idlePlans, lookFor, vpBubble, newFlights, roomWalls, subtitleFor, vpChair, vpDesk, vpGoal, vpHome, vpObstacles, vpPlan, vpStatus, vpVisit, ROOM,
-  BIEN, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, FURNITURE, IDLE_AFTER_MS, IDLE_SLOT_MS, PAIR_GAP, POOL_SPOTS, VP_BOUNDS } from '../src/ref-vanphong/adapter';
+  BIEN, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, FURNITURE, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, VP_BOUNDS } from '../src/ref-vanphong/adapter';
 import { chuanHoa, MAU_SAN } from '../src/ref-vanphong/characters';
 import { blocked, clearLine } from '../src/walk';
 import { BUBBLE_MS, DOOR, allDesks } from '../src/layout';
@@ -34,9 +34,11 @@ describe('ref-vanphong adapter', () => {
     expect(bubbleFor(ag('a', { state: 'talking', text: 'old', textTs: now - BUBBLE_MS - 1 }), now).show).toBe(true);
     expect(bubbleFor(ag('a', { state: 'thinking' }), now)).toEqual({ text: '', show: true, dots: true });
   });
-  it('subtitle shows the running tool while working', () => {
-    expect(subtitleFor(ag('a', { state: 'working', tool: { callId: 'c', name: 'grep', summary: '', ts: 0 } }))).toBe('coder · grep');
-    expect(subtitleFor(ag('a', { state: 'done' }))).toBe('coder · done');
+  it('subtitle is a short status only (no role / tool); idle and done stay blank', () => {
+    expect(subtitleFor(ag('a', { state: 'working', tool: { callId: 'c', name: 'grep', summary: '', ts: 0 } }))).toBe('working');
+    expect(subtitleFor(ag('a', { state: 'thinking' }))).toBe('thinking');
+    expect(subtitleFor(ag('a', { state: 'done' }))).toBe('');
+    expect(subtitleFor(ag('a', { state: 'idle' }))).toBe('');
   });
   it('seats face +z behind the desk; home and visit spots are walkable', () => {
     const d = { x: 2, y: 1 }, [dx, , dz] = vpDesk(d);
@@ -70,7 +72,7 @@ describe('ref-vanphong adapter', () => {
   it('pantry and game room: furniture on the floor, every idle spot walkable and reachable without crossing glass or furniture', () => {
     for (const f of Object.values(FURNITURE)) { expect(f.x - f.hx).toBeGreaterThanOrEqual(BIEN.x0); expect(f.x + f.hx).toBeLessThanOrEqual(BIEN.x1); expect(f.z - f.hz).toBeGreaterThanOrEqual(BIEN.z0); }
     const obs = vpObstacles(), walls = roomWalls();
-    const pts = [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to),
+    const pts = [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to),
       ...([[CHAT_SPOTS, PAIR_GAP.chat], [FIGHT_SPOTS, PAIR_GAP.fight]] as const).flatMap(([cs, d]) => cs.flatMap((c) => [[c[0] - d, 0, c[2]], [c[0] + d, 0, c[2]]] as [number, number, number][]))];
     for (const p of pts) {
       expect(blocked(p[0], p[2], obs), String(p)).toBe(false);
@@ -95,7 +97,7 @@ describe('ref-vanphong adapter', () => {
       }
       const spots = Object.values(plans).map((p) => p.to.join()); expect(new Set(spots).size).toBe(spots.length); // nobody shares a spot
     }
-    expect([...kinds].sort()).toEqual(['chat', 'coffee', 'fight', 'pool']);
+    expect([...kinds].sort()).toEqual(['chat', 'coffee', 'fight', 'massage', 'pool']);
     const busy = { ...agents, a0: ag('a0', { state: 'working' }) };
     for (let slot = 0; slot < 20; slot++) expect(idlePlans(busy, order, [], slot * IDLE_SLOT_MS)['a0']).toBeUndefined();
     const all = (t: number) => Object.fromEntries(order.map((id) => [id, t]));

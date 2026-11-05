@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LINES } from '../src/town/dialogue';
 import { initialWorld, step, throwIntoPond, problemKey, problemText, type World } from '../src/town/sim';
-import { ARCHITECT_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld } from '../src/town/map';
+import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld } from '../src/town/map';
 import { BIEN } from '../src/ref-vanphong/adapter';
 import { loadLooks, setIdent, agentKey } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
@@ -11,18 +11,24 @@ const seq = (xs: number[]) => { let i = 0; return () => xs[i++ % xs.length]; };
 const run = (w: World, from: number, ms: number, r: () => number, it?: any) => { for (let t = from; t <= from + ms; t += 200) w = step(w, t, r, it); return w; };
 const ent = (w: World, id: string) => w.ents.find((e) => e.id === id)!;
 describe('town sim', () => {
-  it('has the cast: IT Ops, Architect, NPCs, dog Chos An, cat Meow', () => {
+  it('has the cast: IT Ops indoors, NPCs, dog Chos An, cat Meow — no Architect', () => {
     const w = initialWorld(0);
-    expect(w.ents.map((e) => e.name)).toEqual(expect.arrayContaining(['IT Ops', 'Architect', 'Chos An', 'Meow']));
+    expect(w.ents.map((e) => e.name)).toEqual(expect.arrayContaining(['IT Ops', 'Chos An', 'Meow']));
+    expect(w.ents.find((e) => e.name === 'Architect')).toBeUndefined();
+    expect(w.ents.every((e) => e.kind !== 'itops' || e.id === 'itops')).toBe(true);
     expect(w.ents.filter((e) => e.kind === 'npc').length).toBeGreaterThanOrEqual(3);
+    const it = ent(w, 'itops');
+    expect(Math.hypot(it.x - ITOPS_SPOT.x, it.y - ITOPS_SPOT.y)).toBeLessThan(2);
   });
-  it('IT Ops stays put when unconfigured or ok; runs to the Architect on an alert and reports it once', () => {
+  it('IT Ops stays put when unconfigured or ok; reports the alert at his indoor desk (no Architect walk)', () => {
     let w = run(initialWorld(0), 0, 5000, seq([0.95]), { mode: 'unconfigured', state: 'unconfigured', alerts: [] });
     expect(ent(w, 'itops').act).not.toBe('report');
     const alert = { mode: 'prometheus', state: 'alert', alerts: [{ name: 'DiskFull', detail: 'db1' }] } as any;
-    w = run(w, 5200, 3500, seq([0.95]), alert);
+    w = run(w, 5200, 500, seq([0.95]), alert);
     const it = ent(w, 'itops');
-    expect(Math.hypot(it.x - ARCHITECT_SPOT.x, it.y - ARCHITECT_SPOT.y)).toBeLessThan(100);
+    expect(it.act).toBe('report');
+    expect(it.say).toMatch(/DiskFull/);
+    expect(Math.hypot(it.x - ITOPS_SPOT.x, it.y - ITOPS_SPOT.y)).toBeLessThan(2);
     expect(w.reportedKey).toBe('DiskFull');
     expect(problemText(alert)).toContain('DiskFull');
     expect(problemKey({ mode: 'unconfigured', state: 'unconfigured', alerts: [] })).toBeUndefined();

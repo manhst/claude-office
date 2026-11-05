@@ -1,10 +1,10 @@
 // Ours (not from the reference): the town around the Vanphong office, in the reference's voxel style (khoi/vatLieu/dungNguoi).
 // Roads, Crossian Cafe, the sidewalk trà đá stall, the crocodile pond, the IT Ops monitoring kiosk, and the side characters
-// (IT Ops, Architect, NPCs, the dog Chos An, the cat Meow) driven by the pure town simulation (../town/sim.ts, plan px → world).
+// (IT Ops indoors, NPCs, the dog Chos An, the cat Meow) driven by the pure town simulation (../town/sim.ts, plan px → world).
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { ItOpsStatus } from '../types';
-import { CAFE, MASSAGE, MASSAGE_BEDS, NOC, POND, PX, ROADS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
+import { CAFE, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POND, PX, ROADS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
 import { initialWorld, knockDown, step, throwIntoPond, type Ent, type World } from '../town/sim';
@@ -155,13 +155,14 @@ function pond(ctx: TownCtx) {
   splash.rotation.x = -Math.PI / 2; splash.position.set(cx, 0.2, cz); splash.visible = false; ctx.nhom.add(splash);
   return { cx, cz, rx, rz, crocs, splash };
 }
+/** Small indoor status panel next to IT Ops (no outdoor street kiosk). */
 function noc(ctx: TownCtx) {
-  const [x, z] = toWorld(NOC), g = new THREE.Group(); g.position.set(x + 1.2, 0, z + 0.6); g.rotation.y = -0.4; ctx.nhom.add(g);
-  khoi(g, 1.4, 0.75, 0.6, '#5d5f6b', 0, 0.38, 0); khoi(g, 1.5, 0.05, 0.7, '#3a3a44', 0, 0.77, 0);
+  const [x, z] = toWorld(ITOPS_SPOT), g = new THREE.Group(); g.position.set(x + 0.85, 0, z - 0.1); g.rotation.y = 0.3; ctx.nhom.add(g);
+  khoi(g, 1.1, 0.7, 0.5, '#5d5f6b', 0, 0.35, 0); khoi(g, 1.15, 0.05, 0.55, '#3a3a44', 0, 0.72, 0);
   const man = ctx.own(new THREE.MeshLambertMaterial({ color: '#1c2030', emissive: '#94a3b8', emissiveIntensity: 0.4 }));
-  for (const dx of [-0.35, 0.35]) { khoi(g, 0.62, 0.42, 0.05, '#2a2833', dx, 1.12, -0.12); khoi(g, 0.56, 0.36, 0.01, man, dx, 1.12, -0.09, false); khoi(g, 0.06, 0.2, 0.06, '#2a2833', dx, 0.88, -0.14); }
-  khoi(g, 0.16, 1.4, 0.16, '#3a3a44', 0.85, 0.7, -0.2); const den = ctx.own(new THREE.MeshLambertMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.3 })); khoi(g, 0.26, 0.26, 0.26, den, 0.85, 1.5, -0.2);
-  const el = sign(ctx, ICON.pulse, 'Monitor', '', '#64748b', x + 1.2, 2.3, z + 0.6, 'noc');
+  khoi(g, 0.9, 0.5, 0.04, '#2a2833', 0, 1.05, -0.1); khoi(g, 0.82, 0.42, 0.01, man, 0, 1.05, -0.07, false);
+  khoi(g, 0.12, 1.1, 0.12, '#3a3a44', 0.55, 0.55, -0.15); const den = ctx.own(new THREE.MeshLambertMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.3 })); khoi(g, 0.2, 0.2, 0.2, den, 0.55, 1.2, -0.15);
+  const el = sign(ctx, ICON.pulse, 'Monitor', '', '#64748b', x + 0.85, 2.05, z - 0.1, 'noc');
   const b = document.createElement('b'); el.append(document.createTextNode(': '), b);
   return { man, den, el, b };
 }
@@ -184,8 +185,9 @@ function petMesh(meo: boolean): Pet {
 }
 interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá / bia', chat: 'tán gẫu', bark: 'sủa', fight: 'đánh nhau', report: 'báo sự cố', fall: 'rơi xuống hồ', eaten: 'bị ăn', massage: 'mát xa', knocked: 'bị xe đâm' };
-const ROLE: Partial<Record<Ent['kind'], string>> = { itops: 'IT Ops', architect: 'Architect', dog: 'chó', cat: 'mèo' };
+/** Short act bit under the name — only when it adds info beyond the name. */
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã' };
+const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo' };
 
 export class TownLayer {
   private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
@@ -257,8 +259,7 @@ export class TownLayer {
       const moving = Math.hypot(dx, dz) > 0.05;
       if (moving) f.heading = Math.atan2(dx, dz);
       else if (e.act === 'fight') { const o = this.world.ents.find((z) => z.kind === (e.kind === 'cat' ? 'dog' : 'cat')); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); } }
-      else if (e.kind === 'itops' && e.act === 'chat') f.heading = -Math.PI / 2;
-      else if (e.kind === 'architect') f.heading = Math.PI / 2 * (this.world.ents.some((z) => z.kind === 'itops' && (z.act === 'chat' || z.act === 'report')) ? 1 : 0);
+      else if (e.kind === 'itops' && e.act === 'report') f.heading = Math.PI * 0.15;
       f.g.rotation.y = THREE.MathUtils.lerp(f.g.rotation.y, f.heading, Math.min(1, dt * 8));
       let y = 0;
       if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
@@ -268,9 +269,9 @@ export class TownLayer {
       this.pose(f, t, dt, moving);
       // label + bubble
       const name = currentName(`npc:${e.id}`) ?? e.name; if (f.ten.textContent !== name) f.ten.textContent = name;
-      const phu = [name !== e.name || e.kind === 'itops' || e.kind === 'architect' ? ROLE[e.kind] : '', ACT_LABEL[e.act]].filter(Boolean).join(' · ');
+      const phu = ROLE[e.kind] ?? ACT_LABEL[e.act] ?? '';
       if (f.phu.textContent !== phu) f.phu.textContent = phu;
-      const alert = (e.kind === 'itops' && !!e.reported && e.act === 'chat') || (e.kind === 'architect' && !!e.say);
+      const alert = e.kind === 'itops' && e.act === 'report';
       const key = `${e.say ?? ''}|${alert}`;
       if (key !== f.bubble) { f.bubble = key; f.bb.textContent = e.say ?? ''; f.el.classList.toggle('co-bong', !!e.say); f.el.classList.toggle('bao-dong', alert); }
       if (f.el.dataset.act !== e.act) f.el.dataset.act = e.act;
@@ -291,16 +292,17 @@ export class TownLayer {
     const h = f.hinh!; let than = 0, tT = 0.05, tP = 0.05, chan = 0, dau = 0, noi = !!f.e.say;
     if (moving) { const s = Math.sin(w * (f.e.speed > 160 ? 11 : 7)); chan = 0.8 * s; tT = -0.8 * s; tP = 0.8 * s; than = 0.12; }
     else if (a === 'drink' || a === 'beer') { tP = -1.9 + 0.35 * Math.max(0, Math.sin(w * 0.9)); dau = -0.08 * Math.max(0, Math.sin(w * 0.9)); }
-    else if (a === 'chat' && f.e.kind === 'itops') { tP = -2.4 + 0.3 * Math.sin(w * 9); tT = -0.6 + 0.3 * Math.sin(w * 7); } // waving: something is wrong
+    else if (a === 'report' && f.e.kind === 'itops') { tP = -2.4 + 0.3 * Math.sin(w * 9); tT = -0.6 + 0.3 * Math.sin(w * 7); } // waving the alert
     else if (a === 'chat') { tP = -0.7 + 0.35 * Math.sin(w * 3); tT = -0.25 + 0.2 * Math.sin(w * 2.3); }
     else if (a === 'fall') { tT = tP = -2.9; }
-    else if (f.e.kind === 'itops') { tT = tP = -1.1; dau = 0.15; } // typing at the kiosk
+    else if (a === 'massage') { tT = tP = -0.2; }
+    else if (f.e.kind === 'itops') { tT = tP = -1.1; dau = 0.15; } // typing at the indoor panel
     h.chan[0].rotation.x = THREE.MathUtils.lerp(h.chan[0].rotation.x, chan, k); h.chan[1].rotation.x = THREE.MathUtils.lerp(h.chan[1].rotation.x, -chan, k);
     h.than.rotation.x = THREE.MathUtils.lerp(h.than.rotation.x, than, k); h.dau.rotation.x = THREE.MathUtils.lerp(h.dau.rotation.x, dau, k);
     h.tay[0].rotation.x = THREE.MathUtils.lerp(h.tay[0].rotation.x, tT, k); h.tay[1].rotation.x = THREE.MathUtils.lerp(h.tay[1].rotation.x, tP, k);
     h.mieng.scale.y = noi ? 1 + 2.4 * Math.abs(Math.sin(w * 13)) : 1;
     const chop = ((w * 0.27) % 1) < 0.035; for (const m of h.mat) m.scale.y = chop ? 0.15 : 1;
-    h.moHoi.visible = a === 'fall' || (f.e.kind === 'itops' && !!f.e.reported && a !== 'idle');
+    h.moHoi.visible = a === 'fall' || (f.e.kind === 'itops' && a === 'report');
   }
   private animatePond(t: number, dt: number, eating: boolean) {
     const { cx, cz, rx, rz, crocs, splash } = this.p;

@@ -331,8 +331,7 @@ export class VanphongScene {
         if (b.dots) { const c = document.createElement('span'); c.className = 'cham'; c.append(...[0, 1, 2].map(() => document.createElement('i'))); n.bbEl.append(c); }
       }
       const phu = subtitleFor(a); if (n.phuEl.textContent !== phu) n.phuEl.textContent = phu;
-      const cho = a.state === 'working' && a.tool ? (a.tool.ok === false ? 'failed' : a.tool.ok ? 'ok' : 'tool') : '';
-      if (n.choEl.textContent !== cho) n.choEl.textContent = cho;
+      if (n.choEl.textContent) n.choEl.textContent = ''; // keep labels to name + short status
     }
     for (const [id, n] of this.nguoi) if (!s.agents[id]) { this.nhom.remove(n.ngoi.goc, n.dung.goc); n.el.remove(); this.nguoi.delete(id); } // session left
     for (const id in this.freeSince) if (!s.agents[id]) delete this.freeSince[id]; // a swept session coming back with the same ids starts fresh
@@ -393,6 +392,8 @@ export class VanphongScene {
       than = 0.42; dau = -0.25; tT = -1.25; tP = -1.25 + 0.3 * Math.max(0, Math.sin(w * 2.2)) * (Math.sin(w * 0.5) > 0 ? 1 : 0); noi = n.noiIdle;
     } else if (n.idleKind === 'coffee') { // ours: sipping
       tP = -1.9 + 0.35 * Math.max(0, Math.sin(w * 0.9)); tT = -0.2; dau = -0.08 * Math.max(0, Math.sin(w * 0.9)); noi = n.noiIdle;
+    } else if (n.idleKind === 'massage') { // ours: lying on a Xuka bed
+      tT = tP = -0.2; than = 0; dau = 0.1; noi = n.noiIdle;
     } else if (n.idleKind === 'chat' && !n.noiIdle) { // ours: listening, arms down, nodding
       dau = 0.08 * Math.max(0, Math.sin(w * 2.4)); dauY = 0.05 * Math.sin(w * 0.9); than = 0.012 * Math.sin(w * 2);
     } else { // standing at a colleague's desk: the reference's "le_tan" chatting pose
@@ -422,7 +423,11 @@ export class VanphongScene {
       (seated ? n.ngoi.goc : n.dung.goc).add(n.nhan); n.nhan.position.set(0, seated ? 1.95 : 2.05, 0);
     }
     if (seated) { this.capNhatNguoi(n, t, dt); return; }
-    const [x, , z] = n.walker.pos; n.dung.goc.position.set(x, 0, z); n.dung.goc.rotation.y = n.walker.heading;
+    const [x, , z] = n.walker.pos;
+    const massage = n.idleKind === 'massage';
+    n.dung.goc.position.set(x, massage ? 0.72 : 0, z);
+    n.dung.goc.rotation.y = n.walker.heading;
+    n.dung.goc.rotation.x = massage ? -Math.PI / 2 : 0;
     this.tuTheDung(n, t, dt, n.walker.phase === 'walking');
     this.capNhatBan(n.ban, null, t, dt);
   }
