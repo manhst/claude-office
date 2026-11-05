@@ -259,6 +259,57 @@ export const LINES = {
     'Bi đỏ đâu rồi?', 'Ông đánh kém quá', 'Tôi tập bida trên YouTube', 'Thêm phấn vào cơ', 'Lượt tôi!', 'Cú này đẹp không?', 'Bàn nghiêng à?', 'Cá cược một ly bạc xỉu', 'Ván cuối rồi đi làm',
     'Ai thắng được ngồi gần cửa sổ', 'Bi vào liên tục!', 'Trượt như deadline', 'Đánh hay quá trời',
   ],
+
+  /** Layoff the T-Rex hunting idle/useless staff (KPI / PIP / headcount jokes) */
+  layoffHunt: [
+    'HR bảo tối ưu headcount... bằng răng!', 'Ai idle quá 5 phút là vào menu của tao!', 'KPI thấp? Layoff phục vụ!', 'Đang săn nhân viên rảnh háng!', 'PIP? Tao là Personal Improvement... Predator!',
+    'Standup mà không standup, tao standup luôn!', 'Slack status "away" quá lâu rồi đấy!', 'Calendar trống như não lúc 4h chiều!', 'Ai đang BBQ trong giờ làm?', 'Mát xa trong sprint? Ngon, thêm protein!',
+    'Optimize headcount theo công thức: ăn!', 'Board muốn lean team, tao lean luôn!', 'Coffee break lần thứ 8 hôm nay hả?', 'Hẹn hò trong vườn hoa? Performance review!', 'Chat vô bổ = calorie miễn phí!',
+    'Ticket "research" kéo dài 3 sprint?', 'Tao ngửi thấy mùi underperform!', 'Rảnh thì đi fill self-assessment... trong bụng tao!', 'Budget cut, menu mở!', 'Q1 restructuring bắt đầu từ đây!',
+    'Ai "đang nghĩ" mà thực ra đang ngủ?', 'Idle state detected. Engaging jaws.', 'HR gửi list, tao đi thu hồi!', 'Tên mày đỏ trên dashboard hiệu suất!', 'Không commit nào trong 2 tuần? Ngon!',
+    'Meeting hết meeting mà zero output!', 'Tao không phải bug, tao là feature của C-level!', 'Săn nhân sự thừa như săn buffalo!', 'Rảnh háng là tội danh hình sự ở đây!', 'Headcount optimization, teeth included!',
+    'Ai trốn ticket bằng Xém Nướng?',
+  ],
+  /** Layoff chomping on the spot (comedic, no gore) */
+  layoffEat: [
+    'Ngon! Vị underperform!', 'Một phát hết probation!', 'Nuốt luôn dual-monitor!', 'KPI của mày giờ là 0!', 'Cảm ơn vì đã đóng góp... calo!',
+    'Exit interview ngắn: ợ!', 'Offboard xong, không cần laptop!', 'Package: một nhát cắn!', 'Severance? Tao cho nghỉ ngay!', 'Đã archive nhân sự!',
+    'Lean team hơn rồi!', 'Headcount -1, happiness +1 (của tao)!', 'Nuốt cả standup notes!', 'Vị trà đá lẫn BBQ!', 'Mát xa xong lại thành snack!',
+    'PIP completed successfully!', 'Không cần Jira ticket cho việc này!', 'HR sẽ gửi email... sau khi tao ợ!', 'Optimization done!', 'Ngọt như bonus bị cắt!',
+    'Ngon hơn buffet all-hands!', 'Một nhân viên = một bữa!', 'Đã sync với Active Directory: deleted!', 'Không còn ping được trên Slack!', 'Status: terminated (literally)!',
+    'Budget tiết kiệm được một suất!', 'CFO sẽ vui!', 'Ăn xong vẫn còn chỗ cho middle management!', 'Ngon mà hơi đắng vì OKR!', 'Tái cấu trúc hoàn tất!',
+    'Ai bảo layoff không có lợi ích?',
+  ],
+  /** Layoff carrying victim to the croc pond */
+  layoffThrow: [
+    'Hồ cá sấu nhận bàn giao nhân sự!', 'Outplacement program: xuống hồ!', 'Tao không ăn hết, chia sẻ với cá sấu!', 'Pond = final destination!', 'Ném luôn, khỏi viết đơn thôi việc!',
+    'Cá sấu cũng cần headcount!', 'Offboard bằng quỹ đạo!', 'Bay đi, performance kém ơi!', 'Hồ này có SLA tốt hơn HR!', 'Restructuring phase 2: splash!',
+    'Không phải ném rác, là chuyển phòng!', 'Cá sấu review resume của mày!', 'Exit route: thẳng đứng!', 'Package bay cao, đáp ướt!', 'Đừng lo, có onboarding dưới hồ!',
+    'Board thích decision nhanh!', 'Zero notice period!', 'Ném nhẹ thôi... đùa đấy, ném mạnh!', 'Cá sấu đang mở miệng như open position!', 'Chia đều cost-cutting!',
+    'Tao săn, cá sấu hoàn tất!', 'Outsource sang hồ!', 'Không cần desk nữa!', 'Flying performance review!', 'KPI cuối: độ cao đường bay!',
+    'HR stamp: approved for pond!', 'Bye bye, calendar invite!', 'Cá sấu bảo "culture fit"!', 'Ném xong tao đi săn tiếp!', 'Splash = termination letter!',
+    'Hồ cá sấu: employee of the month!',
+  ],
+  /** Victim panic / plead / last words when Layoff hunts */
+  victimPanic: [
+    'Đợi đã, sprint này em tăng velocity!', 'Em đang research mà!', 'KPI tháng sau em bù!', 'Đừng! Em vừa cập nhật Jira!', 'Em xin vào PIP thật, đừng ăn!',
+    'Em có dual-track IC path!', 'Thằng bên cạnh idle hơn em!', 'Em đang coffee vì hydration!', 'BBQ là team building!', 'Mát xa là wellness benefit!',
+    'Em vừa merge PR!', 'Cho em viết self-review!', 'Em có stock options chưa vest!', 'Đừng, mẹ em hỏi thăm lương!', 'Em sẽ on-call cả tháng!',
+    'Layoff ơi, em là critical path!', 'Em biết mật khẩu prod!', 'Cho em gửi handover!', 'Em không phải soft-delete!', 'Status em là busy mà!',
+    'Em đang pairing... một mình!', 'Slack status em là deep work!', 'Em chỉ chat 4 tiếng thôi!', 'Hẹn hò là networking!', 'Em sẽ học thêm framework!',
+    'Đừng đưa xuống hồ, em sợ cá!', 'Em xin remote forever!', 'Performance improvement... bằng chân!', 'Em sẽ thôi coffee break!', 'Last words: nhớ commit giúp em!',
+    'Em chưa nhận lương tháng này!',
+  ],
+  /** Bystanders reacting to a Layoff incident */
+  layoffWitness: [
+    'Úi, lại đợt cắt giảm!', 'May quá không phải mình!', 'Năm nay layoff sớm thế?', 'Ai cập nhật org chart giúp!', 'Headcount dashboard vừa nháy đỏ!',
+    'Tao bảo rồi, đừng idle!', 'HR lại "khó khăn" à?', 'Con khủng long tên Layoff... rõ ràng quá!', 'Nhanh lên, giả vờ gõ phím!', 'Mở laptop ra kẻo nó ngửi thấy!',
+    'Standup giả đi mọi người!', 'Ai còn ticket "TBD" thì nguy!', 'Cá sấu no thêm bữa!', 'Tao đi commit lung tung cho chắc!', 'Culture of fear? Có răng luôn!',
+    'Năm ngoái cũng thế, cùng một con!', 'Optimize bằng răng thì hiệu quả thật!', 'Ai rủ BBQ giờ hối hận chưa?', 'Mát xa xong thành menu!', 'Garden romance = risk cao!',
+    'Slack #random im hết!', 'Ai đổi status thành "in a meeting"!', 'Tao thấy list từ sáng!', 'CFO cười trong phòng kính!', 'Đừng nhìn, kẻo thành eye contact!',
+    'Performance review realtime!', 'Team lean thật sự rồi!', 'Ai còn sống nhớ viết post-mortem!', 'Layoff đi qua, KPI đi theo!', 'Tao giấu dưới bàn!',
+    'Nhanh, mở IDE lên!',
+  ],
 };
 /** Two-sided exchanges: [first speaker, reply]. */
 export const PAIRS = {

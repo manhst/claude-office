@@ -15,6 +15,7 @@ import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, s
 import { HeartFX } from './hearts';
 import { buildGameRoom, buildPantry } from './amenities';
 import { CANH, TownLayer } from './town3d';
+import { fromWorld } from '../town/map';
 import { agentKey, currentLook, currentName } from '../town/looks';
 
 export interface MenuTarget { kind: 'agent' | 'ent'; id: string; x: number; y: number }
@@ -508,7 +509,36 @@ export class VanphongScene {
     const dt = Math.min(0.1, this.dongHo.getDelta()), t = this.dongHo.elapsedTime;
     this.capNhatGoc(t); this.dk.update();
     if (this.s) for (const n of this.nguoi.values()) this.capNhat(n, t, dt);
-    this.capNhatBay(t); this.capNhatNem(t); this.town.tick(t, dt, Date.now());
+    this.capNhatBay(t); this.capNhatNem(t);
+    // Layoff may hunt free (idle/done) office agents who are out of the building / wandering.
+    const preyNow = Date.now();
+    const prey = [];
+    if (this.s) {
+      for (const id of this.s.order) {
+        const a = this.s.agents[id], n = this.nguoi.get(id);
+        if (!a || !n || n.goneUntil || !isFree(a)) continue;
+        const g = (n.seated ? n.ngoi : n.dung).goc;
+        const wp = new THREE.Vector3(); g.getWorldPosition(wp);
+        const pt = fromWorld(wp.x, wp.z);
+        prey.push({ id, x: pt.x, y: pt.y });
+      }
+    }
+    this.town.setAgentPrey(prey);
+    this.town.tick(t, dt, preyNow);
+    const ev = this.town.consumeLayoffEvent();
+    if (ev) {
+      const n = this.nguoi.get(ev.agentId), a = this.s?.agents[ev.agentId];
+      if (n && a && !n.goneUntil) {
+        if (ev.type === 'pond') {
+          const tu = new THREE.Vector3(); (n.seated ? n.ngoi : n.dung).goc.getWorldPosition(tu);
+          const fig = dungNguoi(lookFor(a), false).goc; fig.position.copy(tu); this.nhom.add(fig);
+          this.nem.push({ m: fig, tu, den: this.town.pondAt, bat: this.dongHo.elapsedTime });
+        } else {
+          this.town.eat(preyNow, 1800); // brief chomp cue
+        }
+        n.goneUntil = preyNow + RESPAWN_MS;
+      }
+    }
     this.nhanR.domElement.classList.toggle('xa', this.camera.position.distanceTo(this.dk.target) > this.xaTu);
     this.renderer.render(this.canh, this.camera); this.nhanR.render(this.canh, this.camera);
     if (t - this.lastLayout > 0.12) { this.lastLayout = t; this.tachNhan(); }

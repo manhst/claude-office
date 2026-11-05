@@ -101,7 +101,7 @@ export function toView(file: OfficeSettingsFile, cfg: ItOpsConfig, status: ItOps
     desks: { total: 6, perSession: 6, cols: 3 },
     notes: {
       avatar: 'Chuột phải tên nhân vật → Đặt tên & avatar (lưu localStorage).',
-      vpDebug: 'localStorage vp-debug=1 bật nút debug tai nạn / ngoại tình (nâng cao).',
+      vpDebug: 'localStorage vp-debug=1 bật debug tai nạn / ngoại tình / Layoff (nâng cao).',
     },
   };
 }

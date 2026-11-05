@@ -72,6 +72,8 @@ Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kio
 `--demo` with no URL runs a monitor labelled **(demo)** that alternates ok and `DEMO HighLatency` every 15 s.
 **Xuka Mát xa** sits across the back street from Crossian Cafe; NPCs and free office agents walk there, lie on a bed and chat about massages (PG, comedic), then walk back.
 **Xém Nướng** is opposite the crocodile pond (northwest): BBQ and crocodile-meat hotpot. Side NPCs and free agents occasionally walk over, sit/eat, chat, then return.
+**Layoff** is a voxel T-Rex that occasionally roams the town hunting idle/useless staff (side NPCs chatting, coffee, BBQ, massage, romance, etc., and free office agents). Random outcome: eat on the spot (comedic chomp → respawn) or carry them to the crocodile pond. Dialogue in `web/src/town/dialogue.ts` (`layoffHunt` / `layoffEat` / `layoffThrow` / `victimPanic` / `layoffWitness`, ≥30 lines each). Debug: `localStorage vp-debug=1` then `__vpTown.layoffEat()` / `__vpTown.layoffPond()`. Screenshots: `docs/screens/layoff-*.png` (`cd web && npm run build && node scripts/screens-layoff.mjs`).
+
 **Flower garden** between Xuka and Xém Nướng: rarely two characters sneak there for a secret PG office-soap affair (stand close, kiss, flat SVG heart pops).
 Speech bubbles are paced slower (longer display + gaps, less idle chatter) so lines are readable.
 

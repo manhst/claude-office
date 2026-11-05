@@ -7,7 +7,7 @@ import type { ItOpsStatus } from '../types';
 import { BBQ, BBQ_SEATS, CAFE, GARDEN, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POND, PX, ROADS, ROMANCE_SPOTS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
-import { forceRomance, initialWorld, knockDown, step, throwIntoPond, type Ent, type World } from '../town/sim';
+import { forceLayoff, forceRomance, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
@@ -241,14 +241,41 @@ function petMesh(meo: boolean): Pet {
   khoi(duoi, 0.07, meo ? 0.5 : 0.08, meo ? 0.07 : 0.34, dam, 0, meo ? 0.25 : 0.04, meo ? -0.02 : -0.17);
   return { goc, dau, duoi, chan };
 }
-interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
+type Trex = { goc: THREE.Group; dau: THREE.Group; duoi: THREE.Group; chan: THREE.Group[]; tay: THREE.Group[] };
+function trexMesh(): Trex {
+  const goc = new THREE.Group(), da = '#5a8f3c', dam = '#3f6a28', bung = '#c5d98a';
+  const than = new THREE.Group(); goc.add(than);
+  khoi(than, 0.55, 0.55, 0.9, da, 0, 0.85, -0.05); // torso
+  khoi(than, 0.45, 0.35, 0.55, bung, 0, 0.7, 0.05, false); // belly
+  const dau = new THREE.Group(); dau.position.set(0, 1.25, 0.55); than.add(dau);
+  khoi(dau, 0.48, 0.38, 0.55, da, 0, 0, 0); // head
+  khoi(dau, 0.42, 0.16, 0.4, '#2a3d1f', 0, -0.12, 0.12, false); // jaw
+  for (const b of [-1, 1]) {
+    khoi(dau, 0.06, 0.06, 0.04, '#1d1a22', b * 0.12, 0.08, 0.26, false); // eyes
+    khoi(dau, 0.05, 0.1, 0.04, '#e8eecf', b * 0.1, -0.08, 0.28, false); // teeth hint
+  }
+  const tay = [-1, 1].map((s) => {
+    const p = new THREE.Group(); p.position.set(s * 0.32, 0.85, 0.2); than.add(p);
+    khoi(p, 0.08, 0.22, 0.08, dam, 0, -0.05, 0); return p;
+  });
+  const chan = [-1, 1].map((s) => {
+    const p = new THREE.Group(); p.position.set(s * 0.18, 0.55, -0.05); than.add(p);
+    khoi(p, 0.16, 0.55, 0.22, dam, 0, -0.25, 0); khoi(p, 0.22, 0.08, 0.28, '#2f4a1c', 0, -0.52, 0.04, false); return p;
+  });
+  const duoi = new THREE.Group(); duoi.position.set(0, 0.85, -0.55); than.add(duoi);
+  khoi(duoi, 0.22, 0.22, 0.7, da, 0, 0, -0.3); khoi(duoi, 0.12, 0.12, 0.35, dam, 0, 0.02, -0.7);
+  goc.scale.setScalar(1.15);
+  return { goc, dau, duoi, chan, tay };
+}
+interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; trex?: Trex; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
 /** Short act bit under the name — only when it adds info beyond the name. */
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò' };
-const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo' };
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò', hunt: 'săn', chomp: 'ăn', carry: 'tha', carried: 'bị tha' };
+const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo', trex: 'T-Rex' };
 
 export class TownLayer {
   private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
+  private agentPrey: AgentPrey[] = []; private pendingLayoff?: LayoffEvent;
   private p: ReturnType<typeof pond>; private traffic: Traffic; private cars: TrafficLayer; private k: ReturnType<typeof noc>; private nocKey = '';
   private hearts: HeartFX; private heartCd = 0;
   constructor(private ctx: TownCtx, now = Date.now()) {
@@ -259,7 +286,13 @@ export class TownLayer {
     try { if (localStorage.getItem('vp-debug') === '1') {
       const w = window as unknown as Record<string, unknown>;
       w.__vpTraffic = { crash: (x = 700) => { this.traffic = forceCrash(this.traffic, Date.now(), x); }, fire: (x = 1000) => { this.traffic = forceFire(this.traffic, Date.now(), x); } };
-      w.__vpTown = { romance: () => { this.world = forceRomance(this.world, Date.now(), Math.random); }, hearts: (x = 0, z = -14.5) => { this.hearts.burst(x, z, Date.now(), true); } };
+      w.__vpTown = {
+        romance: () => { this.world = forceRomance(this.world, Date.now(), Math.random); },
+        hearts: (x = 0, z = -14.5) => { this.hearts.burst(x, z, Date.now(), true); },
+        layoff: (mode: 'eat' | 'pond' | 'hunt' = 'hunt') => { this.world = forceLayoff(this.world, Date.now(), mode, Math.random); },
+        layoffEat: () => { this.world = forceLayoff(this.world, Date.now(), 'eat', Math.random); },
+        layoffPond: () => { this.world = forceLayoff(this.world, Date.now(), 'pond', Math.random); },
+      };
     }; } catch { /* no storage */ }
     for (const e of this.world.ents) this.figs.set(e.id, this.fig(e));
     this.setItops(undefined);
@@ -269,6 +302,9 @@ export class TownLayer {
   /** Crocodiles chomp + splash for a while (an agent was thrown in). */
   eat(nowMs: number, ms = 2600) { this.eatUntil = Math.max(this.eatUntil, nowMs + ms); }
   throwEnt(id: string, nowMs = Date.now()) { this.world = throwIntoPond(this.world, id, nowMs); }
+  /** Free office agents (plan px) Layoff may hunt. */
+  setAgentPrey(list: AgentPrey[]) { this.agentPrey = list; }
+  consumeLayoffEvent(): LayoffEvent | undefined { const e = this.pendingLayoff; this.pendingLayoff = undefined; return e; }
   /** Traffic state (screenshots / debugging can inject incidents). */
   get road() { return this.traffic; }
   set road(t: Traffic) { this.traffic = t; }
@@ -287,14 +323,16 @@ export class TownLayer {
   private lookOf(e: Ent) { return currentLook(`npc:${e.id}`) ?? e.look ?? ''; }
   private fig(e: Ent): Fig {
     const g = new THREE.Group(); this.ctx.nhom.add(g);
-    const animal = e.kind === 'dog' || e.kind === 'cat', lookId = this.lookOf(e);
-    let hinh: Hinh | undefined, pet: Pet | undefined;
-    if (animal) { pet = petMesh(e.kind === 'cat'); g.add(pet.goc); } else { hinh = dungNguoi(presetLook(lookId), false); g.add(hinh.goc); }
+    const animal = e.kind === 'dog' || e.kind === 'cat', dino = e.kind === 'trex', lookId = this.lookOf(e);
+    let hinh: Hinh | undefined, pet: Pet | undefined, trex: Trex | undefined;
+    if (dino) { trex = trexMesh(); g.add(trex.goc); }
+    else if (animal) { pet = petMesh(e.kind === 'cat'); g.add(pet.goc); }
+    else { hinh = dungNguoi(presetLook(lookId), false); g.add(hinh.goc); }
     const el = document.createElement('div'); el.className = `nguoi-3d ent-3d ent-${e.kind}`; el.dataset.ent = e.id; el.dataset.testid = `ent-${e.id}`;
     el.innerHTML = '<div class="bong-3d"><span class="bb"></span></div><div class="ten-3d"><i class="cham-3d"></i><b></b><small></small></div>';
-    const nhan = new CSS2DObject(el); nhan.center.set(0.5, 1); nhan.position.set(0, animal ? 1.05 : 2.05, 0); g.add(nhan);
+    const nhan = new CSS2DObject(el); nhan.center.set(0.5, 1); nhan.position.set(0, dino ? 2.2 : animal ? 1.05 : 2.05, 0); g.add(nhan);
     const [x, z] = toWorld(e);
-    const f: Fig = { e, g, hinh, pet, el, bb: el.querySelector('.bb')!, ten: el.querySelector('.ten-3d b')!, phu: el.querySelector('.ten-3d small')!, nhan, lookId, pha: Math.random() * 10, x, z, heading: 0, bubble: '\u0000' };
+    const f: Fig = { e, g, hinh, pet, trex, el, bb: el.querySelector('.bb')!, ten: el.querySelector('.ten-3d b')!, phu: el.querySelector('.ten-3d small')!, nhan, lookId, pha: Math.random() * 10, x, z, heading: 0, bubble: '\u0000' };
     g.position.set(x, 0, z); return f;
   }
   /** Rebuild a side character's body when its chosen preset changed. */
@@ -305,7 +343,10 @@ export class TownLayer {
   /** Advance the simulation (every 200 ms) and animate every frame. */
   tick(t: number, dt: number, nowMs: number) {
     if (nowMs - this.lastStep >= 200) {
-      this.world = step(this.world, nowMs, Math.random, this.itops); this.lastStep = nowMs;
+      this.world = step(this.world, nowMs, Math.random, this.itops, this.agentPrey); this.lastStep = nowMs;
+      if (this.world.layoffEvent) { this.pendingLayoff = this.world.layoffEvent; this.world = { ...this.world, layoffEvent: undefined }; }
+      // Chomp on-spot: splash-less hide; pond carry triggers eat splash when victim falls.
+      if (this.world.ents.some((e) => e.act === 'chomp' || (e.kind === 'trex' && e.act === 'idle' && e.partner))) { /* noop */ }
       const peds = this.world.ents.filter((e) => (e.act === 'walk' || e.act === 'idle') && onRoad(e));
       const o = stepTraffic(this.traffic, nowMs, Math.random, peds); this.traffic = o.traffic;
       for (const id of o.hits) this.world = knockDown(this.world, id, nowMs, Math.random);
@@ -315,6 +356,8 @@ export class TownLayer {
     for (const e of this.world.ents) {
       const f = this.figs.get(e.id)!; const prev = f.e.act; f.e = e; this.relook(f);
       if (e.act === 'eaten') eating = true;
+      if (e.act === 'chomp' && e.kind === 'trex') { /* jaw anim via pose */ }
+      if (e.act === 'carried') { /* held by Layoff */ }
       if (e.act === 'fall' && prev !== 'fall') f.fallFrom = [f.x, f.z];
       const hidden = e.act === 'eaten' || e.act === 'gone'; f.g.visible = !hidden; f.el.style.display = hidden ? 'none' : '';
       if (hidden) continue;
@@ -328,6 +371,7 @@ export class TownLayer {
       let y = 0;
       if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
       if (e.act === 'knocked') { f.g.rotation.x = THREE.MathUtils.lerp(f.g.rotation.x, -Math.PI / 2, 1); y = 0.15; }
+      if (e.act === 'carried') { y = 1.1; f.g.rotation.x = 0.4; }
       if (e.act === 'massage') { f.g.rotation.x = -Math.PI / 2; y = 0.72; f.heading = 0; }
       if (e.act === 'bbq') { /* sit-ish: slight lean */ }
       if (e.act === 'romance' && e.partner) {
@@ -349,6 +393,16 @@ export class TownLayer {
   }
   private pose(f: Fig, t: number, dt: number, moving: boolean) {
     const w = t + f.pha, a = f.e.act, k = Math.min(1, dt * 10);
+    if (f.trex) {
+      const T = f.trex, sw = moving || a === 'hunt' || a === 'carry' ? Math.sin(w * 10) * 0.45 : 0;
+      T.chan.forEach((c, i) => { c.rotation.x = (i === 0 ? 1 : -1) * sw; });
+      T.duoi.rotation.y = Math.sin(w * 6) * 0.25;
+      T.tay.forEach((c, i) => { c.rotation.x = Math.sin(w * 8 + i) * 0.15; });
+      T.dau.rotation.x = a === 'chomp' ? -0.45 * Math.abs(Math.sin(w * 14)) : a === 'hunt' ? -0.15 : 0;
+      T.goc.position.y = a === 'chomp' ? Math.abs(Math.sin(w * 14)) * 0.12 : moving ? Math.abs(Math.sin(w * 10)) * 0.06 : 0;
+      T.goc.scale.setScalar(a === 'chomp' ? 1.15 + 0.05 * Math.sin(w * 14) : 1.15);
+      return;
+    }
     if (f.pet) {
       const P = f.pet, sw = moving ? Math.sin(w * 16) * 0.7 : 0;
       P.chan.forEach((c, i) => { c.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw; });
