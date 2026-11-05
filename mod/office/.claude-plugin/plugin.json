@@ -1,7 +1,7 @@
 {
   "name": "office",
-  "version": "0.1.0",
-  "description": "Shows this Claude Code session in the virtual office: state, current tool, subagents. Posts only to a loopback endpoint.",
+  "version": "0.2.0",
+  "description": "Shows this Claude Code session in the virtual office: state, current tool, subagents, and each turn (prompt, assistant text, tool summaries, answer). Posts only to a loopback endpoint.",
   "author": { "name": "Manh" },
   "userConfig": {
     "endpoint": {

@@ -73,6 +73,7 @@ export class OfficeServer {
       const why = eventRequestRejection(req);
       if (why) { req.resume(); res.writeHead(why, sec).end(); return; }
       let body = ''; let tooBig = false;
+      req.setEncoding('utf8'); // decode across chunk boundaries (a multibyte char split between two chunks)
       for await (const chunk of req) { body += chunk; if (body.length > 64 * 1024) { tooBig = true; break; } }
       if (tooBig) { res.writeHead(413, sec).end(); req.destroy(); return; }
       let payload: unknown; try { payload = JSON.parse(body); } catch { res.writeHead(400, sec).end(); return; }

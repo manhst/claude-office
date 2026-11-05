@@ -130,10 +130,26 @@ panel and event log the rest (on phones the map comes first, 78% of the screen h
 It POSTs JSON events `{type, sid, ...}` (`sid` = the full session id), one at a time in event order:
 `start` on `session.start` and a `heartbeat` every 12 s (project, cwd, root, title, transcript path), `state` / `tool` on
 turn start, tool calls, permission requests and turn completion, `subagents` when a subagent starts a turn or calls a tool,
-`end` on `session.end`, and `usage` (below). Every session post also carries state, tool, prompt first sentence, subagents and cost.
+`end` on `session.end`, `usage` (below) and `turn` (below). Every session post also carries state, tool, prompt first sentence, subagents and cost.
 Tool detail is only a file **basename**, the **first line** of a command, a URL **host**, a pattern/query or a description,
-never file contents; the server also redacts tokens and caps lengths. Headless `claude -p` sessions
+never file contents or tool inputs/results; the server also redacts tokens and caps lengths. Headless `claude -p` sessions
 (`CLAUDE_CODE_ENTRYPOINT=sdk-cli`) are skipped. Non-loopback endpoints are refused by the mod.
+
+For the **Responses** panel the mod also posts each turn, the main loop's and each subagent run's, as the CLI shows it:
+`{type:'turn', sid, turn:{id, phase:'start'|'end', agentId?, agentType?, prompt?, steps?, answer?, reason?, durationMs?}}`.
+`id` is the engine's `turnId`, or `local-<run>-<n>` when the engine gives none.
+`start` (on `turn.start`) carries the prompt; `end` (on `turn.complete`) the answer, reason, duration and the steps. A main turn's
+steps are the messages added since its `turn.start` (the scan falls back to "after the last typed prompt" when the list was compacted
+or is at the engine's 4096 cap); a subagent's are those after its prompt. Each assistant text is `{kind:'text', text}` and each tool use
+`{kind:'tool', name, detail, isError?}` with the same summary detail as above. While a main turn runs, a tool call posts a `start`
+with the steps so far (at most one every 2 s).
+Caps: prompt and each text 4000 chars, answer 12000, the last 60 steps, and oldest steps dropped until the body is at most
+56,000 characters (UTF-16 chars, not bytes; the server's limit is 64 × 1024 chars).
+So unlike the rest, **prompts and the assistant's own text and answers leave the session** (to the loopback server only).
+The server redacts tokens in them and keeps the last 40 turns in memory (ended ones are evicted first). It writes them, as
+`session.turn` events, to `orchestrator/logs/run-*.jsonl`, once when a turn starts and once when it ends (live progress goes
+to the UI only). Turns still running when their session ends or times out, or when a new main turn of the same session starts,
+are marked `aborted`.
 
 Engine API used (the same as in the owner's usage-esp mod). Handlers only observe and always call `next(e)`; the classic
 and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they never block.
@@ -143,11 +159,12 @@ and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they nev
 | `export const register: Register = (on, options)`; `options.endpoint` from `plugin.json` userConfig | entry point, endpoint |
 | `on('session.start')`: `e.cwd`, `$.env.get('CLAUDE_CODE_ENTRYPOINT' / 'USERPROFILE' / 'HOME' / 'CLAUDE_CONFIG_DIR')`, `$.session.id()`, `$.session.repo()` → `root` | session info, quiet check, transcript path |
 | `$.clock.every(12000, fn)` | heartbeat |
-| `on('turn.start')`: `e.agentId` (undefined = main turn) | thinking |
+| `on('turn.start')`: `e.agentId` (undefined = main turn), `e.text`, `e.turnId` | thinking, prompt (first sentence; `classic.UserPromptSubmit` is skipped for user-tier plugins), `turn` start |
 | `on('tool.call')`: `e.tool` + tool args on `e`, `e.agentId`, `next.origin.plugin === 'engine'` | current tool (model's own calls only) |
 | `on('classic.PermissionRequest')`: `e.tool_name`, `e.tool_input` | waiting for permission |
 | `on('classic.SessionStart')`, `on('classic.UserPromptSubmit')`: `e.session_title`, `e.transcript_path`, `e.prompt` (if a string) | title, prompt |
-| `on('turn.complete')`: `e.agentId`, `e.reason` (`aborted` → idle; else done, or stay `tool` while busyAgents remain) | done / pendingDone |
+| `on('turn.complete')`: `e.agentId`, `e.reason` (`aborted` → idle; else done, or stay `tool` while busyAgents remain), `e.answer`, `e.durationMs`, `e.turnId` | done / pendingDone, `turn` end |
+| `$.session.messages()` / `$.session.messages({ agentId })` → `[{role, text, toolUses:[{tool, input, isError?}], toolResults?}]` (or `{deny}`); shape from the types package, not yet confirmed live | turn steps (text + tool summary only), message count at `turn.start` |
 | `on('session.end')` | end |
 | `$.agent.list()` → `{id?, name?, type?, description?, status}` (busy = running|pending|waiting); full list on heartbeat / tool / turn when `agentId` set; main `turn.complete` stays `tool` while busy remain | subagents / pendingDone |
 | `$.session.usage()` → `cost.usd`, `rateLimits`, `context` | cost; usage on start/heartbeat |
@@ -155,7 +172,7 @@ and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they nev
 | `$.http.fetch(url, {method: 'POST', headers, body})` | posting events |
 | `$.fs.exists(path)`, `$.fs.read(path)` | title from the transcript (`custom-title` > `ai-title`) when no `session_title` was given |
 
-Not confirmed: the name of the prompt text field on `classic.UserPromptSubmit` (`e.prompt` is used only when it is a string).
+`classic.UserPromptSubmit` is skipped for this user-tier plugin; the prompt comes from `turn.start`'s `e.text`, and `e.prompt` there is used only when it is a string.
 For typechecking without the engine's types package, `orchestrator/test/claude-code.d.ts` declares a stand-in `claude-code` module.
 
 ### Why POST /event has no token

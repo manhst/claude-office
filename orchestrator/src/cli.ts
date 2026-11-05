@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { SessionTracker } from './sessions.js';
 import { OfficeServer, newToken } from './server.js';
-import { JsonlLog } from './log.js';
+import { JsonlLog, turnLogGate } from './log.js';
 import { simulate } from './simulate.js';
 import { UsageStore } from './usage.js';
 import { ItOpsMonitor } from './itops.js';
@@ -52,7 +52,8 @@ export async function start(o: StartOpts) {
     },
   });
   const log = new JsonlLog(join(o.logDir, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`));
-  tracker.on((e) => { if (e.t !== 'sessions.update') log.write(e); server.broadcast(e); });
+  const logTurn = turnLogGate();
+  tracker.on((e) => { if (e.t !== 'sessions.update' && logTurn(e)) log.write(e); server.broadcast(e); });
   const sweep = setInterval(() => tracker.sweep(), 5000); sweep.unref();
   const port = await server.listen(o.port);
   itops.start();

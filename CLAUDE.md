@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Claude Code session ──(office mod, POST /event, loopback)──> orchestrator :7777 ──(WebSocket + per-run token)──> web UI
 ```
 
-- `mod/` — a Claude Code mod (marketplace `office-mods`, plugin `office`). `mod/office/hooks/register.ts` observes engine events and POSTs `{type, sid, ...}` events to the orchestrator. It only observes: every handler calls `next(e)` and the classic/`tool.call` handlers swallow errors. It sends tool *summaries* only (file basename, first line of a command, URL host), never file contents, and refuses non-loopback endpoints.
+- `mod/` — a Claude Code mod (marketplace `office-mods`, plugin `office`). `mod/office/hooks/register.ts` observes engine events and POSTs `{type, sid, ...}` events to the orchestrator. It only observes: every handler calls `next(e)` and the classic/`tool.call` handlers swallow errors. It sends tool *summaries* only (file basename, first line of a command, URL host), never file contents or tool inputs/results, and refuses non-loopback endpoints. It also sends each turn (`type:'turn'`) for the Responses panel: the prompt, the assistant's text, tool summaries and the final answer, capped and redacted by the server; these texts end up in `orchestrator/logs/run-*.jsonl`.
 - `orchestrator/` — Node/TS server (no build step, run with `tsx`). It doesn't run agents; it tracks sessions reported by the mod and turns them into desks.
 - `web/` — Vite + React 19 UI. It's a pure reducer over the orchestrator's event stream.
 
@@ -47,6 +47,7 @@ CLI flags: `start [--demo|--mock] [--port 7777] [--print-token] [--user-agents <
 **Session → desks** (`orchestrator/src/sessions.ts`, `SessionTracker`):
 - `parseModEvent` validates and sanitizes untrusted mod payloads (redaction via `redact.ts`, length caps).
 - `ingest` merges events into `SessionView`s, and `sweep` (every 5 s) drops sessions with no heartbeat for about 60 s.
+- `turn` events upsert a ring of the last 40 `TurnView`s by sid+turnId+agentId (end keeps the start's prompt), emit `session.turn`, and stay in `snapshot().turns` after the session leaves. Ended turns are evicted first. Running turns become `aborted` when their session drops or a new main turn of that sid starts. `cli.ts` logs a turn only at its first start and its end (`turnLogGate`). `deskId` is the lead desk for the main loop, the desk whose profile name equals the subagent type otherwise.
 - Desks are capped at 6 per session and 6 in total, so one session with 6 agents fills the office. Sessions beyond that still appear in the panel.
 - Session state maps onto agent state: `tool → working`, `waiting-permission → talking`.
 - The session's own activity goes to its first agent. A subagent's activity goes to the agent whose `name` equals the subagent type.

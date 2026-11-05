@@ -1,20 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload } from '../../mod/office/hooks/register.js';
+import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP } from '../../mod/office/hooks/register.js';
 // Fake engine matching the API used by usage-esp: register(on, options); on(name, ($, e, next) => ...) returns { catch }.
 function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' }, files: Record<string, string> = {}) {
   const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; let beat: (() => any) | undefined; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
+  let msgs: any[] = []; const agentMsgs: Record<string, any[]> = {}; let subStatus = 'running';
   const on = (n: string, fn: any) => { h[n] = fn; return { catch: () => {} }; };
   const $ = {
     env: { get: async (k: string) => env[k] },
-    session: { id: async () => sid, repo: async () => ({ root: 'C:/Users/m/proj' }), usage: async () => ({ cost: { usd: 0.42 } }) },
-    agent: { list: async () => [{ type: 'coder', description: 'step 1', status: 'running' }] },
+    session: { id: async () => sid, repo: async () => ({ root: 'C:/Users/m/proj' }), usage: async () => ({ cost: { usd: 0.42 } }),
+      messages: async (a?: any) => (a?.agentId ? (agentMsgs[a.agentId] ?? { deny: 'not yours' }) : msgs) },
+    agent: { list: async () => [{ id: 'sub1', type: 'coder', description: 'step 1', status: subStatus }] },
     http: { fetch: async (url: string, o: any) => { posts.push({ url, ...JSON.parse(o.body), ct: o.headers['content-type'] }); return { ok: true, text: async () => '' }; } },
     fs: { exists: async (p: string) => p in files, read: async (p: string) => files[p], list: async () => [] },
     clock: { every: (_ms: number, fn: () => any) => { everyCalls++; beat = fn; }, after: () => {}, now: async () => 0, sleep: async () => {} },
   };
   const next: any = (e: any) => e; next.origin = { plugin: 'engine' };
   const fire = (n: string, e: any = {}, nx = next) => h[n]($, e, nx);
-  return { on, posts, fire, beat: () => beat?.(), next, everyCalls: () => everyCalls, setSid: (s: string) => { sid = s; } };
+  return { on, posts, fire, beat: () => beat?.(), next, everyCalls: () => everyCalls, setSid: (s: string) => { sid = s; }, setSub: (s: string) => { subStatus = s; }, setMsgs: (m: any[], agentId?: string) => { if (agentId) agentMsgs[agentId] = m; else msgs = m; } };
 }
 const flush = () => new Promise((r) => setTimeout(r, 20));
 import { readFileSync } from 'node:fs';
@@ -56,14 +58,16 @@ describe('office mod (usage-esp API)', () => {
     const own: any = (e: any) => e; own.origin = { plugin: 'office' }; await f.fire('tool.call', { tool: 'Read', file_path: 'x' }, own); // mod's own call: ignored
     await f.fire('tool.call', { tool: 'Read', file_path: 'y', agentId: 'sub1' }); // subagent call: subagent refresh only
     await f.fire('classic.PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'git push' } }); await flush();
-    await f.fire('turn.complete', { reason: 'answer' }); await flush();
+    f.setSub('completed'); await f.fire('turn.complete', { reason: 'answer' }); await flush(); // no busy subagent left: done
     await f.fire('session.end', {}); await flush();
     const s = JSON.stringify(f.posts); expect(s).not.toContain('API_KEY'); expect(s).not.toContain('rm -rf');
-    expect(f.posts.map((p) => [p.type, p.state, p.tool?.name, p.tool?.detail])).toEqual([
+    const ses = () => f.posts.filter((p) => p.type !== 'turn'); // no engine turnId here: turns go out with local ids
+    expect(f.posts.filter((p) => p.type === 'turn').map((p) => [p.turn.phase, /^local-[a-z0-9]+-\d+$/.test(p.turn.id)])).toEqual([['start', true], ['end', true]]);
+    expect(ses().map((p) => [p.type, p.state, p.tool?.name, p.tool?.detail])).toEqual([
       ['start', 'idle', undefined, undefined], ['state', 'thinking', undefined, undefined], ['tool', 'tool', 'Write', 'secret.ts'], ['tool', 'tool', 'Bash', 'npm test'],
       ['subagents', 'tool', 'Bash', 'npm test'], ['state', 'waiting-permission', 'Bash', 'git push'], ['state', 'done', undefined, undefined], ['end', 'done', undefined, undefined]]);
-    expect(f.posts[1]).toMatchObject({ prompt: 'Fix the login bug.', subagents: [{ type: 'coder', status: 'running' }] });
-    await f.beat(); await flush(); expect(f.posts).toHaveLength(8); // nothing after end
+    expect(ses()[1]).toMatchObject({ prompt: 'Fix the login bug.', subagents: [{ type: 'coder', status: 'running' }] });
+    await f.beat(); await flush(); expect(f.posts).toHaveLength(10); // nothing after end
   });
   it('heartbeat sends session info; classic session_title wins over transcript', async () => {
     const f = fakeEngine(); register(f.on, {});
@@ -76,7 +80,7 @@ describe('office mod (usage-esp API)', () => {
     const f = fakeEngine(); register(f.on, {});
     await f.fire('session.start', { cwd: 'C:/Users/m/proj' }); await f.fire('session.end', {}); await flush();
     f.setSid('9e8d7c6b-aaaa-bbbb-cccc-ddddeeeeffff'); await f.fire('turn.start', {}); await flush();
-    expect(f.posts.map((p) => [p.type, p.sid.slice(0, 4)])).toEqual([['start', '3f2a'], ['end', '3f2a'], ['start', '9e8d'], ['state', '9e8d']]);
+    expect(f.posts.map((p) => [p.type, p.sid.slice(0, 4)])).toEqual([['start', '3f2a'], ['end', '3f2a'], ['start', '9e8d'], ['state', '9e8d'], ['turn', '9e8d']]);
     expect(f.posts[2]).toMatchObject({ project: 'proj', transcript: transcriptPath('C:/Users/m/.claude', 'C:/Users/m/proj', '9e8d7c6b-aaaa-bbbb-cccc-ddddeeeeffff') });
     await f.fire('session.end', {}); f.setSid('1234abcd-0000-0000-0000-000000000000'); await f.beat(); await flush(); // no turn yet: the heartbeat picks it up
     expect(f.posts.slice(-2).map((p) => [p.type, p.sid.slice(0, 4)])).toEqual([['start', '1234'], ['heartbeat', '1234']]);
@@ -106,5 +110,72 @@ describe('office mod (usage-esp API)', () => {
     expect(f.posts.length).toBe(n);
     f.fire('session.measure', { rateLimits: [{ kind: 'five_hour', percentUsed: 61, resetsAt: 'R' }], cost: { usd: 0.5 } }); await flush();
     const u = f.posts.at(-1); expect(u.type).toBe('usage'); expect(u.usage).toMatchObject({ source: 'claude-code', five_hour: { pct: 61, resets_at: 'R' }, seven_day: null, cost_usd: 0.5 });
+  });
+  const convo = [
+    { role: 'user', text: 'old prompt', toolUses: [] }, { role: 'assistant', text: 'old answer', toolUses: [] },
+    { role: 'user', text: 'Fix the login bug.\nThen add tests.', toolUses: [] },
+    { role: 'assistant', text: 'Looking at the code.', toolUses: [{ tool_use_id: 'u1', tool: 'Read', input: { file_path: 'C:/p/src/login.ts' }, text: 'SECRET FILE BODY', result: { content: 'SECRET FILE BODY' } }] },
+    { role: 'user', text: '', toolUses: [], toolResults: [{ tool_use_id: 'u1', text: 'SECRET FILE BODY' }] },
+    { role: 'assistant', text: '', toolUses: [{ tool_use_id: 'u2', tool: 'Bash', input: { command: 'npm test\nrm -rf /' }, text: 'boom', isError: true }] },
+    { role: 'user', text: 'tool output', toolUses: [], toolResults: [{ tool_use_id: 'u2', text: 'boom' }] },
+    { role: 'assistant', text: 'Fixed.', toolUses: [] },
+  ];
+  it('posts turns: prompt on start, live steps (throttled), CLI steps + answer on end; subagent runs; summaries only', async () => {
+    const f = fakeEngine(); register(f.on, {}); await f.fire('session.start', { cwd: 'C:/Users/m/proj' });
+    f.setMsgs(convo.slice(0, 3)); f.setMsgs([{ role: 'user', text: 'Explore auth', toolUses: [] }, { role: 'assistant', text: '', toolUses: [{ tool_use_id: 'x', tool: 'Grep', input: { pattern: 'login' } }] }], 'sub1');
+    await f.fire('turn.start', { text: 'Fix the login bug.\nThen add tests.', turnId: 'T1' }); await flush(); f.setMsgs(convo); // base = 3 messages at turn.start
+    expect(f.posts.at(-2)).toMatchObject({ type: 'state', state: 'thinking', prompt: 'Fix the login bug.' }); // turn.start is the prompt source now
+    await f.fire('tool.call', { tool: 'Bash', command: 'npm test' }); await f.fire('tool.call', { tool: 'Bash', command: 'npm test' }); await flush();
+    await f.fire('turn.start', { text: 'Explore auth', turnId: 'S1', agentId: 'sub1' });
+    await f.fire('turn.complete', { turnId: 'S1', agentId: 'sub1', answer: 'auth is in login.ts', reason: 'answer', durationMs: 5 });
+    await f.fire('turn.start', { text: '', turnId: 'S2', agentId: 'ghost' }); await f.fire('turn.complete', { turnId: 'S2', agentId: 'ghost', answer: '', reason: 'error', durationMs: 1 });
+    await f.fire('turn.complete', { turnId: 'T1', answer: 'Fixed.', reason: 'answer', durationMs: 1234 }); await flush();
+    const turns = f.posts.filter((p) => p.type === 'turn');
+    expect(turns.map((p) => [p.turn.id, p.turn.phase, p.turn.agentId, p.turn.agentType])).toEqual([
+      ['T1', 'start', undefined, undefined], ['T1', 'start', undefined, undefined], ['S1', 'start', 'sub1', 'coder'], ['S1', 'end', 'sub1', 'coder'],
+      ['S2', 'start', 'ghost', undefined], ['S2', 'end', 'ghost', undefined], ['T1', 'end', undefined, undefined]]);
+    const steps = [{ kind: 'text', text: 'Looking at the code.' }, { kind: 'tool', name: 'Read', detail: 'login.ts' }, { kind: 'tool', name: 'Bash', detail: 'npm test', isError: true }];
+    expect(turns[0]).toEqual({ url: 'http://127.0.0.1:7777/event', ct: 'application/json', type: 'turn', sid: '3f2a9c1e-1111-2222-3333-444455556666', turn: { id: 'T1', phase: 'start', prompt: 'Fix the login bug.\nThen add tests.' } });
+    expect(turns[1].turn).toEqual({ id: 'T1', phase: 'start', steps: [...steps, { kind: 'text', text: 'Fixed.' }] });
+    expect(turns[3].turn).toEqual({ id: 'S1', phase: 'end', agentId: 'sub1', agentType: 'coder', answer: 'auth is in login.ts', reason: 'answer', durationMs: 5, steps: [{ kind: 'tool', name: 'Grep', detail: 'login' }] });
+    expect(turns[4].turn.prompt).toBeUndefined(); expect(turns[5].turn).toMatchObject({ steps: [], reason: 'error' }); // denied messages: no steps
+    expect(turns[6].turn).toEqual({ id: 'T1', phase: 'end', answer: 'Fixed.', reason: 'answer', durationMs: 1234, steps }); // last text = answer: not repeated
+    const s = JSON.stringify(f.posts); for (const bad of ['SECRET FILE BODY', 'rm -rf', 'boom', 'old answer', 'C:/p/src']) expect(s).not.toContain(bad);
+  });
+  it('turn helpers: steps after the last typed prompt, caps keep the body under the server limit', () => {
+    expect(turnSteps(undefined)).toEqual([]); expect(turnSteps([{ role: 'assistant', text: 'hi', toolUses: [] }])).toEqual([{ kind: 'text', text: 'hi' }]);
+    expect(turnSteps(convo, 'Fixed.').map((x: any) => x.name ?? x.text)).toEqual(['Looking at the code.', 'Read', 'Bash']);
+    const many = Array.from({ length: 100 }, (_, i) => ({ role: 'assistant', text: `${i} ${'x'.repeat(5000)}`, toolUses: [] }));
+    const st = turnSteps(many); expect(st).toHaveLength(TURN_CAP.steps); expect((st[0] as any).text.startsWith('40 ')).toBe(true); expect((st[0] as any).text).toHaveLength(TURN_CAP.text + 1);
+    const body = turnBody('s', { id: 't', phase: 'end', prompt: 'p'.repeat(9000), answer: 'a'.repeat(30_000), steps: st });
+    const j = JSON.parse(body); expect(body.length).toBeLessThanOrEqual(TURN_CAP.body);
+    expect(j.turn.prompt).toHaveLength(TURN_CAP.prompt + 1); expect(j.turn.answer).toHaveLength(TURN_CAP.answer + 1);
+    expect(j.turn.steps.length).toBeGreaterThan(0); expect(j.turn.steps.at(-1).text.startsWith('99 ')).toBe(true); // newest kept
+    expect(JSON.parse(turnBody('s', { id: 't', phase: 'end', answer: 'é'.repeat(12_000) }, 5000)).turn.answer.length).toBeLessThan(5000);
+  });
+  it('turn steps from the message count at turn.start: no repeat on continuation, reminders do not cut them; scan when compacted or capped', () => {
+    const reminder = { role: 'user', text: '<system-reminder>todo list changed</system-reminder>', toolUses: [] };
+    const msgs = [...convo.slice(0, 4), reminder, ...convo.slice(4)];
+    expect(turnSteps(msgs, 'Fixed.', 3).map((x: any) => x.name ?? x.text)).toEqual(['Looking at the code.', 'Read', 'Bash']); // base: reminder kept inside
+    expect(turnSteps(msgs, 'Fixed.').map((x: any) => x.name ?? x.text)).toEqual(['Bash']); // old scan stops at the reminder
+    expect(turnSteps(convo, undefined, convo.length)).toEqual([]); // continuation turn with nothing new: no previous steps
+    expect(turnSteps([...convo, { role: 'assistant', text: 'More.', toolUses: [] }], undefined, convo.length)).toEqual([{ kind: 'text', text: 'More.' }]);
+    expect(turnSteps(convo.slice(2), 'Fixed.', 7)).toHaveLength(3); // shrunk below base (compacted): scan
+    const capped = Array.from({ length: TURN_CAP.msgs }, () => ({ role: 'assistant', text: 'a', toolUses: [] }));
+    expect(turnSteps(capped, undefined, TURN_CAP.msgs - 1)).toHaveLength(TURN_CAP.steps); // list at the engine cap: base unreliable, scan
+  });
+  it('turnBody always ends and clips ids/reason', () => {
+    for (const max of [0, 10, 60]) expect(JSON.parse(turnBody('s', { id: 't', phase: 'end', answer: 'ab', steps: [{ kind: 'text', text: 'x' }] }, max)).turn).toEqual({ id: 't', phase: 'end', steps: [] }); // too small: steps and answer go, no hang
+    expect(JSON.parse(turnBody('s', { id: 't', phase: 'end', answer: 'ab', steps: [{ kind: 'text', text: 'x' }] }, 200)).turn).toMatchObject({ answer: 'ab', steps: [{ text: 'x' }] });
+    const small = turnBody('s', { id: 't', phase: 'end', answer: 'é'.repeat(9000) }, 100); expect(small.length).toBeLessThanOrEqual(100); expect(JSON.parse(small).turn.answer).toMatch(/^é+…$/);
+    const j = JSON.parse(turnBody('s', { id: 'i'.repeat(200), agentId: 'a'.repeat(200), agentType: 'T'.repeat(200), phase: 'end', reason: 'x'.repeat(50) })).turn;
+    expect([j.id.length, j.agentId.length, j.agentType.length, j.reason]).toEqual([64, 64, 64, undefined]);
+    expect(JSON.parse(turnBody('s', { id: 't', phase: 'end', reason: 'aborted' })).turn.reason).toBe('aborted');
+  });
+  it('without engine turnIds, a subagent run keeps one local id from start to end', async () => {
+    const f = fakeEngine(); register(f.on, {}); await f.fire('session.start', { cwd: '/p' });
+    await f.fire('turn.start', { text: 'go', agentId: 'sub1' }); await f.fire('turn.complete', { agentId: 'sub1', answer: 'ok', reason: 'answer' }); await flush();
+    const t = f.posts.filter((p) => p.type === 'turn').map((p) => p.turn); expect(t.map((x) => x.phase)).toEqual(['start', 'end']);
+    expect(t[0].id).toMatch(/^local-/); expect(t[1].id).toBe(t[0].id); expect(t[1]).toMatchObject({ agentId: 'sub1', agentType: 'coder', answer: 'ok' });
   });
 });

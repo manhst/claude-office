@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionTracker, parseModEvent } from '../src/sessions.js';
 import { loadProfiles, parseFrontmatter } from '../src/profiles.js';
+import { turnLogGate } from '../src/log.js';
 import type { OfficeEvent } from '../src/types.js';
 const tmp = () => mkdtempSync(join(tmpdir(), 'office-prof-'));
 const agent = (dir: string, file: string, md: string) => { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, file), md); };
@@ -158,5 +159,71 @@ describe('session tracking', () => {
     expect(parseModEvent({ type: 'start' })).toBeNull(); expect(parseModEvent({ type: 'x', sid: 'a' })).toBeNull(); expect(parseModEvent(null)).toBeNull();
     const e = parseModEvent({ type: 'tool', sid: 'a/../b', tool: { name: 'Bash', detail: 'export GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz ' + 'x'.repeat(500) } })!;
     expect(e.sid).toBe('ab'); expect(e.tool!.detail).not.toContain('ghp_'); expect(e.tool!.detail!.length).toBeLessThan(140);
+  });
+  it('sanitizes turn events: newlines kept, secrets redacted, ids cleaned, steps capped', () => {
+    expect(parseModEvent({ type: 'turn', sid: 'a' })).toBeNull(); expect(parseModEvent({ type: 'turn', sid: 'a', turn: { id: 't', phase: 'run' } })).toBeNull();
+    expect(parseModEvent({ type: 'turn', sid: 'a', turn: { id: '../', phase: 'start' } })).toBeNull();
+    const steps = [...Array.from({ length: 70 }, (_, i) => (i % 2 ? { kind: 'tool', name: 'Bash', detail: 'y'.repeat(500), isError: 'yes', input: { content: 'FILE' } } : { kind: 'text', text: `step ${i}\r\n  indented` })), { kind: 'evil', text: 'x' }, { kind: 'text', text: '  \n ' }];
+    const e = parseModEvent({ type: 'turn', sid: 'a', turn: { id: 't1/../x'.repeat(30), phase: 'end', agentId: 'ag<1>', agentType: 'coder\nx', prompt: '\n\nline 1\r\n  line 2\0\x1b', reason: 'bogus', durationMs: 12.6,
+      answer: 'Done.\nkey: sk-abcdefghijklmnopqrstuvwxyz\nexport GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz\n' + 'z'.repeat(20_000), steps } })!;
+    const t = e.turn!;
+    expect(t.id).toHaveLength(64); expect(t.id).toMatch(/^[\w-]+$/); expect(t.agentId).toBe('ag1'); expect(t.agentType).toBe('coder x');
+    expect(t.prompt).toBe('line 1\n  line 2'); expect(t.reason).toBeUndefined(); expect(t.durationMs).toBe(13);
+    expect(t.answer).toContain('Done.\nkey: [REDACTED]\n'); expect(t.answer).not.toContain('sk-abc'); expect(t.answer).not.toContain('ghp_'); expect(t.answer!.length).toBeLessThan(12_100);
+    expect(t.steps).toHaveLength(58); expect(t.steps![0]).toEqual({ kind: 'text', text: 'step 12\n  indented' });
+    expect(t.steps![1]).toEqual({ kind: 'tool', name: 'Bash', detail: expect.stringMatching(/^y+…/) }); expect(JSON.stringify(t)).not.toContain('FILE');
+  });
+  it('upserts turns (end keeps start prompt/startedAt), sets deskId, keeps a ring and snapshot.turns after the session leaves', () => {
+    const { t, ev, root, tick } = setup({ turns: 3 });
+    t.ingest({ type: 'start', sid: 's1', cwd: root, project: 'proj' }); const [s] = t.list();
+    const turn = (x: any) => expect(t.ingest({ type: 'turn', sid: 's1', turn: x })).toBe(true);
+    turn({ id: 'T1', phase: 'start', prompt: 'Do it\n  now' }); tick(200);
+    turn({ id: 'T1', phase: 'start', steps: [{ kind: 'tool', name: 'Read', detail: 'a.ts' }] });
+    turn({ id: 'S1', phase: 'start', agentId: 'ag1', agentType: 'Coder', prompt: 'sub' }); turn({ id: 'S1', phase: 'end', agentId: 'ag1', answer: 'sub done' });
+    turn({ id: 'S2', phase: 'start', agentId: 'ag2', agentType: 'Explore' }); tick(300);
+    turn({ id: 'T1', phase: 'end', answer: 'All done, token ghp_abcdefghijklmnopqrstuvwxyz', reason: 'answer', durationMs: 900, steps: [] });
+    turn({ id: 'T1', phase: 'start', steps: [{ kind: 'text', text: 'late' }] }); // progress after the end: ignored
+    const turns = ev.flatMap((e) => (e.t === 'session.turn' ? [e.turn] : []));
+    expect(turns).toHaveLength(6);
+    expect(turns.at(-1)).toEqual({ sid: 's1', turnId: 'T1', project: 'proj', deskId: s.agentIds[0], prompt: 'Do it\n  now', steps: [{ kind: 'tool', name: 'Read', detail: 'a.ts' }],
+      answer: 'All done, token [REDACTED]', status: 'answer', startedAt: 1000, endedAt: 1500, durationMs: 900 });
+    expect(turns[3]).toMatchObject({ turnId: 'S1', agentRunId: 'ag1', who: 'Coder', deskId: s.agentIds[1], prompt: 'sub', answer: 'sub done', status: 'answer' });
+    expect(turns[4]).toMatchObject({ turnId: 'S2', who: 'Explore', status: 'running' }); expect(turns[4].deskId).toBeUndefined();
+    t.ingest({ type: 'turn', sid: 's1', turn: { id: 'T2', phase: 'start', prompt: 'next' } }); // ring of 3: T1 (oldest) goes
+    t.ingest({ type: 'end', sid: 's1' });
+    t.ingest({ type: 'turn', sid: 'gone', turn: { id: 'X', phase: 'end', reason: 'aborted', durationMs: 100 } }); // unknown session: no desk
+    const snap = t.snapshot() as any;
+    expect(snap.sessions).toEqual([]); expect(snap.turns.map((x: any) => x.turnId)).toEqual(['S2', 'T2', 'X']);
+    expect(snap.turns[2]).toMatchObject({ project: 'gone', status: 'aborted', startedAt: 1400, endedAt: 1500 }); expect(snap.turns[2].deskId).toBeUndefined();
+    snap.turns[0].steps.push({ kind: 'text', text: 'mutated' }); expect((t.snapshot() as any).turns[0].steps).toEqual([]); // copies
+  });
+  it('aborts stale running turns: a new main turn supersedes the old one, session end/timeout aborts the rest', () => {
+    const { t, ev, root, tick } = setup();
+    t.ingest({ type: 'start', sid: 's1', cwd: root });
+    const turn = (x: any) => t.ingest({ type: 'turn', sid: 's1', turn: x });
+    const last = (id: string) => ev.flatMap((e) => (e.t === 'session.turn' && e.turn.turnId === id ? [e.turn] : [])).at(-1)!;
+    turn({ id: 'T1', phase: 'start', prompt: 'one' }); turn({ id: 'S1', phase: 'start', agentId: 'ag1' }); tick(100);
+    turn({ id: 'T2', phase: 'start', prompt: 'two' }); // T1 never ended (interrupted without turn.complete)
+    expect(last('T1')).toMatchObject({ status: 'aborted', endedAt: 1100 }); expect(last('S1').status).toBe('running'); // subagent runs are not superseded
+    turn({ id: 'T2', phase: 'start', steps: [{ kind: 'text', text: 'x' }] }); expect(last('T2').status).toBe('running'); // same turn: no abort
+    tick(70_000); t.sweep(); // killed terminal: no heartbeat
+    expect([last('S1'), last('T2')].map((x) => [x.status, x.endedAt])).toEqual([['aborted', 71_100], ['aborted', 71_100]]);
+    expect((t.snapshot() as any).turns.every((x: any) => x.status !== 'running')).toBe(true);
+  });
+  it('ring evicts the oldest ended turn first, a running one only as a last resort', () => {
+    const { t, root } = setup({ turns: 3 });
+    t.ingest({ type: 'start', sid: 's1', cwd: root });
+    const turn = (x: any) => t.ingest({ type: 'turn', sid: 's1', turn: x });
+    turn({ id: 'T1', phase: 'start', prompt: 'main' });
+    for (const n of [1, 2, 3, 4]) { turn({ id: `S${n}`, phase: 'start', agentId: `a${n}` }); turn({ id: `S${n}`, phase: 'end', agentId: `a${n}` }); }
+    const ids = () => (t.snapshot() as any).turns.map((x: any) => x.turnId);
+    expect(ids()).toEqual(['T1', 'S3', 'S4']); expect((t.snapshot() as any).turns[0]).toMatchObject({ prompt: 'main', startedAt: 1000 });
+    for (const n of [5, 6, 7]) turn({ id: `S${n}`, phase: 'start', agentId: `a${n}` }); // all running: the oldest running goes
+    expect(ids()).toEqual(['S5', 'S6', 'S7']);
+  });
+  it('turn log gate: first start and the end only', () => {
+    const gate = turnLogGate(); const ev = (turnId: string, status: string, agentRunId?: string) => ({ t: 'session.turn', turn: { sid: 's', turnId, agentRunId, status }, ts: 0 }) as any;
+    expect([ev('a', 'running'), ev('a', 'running'), ev('a', 'running', 'x'), ev('a', 'answer'), ev('a', 'running'), ev('b', 'aborted')].map(gate)).toEqual([true, false, true, true, true, true]);
+    expect(gate({ t: 'agent.state', id: 'x', state: 'idle', ts: 0 })).toBe(true);
   });
 });

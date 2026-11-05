@@ -1,17 +1,44 @@
 import { basename } from 'node:path';
 import { redactText } from './redact.js';
 import { loadProfiles } from './profiles.js';
-import type { AgentProfile, AgentState, AgentView, OfficeEvent, ProfileSource, SessionState, SessionView, SubagentInfo } from './types.js';
+import type { AgentProfile, AgentState, AgentView, OfficeEvent, ProfileSource, SessionState, SessionView, SubagentInfo, TurnStatus, TurnStep, TurnView } from './types.js';
 
 /** One event POSTed by the `office` mod (see mod/office/register.ts). Every field except type+sid is optional and merged. */
 export interface ModEvent {
-  type: 'start' | 'heartbeat' | 'state' | 'tool' | 'subagents' | 'prompt' | 'end';
+  type: 'start' | 'heartbeat' | 'state' | 'tool' | 'subagents' | 'prompt' | 'end' | 'turn';
   sid: string; project?: string; cwd?: string; root?: string; title?: string; transcript?: string;
   state?: SessionState; tool?: { name?: string; detail?: string } | null; subagents?: SubagentInfo[]; prompt?: string; costUsd?: number;
+  turn?: ModTurn;
 }
-const TYPES = new Set(['start', 'heartbeat', 'state', 'tool', 'subagents', 'prompt', 'end']);
+/** A `turn` event's turn: phase start (also live progress) or end of a main-loop turn or a subagent run (agentId). */
+export interface ModTurn { id: string; phase: 'start' | 'end'; agentId?: string; agentType?: string; prompt?: string; steps?: TurnStep[]; answer?: string; reason?: Exclude<TurnStatus, 'running'>; durationMs?: number }
+const TYPES = new Set(['start', 'heartbeat', 'state', 'tool', 'subagents', 'prompt', 'end', 'turn']);
 const STATES = new Set(['idle', 'thinking', 'tool', 'waiting-permission', 'done']);
+const REASONS = new Set(['answer', 'aborted', 'refusal', 'error']);
+/** Turn caps (the mod caps the same; these hold for any local poster). */
+export const TURN_LIMITS = { prompt: 4000, text: 4000, answer: 12_000, steps: 60 };
 const str = (v: unknown, n: number) => (typeof v === 'string' && v.trim() ? redactText(v.trim().replace(/\s+/g, ' '), n) : undefined);
+/** Like str but keeps newlines and indentation (prompt, assistant text): only control chars go, CRLF → LF, blank edges trimmed. */
+const multi = (v: unknown, n: number) => { if (typeof v !== 'string') return undefined; const t = v.replace(/\r\n?/g, '\n').replace(/[\0-\x08\x0B-\x1F\x7F]/g, '').replace(/^\s*\n/, '').trimEnd(); return t.trim() ? redactText(t, n) : undefined; };
+const ident = (v: unknown) => (typeof v === 'string' ? v.replace(/[^\w-]/g, '').slice(0, 64) : '');
+function parseTurn(t: any): ModTurn | null {
+  if (!t || typeof t !== 'object' || (t.phase !== 'start' && t.phase !== 'end')) return null;
+  const id = ident(t.id); if (!id) return null;
+  const r: ModTurn = { id, phase: t.phase };
+  const agentId = ident(t.agentId); if (agentId) r.agentId = agentId;
+  const agentType = str(t.agentType, 60); if (agentType) r.agentType = agentType;
+  const prompt = multi(t.prompt, TURN_LIMITS.prompt); if (prompt) r.prompt = prompt;
+  const answer = multi(t.answer, TURN_LIMITS.answer); if (answer) r.answer = answer;
+  if (REASONS.has(t.reason)) r.reason = t.reason;
+  if (typeof t.durationMs === 'number' && Number.isFinite(t.durationMs) && t.durationMs >= 0) r.durationMs = Math.round(t.durationMs);
+  if (Array.isArray(t.steps)) r.steps = t.steps.slice(-TURN_LIMITS.steps).flatMap((x: any): TurnStep[] => {
+    if (x?.kind === 'text') { const text = multi(x.text, TURN_LIMITS.text); return text ? [{ kind: 'text', text }] : []; }
+    if (x?.kind !== 'tool') return [];
+    const st: TurnStep = { kind: 'tool', name: str(x.name, 40) ?? 'tool' }; const detail = str(x.detail, 120); if (detail) st.detail = detail; if (x.isError === true) st.isError = true;
+    return [st];
+  });
+  return r;
+}
 /** Validate + sanitize an untrusted payload. Returns null when it is not a mod event. */
 export function parseModEvent(p: any): ModEvent | null {
   if (!p || typeof p !== 'object' || !TYPES.has(p.type)) return null;
@@ -27,13 +54,16 @@ export function parseModEvent(p: any): ModEvent | null {
     id: str(s.id ?? s.agentId, 64), name: str(s.name, 60), type: str(s.type ?? s.agentType, 60),
     description: str(s.description, 120), status: str(s.status, 20) ?? 'running' }));
   if (typeof p.costUsd === 'number' && Number.isFinite(p.costUsd)) e.costUsd = p.costUsd;
+  if (p.type === 'turn') { const t = parseTurn(p.turn); if (!t) return null; e.turn = t; }
   return e;
 }
 
 const ACTIVE_SUB = new Set(['running', 'pending', 'waiting']);
 const MAIN_STATE: Record<SessionState, AgentState> = { idle: 'idle', thinking: 'thinking', tool: 'working', 'waiting-permission': 'talking', done: 'done' };
+const norm = (v?: string) => (v ?? '').trim().toLowerCase();
+const copyTurn = (t: TurnView): TurnView => ({ ...t, steps: t.steps.map((x) => ({ ...x })) });
 interface Desk { id: string; sid: string; profile: AgentProfile; view: AgentView; text?: string; callId?: string; toolKey?: string }
-export interface TrackerOpts { staleMs?: number; desks?: number; cols?: number; perSession?: number; userAgentsDir?: string; now?: () => number;
+export interface TrackerOpts { staleMs?: number; desks?: number; cols?: number; perSession?: number; userAgentsDir?: string; now?: () => number; turns?: number;
   load?: (root: string, userDir?: string) => { source: ProfileSource; profiles: AgentProfile[] } }
 
 /** Keeps the list of active Claude Code sessions and projects their activity onto office desks (agents). */
@@ -41,18 +71,21 @@ export class SessionTracker {
   private sessions = new Map<string, SessionView>();
   private desks = new Map<string, Desk>();
   private listeners: Array<(e: OfficeEvent) => void> = [];
+  /** Recent turns across sessions, oldest first; kept after their session leaves. */
+  private turns: TurnView[] = [];
   private calls = 0;
   constructor(private o: TrackerOpts = {}) {}
   private now() { return (this.o.now ?? Date.now)(); }
   on(fn: (e: OfficeEvent) => void) { this.listeners.push(fn); }
   private emit(e: OfficeEvent) { for (const l of this.listeners) l(e); }
   list(): SessionView[] { return [...this.sessions.values()].map((s) => ({ ...s, subagents: [...s.subagents], agentIds: [...s.agentIds] })); }
-  snapshot(): OfficeEvent { return { t: 'office.snapshot', agents: [...this.desks.values()].map((d) => ({ ...d.view, desk: { ...d.view.desk } })), sessions: this.list(), ts: this.now() }; }
+  snapshot(): OfficeEvent { return { t: 'office.snapshot', agents: [...this.desks.values()].map((d) => ({ ...d.view, desk: { ...d.view.desk } })), sessions: this.list(), turns: this.turns.map(copyTurn), ts: this.now() }; }
 
   ingest(raw: unknown): boolean {
     const e = parseModEvent(raw); if (!e) return false;
     const ts = this.now();
     if (e.type === 'end') { this.drop(e.sid); return true; }
+    if (e.turn) { this.turn(e.sid, e.turn, ts); return true; }
     let s = this.sessions.get(e.sid);
     if (!s) s = this.create(e, ts);
     if (e.project) s.project = e.project; if (e.title) s.title = e.title; if (e.transcript) s.transcript = e.transcript;
@@ -71,6 +104,28 @@ export class SessionTracker {
     for (const s of [...this.sessions.values()]) if (s.lastSeen < cut) this.drop(s.sid);
   }
 
+  /** Upsert a turn by sid+turnId+agentId (end keeps the start's prompt/startedAt) and emit the merged view; ring of the last `turns` (40). */
+  private turn(sid: string, m: ModTurn, ts: number) {
+    const s = this.sessions.get(sid); if (s) s.lastSeen = ts;
+    let t = this.turns.find((x) => x.sid === sid && x.turnId === m.id && (x.agentRunId ?? '') === (m.agentId ?? ''));
+    if (!t) {
+      if (!m.agentId) this.abort((x) => x.sid === sid && !x.agentRunId, ts); // a new main turn: the previous one is not running any more
+      t = { sid, turnId: m.id, project: s?.project ?? sid, steps: [], status: 'running', startedAt: m.phase === 'end' && m.durationMs ? ts - m.durationMs : ts };
+      if (m.agentId) t.agentRunId = m.agentId;
+      this.turns.push(t);
+      while (this.turns.length > (this.o.turns ?? 40)) { const i = this.turns.findIndex((x) => x.status !== 'running'); this.turns.splice(i < 0 ? 0 : i, 1); } // oldest ended first
+    }
+    if (m.phase === 'start' && t.status !== 'running') return; // late progress after the end
+    if (m.agentType) t.who = m.agentType; if (m.prompt && !t.prompt) t.prompt = m.prompt; if (s) t.project = s.project;
+    if (m.steps?.length) t.steps = m.steps;
+    if (!t.deskId && s) t.deskId = m.agentId ? (t.who ? s.agentIds.find((id) => norm(this.desks.get(id)?.profile.name) === norm(t!.who)) : undefined) : s.agentIds[0];
+    if (m.phase === 'end') { t.status = m.reason ?? 'answer'; t.endedAt = ts; if (m.answer) t.answer = m.answer; if (m.durationMs != null) t.durationMs = m.durationMs; }
+    this.emit({ t: 'session.turn', turn: copyTurn(t), ts });
+  }
+  /** Mark matching running turns aborted (session gone, or superseded) and emit each. */
+  private abort(pick: (t: TurnView) => boolean, ts: number) {
+    for (const t of this.turns) if (t.status === 'running' && pick(t)) { t.status = 'aborted'; t.endedAt = ts; this.emit({ t: 'session.turn', turn: copyTurn(t), ts }); }
+  }
   private create(e: ModEvent, ts: number): SessionView {
     const root = e.root || e.cwd || '';
     const { source, profiles } = (this.o.load ?? loadProfiles)(root, this.o.userAgentsDir);
@@ -92,8 +147,9 @@ export class SessionTracker {
     return s;
   }
   private drop(sid: string) {
-    const s = this.sessions.get(sid); if (!s) return;
     const ts = this.now();
+    this.abort((t) => t.sid === sid, ts); // a killed terminal never sends turn.complete
+    const s = this.sessions.get(sid); if (!s) return;
     for (const id of s.agentIds) { this.desks.delete(id); this.emit({ t: 'agent.left', id, ts }); }
     this.sessions.delete(sid);
     this.emit({ t: 'office.notice', level: 'info', text: `Session left: ${s.project}`, ts });
@@ -109,7 +165,6 @@ export class SessionTracker {
     const claimed = new Set<Desk>();
     const placed = new Set<number>();
     const leftover: string[] = [];
-    const norm = (v?: string) => (v ?? '').trim().toLowerCase();
     const matches = (d: Desk, sub: SubagentInfo) => {
       const pname = norm(d.profile.name);
       if (!pname) return false;
