@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RESPONSE_DISPLAY_MAX, clipResponse, describeResponse, listResponses, pickResponseEvents } from '../src/responseLog';
+import { RESPONSE_DISPLAY_MAX, clipResponse, describeResponse, listResponses, pickResponseEvents } from '../src/listResponses';
 import { DEFAULT_COLLAPSE, loadCollapse, setCollapse } from '../src/collapse';
 import type { OfficeEvent } from '../src/types';
 

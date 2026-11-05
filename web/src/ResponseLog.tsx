@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { OfficeState } from './reducer';
 import { loadCollapse, setCollapse } from './collapse';
-import { listResponses } from './responseLog';
+import { listResponses } from './listResponses';
 import { IconCheck, IconCross, IconResult } from './icons';
 
 export function ResponseLog({ s }: { s: OfficeState }) {
