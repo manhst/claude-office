@@ -2,7 +2,10 @@
 header{display:flex;align-items:center;gap:16px;padding:10px 18px;border-bottom:1px solid #1e293b;background:#111c33}
 h1{font-size:17px;margin:0}h1 span{color:#94a3b8;font-weight:400}
 .conn{padding:2px 10px;border-radius:99px;background:#1e293b;font-size:12px}.conn-open{color:#4ade80}.conn-reconnecting,.conn-connecting{color:#fbbf24}.conn-no-token{color:#f87171}
-.legend{margin-left:auto;display:flex;gap:12px;color:#94a3b8;font-size:12px}.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.usage{margin-left:auto;display:flex;align-items:center;gap:14px;color:#94a3b8;font-size:12px}.usage-demo{font-size:10px;padding:0 5px;border-radius:4px;background:#78350f;color:#fde68a}
+.ubar{display:flex;align-items:center;gap:6px;white-space:nowrap}.ubar b{color:#cbd5e1;font-weight:600}.ubar small{color:#64748b}.ubar-num{min-width:30px;text-align:right;color:#e2e8f0;font-variant-numeric:tabular-nums}
+.ubar-track{position:relative;width:120px;height:8px;border-radius:99px;background:#1e293b;overflow:visible}.ubar-track i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:#38bdf8}
+.ubar-pace{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:#ef4444;border-radius:1px}.ubar.over .ubar-track i{background:#f97316}.ubar.over .ubar-num{color:#fca5a5}
 main{display:flex;gap:14px;padding:14px;align-items:flex-start}
 .empty{padding:40px;color:#94a3b8}
 .log{flex:1;min-width:0;height:calc(100vh - 80px);overflow:auto;background:#111c33;border:1px solid #23314f;border-radius:12px;padding:8px 10px}
@@ -12,9 +15,9 @@ main{display:flex;gap:14px;padding:14px;align-items:flex-start}
 .icon{flex:none;vertical-align:-2px}
 .conn{display:flex;align-items:center;gap:6px}
 .ev i{flex:none;width:14px;color:#94a3b8;padding-top:1px}
-.stage3d{position:relative;flex:none;width:870px;height:calc(100vh - 80px);min-height:560px;border-radius:14px;overflow:hidden;border:1px solid #23314f;background:#0f172a}
+.stage3d{position:relative;flex:4 1 0;min-width:0;height:calc(100vh - 80px);min-height:560px;border-radius:14px;overflow:hidden;border:1px solid #23314f;background:#0f172a}
 /* sessions (office mod) */
-.side{flex:1;min-width:280px;display:flex;flex-direction:column;gap:10px;height:calc(100vh - 80px)}.side .log{height:auto;flex:1;min-height:160px}
+.side{flex:1 1 0;min-width:240px;display:flex;flex-direction:column;gap:10px;height:calc(100vh - 80px)}.side .log{height:auto;flex:1;min-height:160px}
 .sessions{background:#111c33;border:1px solid #23314f;border-radius:12px;padding:8px 10px;max-height:62%;overflow:auto}
 .sessions h2,.log h2{font-size:13px;margin:2px 0 8px}.sessions h2 small{color:#64748b}.sessions ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 .sess{width:100%;display:grid;grid-template-columns:10px 16px 1fr auto;align-items:center;gap:6px;text-align:left;background:#0f172a;border:1px solid #23314f;border-radius:8px;color:inherit;font:inherit;padding:5px 8px;cursor:pointer}
@@ -26,7 +29,7 @@ main{display:flex;gap:14px;padding:14px;align-items:flex-start}
 .profile{border:1px solid #23314f;border-radius:8px;padding:4px 8px;margin:4px 0;background:#0f172a}.profile summary{cursor:pointer;display:flex;gap:6px;align-items:center}.profile p{margin:4px 0;color:#cbd5e1}
 .md{white-space:pre-wrap;word-break:break-word;margin:4px 0;padding:6px;background:#0b1222;border-radius:6px;font:11px/1.45 ui-monospace,Consolas,monospace;color:#cbd5e1;max-height:220px;overflow:auto}
 .muted{color:#64748b;font-size:11.5px}.mono{font-family:ui-monospace,Consolas,monospace}
-@media (max-width:900px){header{flex-wrap:wrap;gap:8px}.legend{display:none}main{flex-direction:column}.stage3d{width:100%;height:60vh;min-height:360px}.side{width:100%;min-width:0;height:auto}.sessions{max-height:none}.side .log{max-height:300px}}
+@media (max-width:900px){header{flex-wrap:wrap;gap:8px}.usage{margin-left:0;width:100%;gap:6px 10px;flex-wrap:wrap}.ubar-track{width:64px}main{flex-direction:column}.stage3d{flex:none;width:100%;height:78vh;min-height:420px}.side{width:100%;min-width:0;height:auto}.sessions{max-height:none}.side .log{max-height:300px}}
 .chibi{display:inline-block;border-radius:50%;overflow:hidden;line-height:0}.chibi svg{width:100%;height:100%}
 .svg-nv .mieng-mo,.svg-nv .mieng-met{display:none}.svg-nv .lap-lanh,.svg-nv .choang,.svg-nv .mo-hoi,.svg-nv .hon,.svg-nv .zzz,.svg-nv .quang-tham{opacity:0}
 .ctx{position:fixed;z-index:10;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:2px;min-width:170px;box-shadow:0 10px 30px #0008}

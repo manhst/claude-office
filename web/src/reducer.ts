@@ -1,9 +1,9 @@
-import type { AgentState, ItOpsStatus, OfficeEvent, SessionView } from './types';
+import type { AgentState, ItOpsStatus, OfficeEvent, SessionView, UsageReading } from './types';
 export type ConnStatus = 'no-token' | 'connecting' | 'open' | 'reconnecting';
 export interface ToolChip { callId: string; name: string; summary: string; ok?: boolean; ts: number }
 export interface AgentUI { id: string; role: string; name: string; state: AgentState; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string; text?: string; textTs?: number; tool?: ToolChip; result?: string; costUsd?: number; error?: string }
 export interface MessageUI { from: string; to: string; text: string; kind: 'ask' | 'reply'; ts: number }
-export interface OfficeState { conn: ConnStatus; retries: number; agents: Record<string, AgentUI>; order: string[]; messages: MessageUI[]; log: OfficeEvent[]; sessions: SessionView[]; notices: { text: string; ts: number }[]; itops?: ItOpsStatus }
+export interface OfficeState { conn: ConnStatus; retries: number; agents: Record<string, AgentUI>; order: string[]; messages: MessageUI[]; log: OfficeEvent[]; sessions: SessionView[]; notices: { text: string; ts: number }[]; itops?: ItOpsStatus; usage?: UsageReading | null }
 export type Action = { type: 'event'; e: OfficeEvent } | { type: 'conn'; status: ConnStatus; retries?: number };
 export const MAX_LOG = 200, MAX_MSG = 30, BUBBLE_MAX = 140;
 export const initialState = (conn: ConnStatus = 'connecting'): OfficeState => ({ conn, retries: 0, agents: {}, order: [], messages: [], log: [], sessions: [], notices: [] });
@@ -18,13 +18,13 @@ export function reduce(s: OfficeState, act: Action): OfficeState {
   if (act.type === 'conn') return { ...s, conn: act.status, retries: act.retries ?? (act.status === 'open' ? 0 : s.retries) };
   const e = act.e;
   if (!e || typeof e !== 'object' || typeof (e as any).t !== 'string') return s;
-  const logged = e.t === 'office.snapshot' || e.t === 'sessions.update' || e.t === 'itops.status' ? s : { ...s, log: push(s.log, e, MAX_LOG) };
+  const logged = e.t === 'office.snapshot' || e.t === 'sessions.update' || e.t === 'itops.status' || e.t === 'usage.update' ? s : { ...s, log: push(s.log, e, MAX_LOG) };
   switch (e.t) {
     case 'office.snapshot': {
       const agents: Record<string, AgentUI> = {};
       for (const v of e.agents) agents[v.id] = { ...s.agents[v.id], tools: s.agents[v.id]?.tools ?? [], id: v.id, role: v.role, name: v.name, state: v.state, desk: v.desk };
       for (const ss of e.sessions ?? []) for (const id of ss.agentIds) if (agents[id]) agents[id].sessionId = ss.sid;
-      return { ...s, agents, order: e.agents.map((v) => v.id), sessions: e.sessions ?? s.sessions, itops: e.itops ?? s.itops };
+      return { ...s, agents, order: e.agents.map((v) => v.id), sessions: e.sessions ?? s.sessions, itops: e.itops ?? s.itops, usage: e.usage ?? s.usage };
     }
     case 'agent.spawned': {
       const prev = logged.agents[e.id];
@@ -33,6 +33,7 @@ export function reduce(s: OfficeState, act: Action): OfficeState {
     }
     case 'sessions.update': return { ...s, sessions: e.sessions };
     case 'itops.status': return { ...s, itops: e.status };
+    case 'usage.update': return !s.usage || e.usage.ts >= s.usage.ts ? { ...s, usage: e.usage } : s;
     case 'agent.left': {
       if (!logged.agents[e.id]) return logged;
       const { [e.id]: _gone, ...agents } = logged.agents;

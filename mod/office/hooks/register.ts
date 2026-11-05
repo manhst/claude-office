@@ -35,6 +35,14 @@ export function titleFromJsonl(text: string): string | undefined {
   }
   return custom ?? ai;
 }
+/** Account-wide usage reading, built exactly like esp-claude's payload.ts. null when the engine has no limit reading yet. */
+export function usagePayload(rateLimits: Any, context: Any, cost: Any, ts: number) {
+  const rl: Any[] = Array.isArray(rateLimits) ? rateLimits : [];
+  const pick = (limits: Any[], kind: string) => { const w = limits.find((l: Any) => l?.kind === kind); return w ? { pct: w.percentUsed, resets_at: w.resetsAt ?? null } : null; };
+  const payload = { source: 'claude-code', ts, five_hour: pick(rl, 'five_hour'), seven_day: pick(rl, 'seven_day'), context_pct: context?.percent ?? null, cost_usd: cost ? Math.round(cost.usd * 100) / 100 : null };
+  const hasReading = payload.five_hour !== null || payload.seven_day !== null;
+  return hasReading ? payload : null;
+}
 
 // The engine checks this module statically: `$` is never stored, destructured, spread, returned or put in objects.
 // It is only a handler parameter, the first parameter/argument of module-level helpers, and spelled `$.noun.verb(...)`.
@@ -63,8 +71,21 @@ function send($: Any, st: State, type: string): Promise<void> {
   st.queue = st.queue.then(() => post($, st, type, body)).catch(() => {});
   return st.queue;
 }
+async function postRaw($: Any, st: State, body: string) {
+  try { await $.http.fetch(st.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body }); } catch { /* office not running */ }
+}
+/** Usage goes on the same ordered queue; only when there is a reading. u = { rateLimits, context, cost } (session.measure event or $.session.usage()). */
+function sendUsage($: Any, st: State, u: Any, ts: number): Promise<void> {
+  if (st.quiet || !st.loopback || !st.sid || st.ended) return st.queue;
+  const usage = usagePayload(u?.rateLimits, u?.context, u?.cost, ts);
+  if (!usage) return st.queue;
+  const body = JSON.stringify({ type: 'usage', sid: st.sid, usage });
+  st.queue = st.queue.then(() => postRaw($, st, body)).catch(() => {});
+  return st.queue;
+}
+async function readUsage($: Any, st: State) { try { await sendUsage($, st, await $.session.usage(), Date.now()); } catch { /* no usage */ } }
 function setState($: Any, st: State, s: string, t: State['tool'], type = t ? 'tool' : 'state') { st.state = s; st.tool = t; void send($, st, type); }
-async function heartbeat($: Any, st: State) { await follow($, st); await readTitle($, st); await send($, st, 'heartbeat'); }
+async function heartbeat($: Any, st: State) { await follow($, st); await readTitle($, st); await send($, st, 'heartbeat'); await readUsage($, st); }
 /** Per-session fields. The module lives as long as the process, which can move to another session (/resume, /clear) after session.end. */
 function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined }); }
 /** If the engine now reports another session id, start reporting that session. */
@@ -86,7 +107,7 @@ async function begin($: Any, st: State) {
   const home = (await $.env.get('USERPROFILE')) || (await $.env.get('HOME')) || '';
   const config = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '');
   if (!st.transcript) st.transcript = config && st.cwd ? transcriptPath(config, st.cwd, st.sid) : '';
-  await readTitle($, st); void send($, st, 'start');
+  await readTitle($, st); void send($, st, 'start'); await readUsage($, st);
 }
 function classicInfo(st: State, e: Any) {
   if (typeof e?.session_title === 'string' && e.session_title) st.sessionTitle = st.title = e.session_title;
@@ -133,6 +154,11 @@ export const register: Register = (on: Any, options: Any) => {
   }).catch(($: Any, e: Any, next: Any) => next(e));
   on('turn.complete', async ($: Any, e: Any, next: Any) => {
     if (e?.agentId === undefined) { await readTitle($, st); setState($, st, e?.reason === 'aborted' ? 'idle' : 'done', null); } else void send($, st, 'subagents');
+    return next(e);
+  });
+  // Raised after each turn and whenever a limit moves a whole point (same hook as usage-esp).
+  on('session.measure', async ($: Any, e: Any, next: Any) => {
+    try { void sendUsage($, st, e, Date.now()); } catch { /* never break the session */ }
     return next(e);
   });
   on('session.end', async ($: Any, e: Any, next: Any) => { await send($, st, 'end'); st.ended = true; return next(e); });

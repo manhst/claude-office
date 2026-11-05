@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useReducer, useState } from 'react';
 import { reduce, initialState, type OfficeState } from './reducer';
 import { takeToken, connect } from './connection';
 import type { OfficeEvent } from './types';
-import { STATE_COLORS } from './layout';
+import { UsageBars } from './UsageBars';
 import { EventLog } from './EventLog';
 import { SessionPanel } from './SessionPanel';
 import { pickSelected } from './sessionView';
@@ -22,7 +22,7 @@ export function App() {
   return (
     <div className="app">
       <header><h1>Văn phòng ảo <span>· virtual office</span></h1><Conn s={s} />
-        <Legend /></header>
+        <UsageBars u={s.usage} now={now} /></header>
       <main>
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
           : <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} /></Suspense>}
@@ -35,4 +35,3 @@ function Conn({ s }: { s: OfficeState }) {
   const label = { 'no-token': 'no token', connecting: 'connecting…', open: 'live', reconnecting: `reconnecting (try ${s.retries})` }[s.conn];
   return <div className={`conn conn-${s.conn}`} data-testid="conn"><IconDot size={10} />{label}</div>;
 }
-function Legend() { return <div className="legend">{Object.entries(STATE_COLORS).map(([k, c]) => <span key={k}><i style={{ background: c }} />{k}</span>)}</div>; }

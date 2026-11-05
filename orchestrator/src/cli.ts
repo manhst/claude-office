@@ -6,6 +6,7 @@ import { SessionTracker } from './sessions.js';
 import { OfficeServer, newToken } from './server.js';
 import { JsonlLog } from './log.js';
 import { simulate } from './simulate.js';
+import { UsageStore } from './usage.js';
 import { ItOpsMonitor, itopsConfigFromEnv } from './itops.js';
 const here = dirname(fileURLToPath(import.meta.url));
 export interface StartOpts { demo: boolean; port: number; logDir: string; printToken: boolean; webDir: string; stepMs: number; userAgentsDir?: string; prometheus?: string }
@@ -28,7 +29,8 @@ export async function start(o: StartOpts) {
   const token = newToken();
   let server!: OfficeServer;
   const itops = new ItOpsMonitor(itopsConfigFromEnv(process.env, o.demo, o.prometheus), (status) => server?.broadcast({ t: 'itops.status', status, ts: Date.now() }));
-  server = new OfficeServer(token, () => ({ ...tracker.snapshot(), itops: itops.status }) as any, { onEvent: (p) => tracker.ingest(p), staticDir: existsSync(o.webDir) ? o.webDir : undefined });
+  const usage = new UsageStore(); usage.onChange = (u) => server?.broadcast({ t: 'usage.update', usage: u, ts: Date.now() });
+  server = new OfficeServer(token, () => ({ ...tracker.snapshot(), itops: itops.status, usage: usage.latest }) as any, { onEvent: (p) => ((p as any)?.type === 'usage' ? usage.accept(p) : tracker.ingest(p)), staticDir: existsSync(o.webDir) ? o.webDir : undefined });
   const log = new JsonlLog(join(o.logDir, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`));
   tracker.on((e) => { if (e.t !== 'sessions.update') log.write(e); server.broadcast(e); });
   const sweep = setInterval(() => tracker.sweep(), 5000); sweep.unref();
@@ -42,7 +44,7 @@ export async function start(o: StartOpts) {
   console.error(`[office] UI: ${o.printToken ? uiUrl : uiUrl.replace(/#token=.*/, '#token=[REDACTED]')} (full URL in orchestrator/.run/ui-url.txt, mode 600)`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
   const close = async () => { clearInterval(sweep); itops.stop(); await server.close(); };
-  return { port, token, tracker, server, close, logPath: log.path };
+  return { port, token, tracker, server, usage, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

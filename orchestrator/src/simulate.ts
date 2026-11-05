@@ -33,13 +33,21 @@ export const DEMO_SESSIONS = [
 async function post(endpoint: string, ev: Ev) {
   try { await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ev) }); } catch { /* server not up yet */ }
 }
+/** Labelled demo usage: 5h climbs and resets, 7d creeps; resets_at are real times so the pace marker moves. */
+export function demoUsage(now: number, step: number) {
+  const H5 = 5 * 3600e3, D7 = 7 * 86400e3, fiveStart = now - ((step * 7 * 60e3) % H5), weekStart = now - 2.6 * 86400e3;
+  return { type: 'usage', sid: 'demo-usage', usage: { source: 'demo', ts: now, five_hour: { pct: Math.min(100, 18 + (step % 40) * 2), resets_at: new Date(fiveStart + H5).toISOString() },
+    seven_day: { pct: 41 + Math.floor(step / 10), resets_at: new Date(weekStart + D7).toISOString() }, context_pct: 35, cost_usd: 1.23 } };
+}
 /** Posts start events, then steps round-robin every stepMs. loops = how many passes over the steps (Infinity = forever). */
 export async function simulate(endpoint: string, o: { stepMs?: number; loops?: number; end?: boolean } = {}) {
   const stepMs = o.stepMs ?? 1500, loops = o.loops ?? Infinity;
+  await post(endpoint, demoUsage(Date.now(), 0));
   for (const s of DEMO_SESSIONS) await post(endpoint, { type: 'start', sid: s.sid, project: s.project, cwd: s.cwd, title: s.title, transcript: `(demo)/${s.sid}.jsonl` });
   const longest = Math.max(...DEMO_SESSIONS.map((s) => s.steps.length));
   for (let loop = 0; loop < loops; loop++) for (let i = 0; i < longest; i++) {
     await new Promise((r) => setTimeout(r, stepMs));
+    await post(endpoint, demoUsage(Date.now(), loop * longest + i));
     for (const s of DEMO_SESSIONS) { const st = s.steps[i % s.steps.length]; await post(endpoint, { type: st.tool ? 'tool' : 'state', sid: s.sid, tool: null, ...st, costUsd: +(0.01 * (loop * longest + i + 1)).toFixed(3) }); }
   }
   if (o.end) for (const s of DEMO_SESSIONS) await post(endpoint, { type: 'end', sid: s.sid });

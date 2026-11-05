@@ -77,8 +77,9 @@ Live activity is pushed onto those desks so it looks like the agents are working
 - each running **subagent** goes to the agent whose `name` equals the subagent type (e.g. a `coder` subagent lights up the `coder` desk);
   unmatched subagents are shown on the first agent's bubble.
 
-Click a session in the panel to see its agent profiles (name, description, tools, model, markdown body as text)
-and live activity (state, tool, prompt first sentence, subagents, cost).
+Click a session in the panel to see its live activity (state, tool, prompt first sentence, subagents, cost). Agent profiles are
+not listed in the UI any more; they still decide who sits at the desks. The map takes about 80% of the width, the session
+panel and event log the rest (on phones the map comes first, 78% of the screen height).
 
 ## The `office` mod
 
@@ -89,7 +90,7 @@ and live activity (state, tool, prompt first sentence, subagents, cost).
 It POSTs JSON events `{type, sid, ...}` (`sid` = the full session id), one at a time in event order:
 `start` on `session.start` and a `heartbeat` every 12 s (project, cwd, root, title, transcript path), `state` / `tool` on
 turn start, tool calls, permission requests and turn completion, `subagents` when a subagent starts a turn or calls a tool,
-`end` on `session.end`. Every post also carries state, tool, prompt first sentence, subagents and cost.
+`end` on `session.end`, and `usage` (below). Every session post also carries state, tool, prompt first sentence, subagents and cost.
 Tool detail is only a file **basename**, the **first line** of a command, a URL **host**, a pattern/query or a description,
 never file contents; the server also redacts tokens and caps lengths. Headless `claude -p` sessions
 (`CLAUDE_CODE_ENTRYPOINT=sdk-cli`) are skipped. Non-loopback endpoints are refused by the mod.
@@ -109,7 +110,8 @@ and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they nev
 | `on('turn.complete')`: `e.agentId`, `e.reason` (`aborted` → idle, otherwise done) | done |
 | `on('session.end')` | end |
 | `$.agent.list()` → `{type, description, status}` | subagents |
-| `$.session.usage()` → `cost.usd` | cost |
+| `$.session.usage()` → `cost.usd`, `rateLimits`, `context` | cost; usage on start/heartbeat |
+| `on('session.measure')`: `e.rateLimits[{kind, percentUsed, resetsAt}]`, `e.context.percent`, `e.cost.usd` | usage bars |
 | `$.http.fetch(url, {method: 'POST', headers, body})` | posting events |
 | `$.fs.exists(path)`, `$.fs.read(path)` | title from the transcript (`custom-title` > `ai-title`) when no `session_title` was given |
 
@@ -127,6 +129,18 @@ The browser token is per run, so the mod cannot know it. Instead `/event` accept
 Payloads are validated, capped at 64 KB and redacted. Any local process could still post fake sessions; it can only make the
 office display them, and the server only reads `.claude/agents/*.md` / `CLAUDE.md` under the reported path, showing them to the
 token-protected UI. The UI WebSocket keeps the per-run token (URL fragment, Origin check), unchanged.
+
+### Claude usage in the header
+
+The header shows the account's Claude usage as two bars, **5h** and **7d** (percent used, time to reset). The red line on each
+bar is the **pace**: the share of the window already gone, from `resets_at` (e.g. 2.5 h into the 5 h window = 50%). Being past
+the line means burning faster than the limit sustains; the bar then turns orange. Before any reading it says **chưa có số liệu**.
+
+The mod sends `{type:'usage', sid, usage}` on `session.measure` (raised by the engine after each turn and whenever a limit moves
+a whole point) and on start/heartbeat from `$.session.usage()`. `usage` is built exactly like esp-claude's `payload.ts`:
+`{source:'claude-code', ts, five_hour:{pct, resets_at}|null, seven_day:…, context_pct, cost_usd}`, and is sent only when
+there is a 5h or 7d reading. The server keeps the newest reading (account-wide, newest `ts` wins) and pushes it to the UI.
+`--demo` posts simulated usage labelled **demo**.
 
 ## Development
 
@@ -153,4 +167,5 @@ Older `phase*` / `refui*` screenshots show earlier designs (orchestrator spawnin
 ## Known issues
 
 - IT Ops' Prometheus client sends no auth header (only credentials embedded in the URL), and has not been tried against a real Prometheus yet.
+- `orchestrator/test/mod.test.ts` (incl. the usage payload tests) only loads when `mod/office/.claude-plugin/types/tsconfig.json` exists (it comes with the engine types, not in this repo).
 - Headless screenshots use software WebGL (SwiftShader), so shadows are off in them.

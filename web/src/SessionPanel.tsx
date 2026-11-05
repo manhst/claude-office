@@ -1,9 +1,9 @@
 import type { OfficeState } from './reducer';
-import type { AgentProfile, SessionView } from './types';
+import type { SessionView } from './types';
 import { STATE_COLORS } from './layout';
-import { SOURCE_LABEL, STATE_KEY, STATE_LABEL, activeSubagents, agoLabel } from './sessionView';
-import { IconBranch, IconFile, IconTerminal, IconTool, IconUser } from './icons';
-/** Lists every active session the `office` mod reported; the selected one shows its agent profiles + live activity. */
+import { STATE_KEY, STATE_LABEL, activeSubagents, agoLabel } from './sessionView';
+import { IconBranch, IconTerminal, IconTool } from './icons';
+/** Lists every active session the `office` mod reported; the selected one shows its live activity (agent profiles are not shown). */
 export function SessionPanel({ s, selected, onSelect, now }: { s: OfficeState; selected?: string; onSelect: (sid: string) => void; now: number }) {
   const cur = s.sessions.find((x) => x.sid === selected);
   return (
@@ -31,19 +31,6 @@ function Detail({ x, now }: { x: SessionView; now: number }) {
       {x.prompt && <div className="kv"><span>Prompt</span><b>{x.prompt}</b></div>}
       {subs.length > 0 && <div className="kv"><span>Subagents</span><b>{subs.map((a, i) => <span key={i} className="tag"><IconBranch size={12} />{a.type ?? 'agent'}{a.description ? `: ${a.description}` : ''}</span>)}</b></div>}
       {x.costUsd != null && <div className="kv"><span>Cost</span><b>${x.costUsd.toFixed(3)}</b></div>}
-      <h3><IconUser size={12} /> Agents <small>from {SOURCE_LABEL[x.source]}</small></h3>
-      {x.profiles.map((p, i) => <Profile key={p.name + i} p={p} open={i === 0} />)}
     </div>
-  );
-}
-function Profile({ p, open }: { p: AgentProfile; open: boolean }) {
-  return (
-    <details className="profile" open={open} data-testid="profile">
-      <summary><b>{p.name}</b>{p.model && <span className="tag">{p.model}</span>}{p.scope === 'user' && <span className="tag">user</span>}</summary>
-      {p.description && <p>{p.description}</p>}
-      {p.tools.length > 0 && <div className="tools">{p.tools.map((t) => <span key={t} className="tag">{t}</span>)}</div>}
-      {p.file && <div className="muted mono"><IconFile size={12} /> {p.file}</div>}
-      {p.body && <pre className="md">{p.body}</pre>}
-    </details>
   );
 }

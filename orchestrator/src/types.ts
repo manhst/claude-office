@@ -21,6 +21,10 @@ export interface SessionView {
 export interface ItOpsAlert { name: string; detail?: string; value?: string }
 export interface ItOpsStatus { mode: 'prometheus' | 'demo' | 'unconfigured'; state: 'unconfigured' | 'checking' | 'ok' | 'alert' | 'error'; endpoint?: string; query?: string; alerts: ItOpsAlert[]; error?: string; checkedAt?: number }
 
+/** Claude account usage (esp-claude payload). pct = percent used (0-100); resets_at as the engine gives it (ISO string or epoch). */
+export interface UsageWindow { pct: number; resets_at: string | number | null }
+export interface UsageReading { source: 'claude-code' | 'demo'; ts: number; five_hour: UsageWindow | null; seven_day: UsageWindow | null; context_pct: number | null; cost_usd: number | null }
+
 type Base = { ts: number };
 export type OfficeEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }
@@ -35,5 +39,6 @@ export type OfficeEvent = Base & (
   | { t: 'agent.left'; id: string }
   | { t: 'sessions.update'; sessions: SessionView[] }
   | { t: 'itops.status'; status: ItOpsStatus }
-  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus }
+  | { t: 'usage.update'; usage: UsageReading }
+  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus; usage?: UsageReading | null }
 );

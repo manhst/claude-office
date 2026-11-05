@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { register, toolDetail, titleFromJsonl, transcriptPath } from '../../mod/office/hooks/register.js';
+import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload } from '../../mod/office/hooks/register.js';
 // Fake engine matching the API used by usage-esp: register(on, options); on(name, ($, e, next) => ...) returns { catch }.
 function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' }, files: Record<string, string> = {}) {
   const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; let beat: (() => any) | undefined; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
@@ -92,5 +92,19 @@ describe('office mod (usage-esp API)', () => {
     expect(toolDetail('WebFetch', { url: 'https://docs.example.com/a?token=1' })).toBe('docs.example.com');
     expect(transcriptPath('/c', 'C:\\Users\\Manh\\proj', 's')).toBe('/c/projects/C--Users-Manh-proj/s.jsonl');
     expect(titleFromJsonl('{"type":"ai-title","aiTitle":"A"}\n{"type":"custom-title","customTitle":"B"}\n{"type":"ai-title","aiTitle":"C"}')).toBe('B');
+  });
+  it('usage payload matches esp-claude payload.ts', () => {
+    const rl = [{ kind: 'five_hour', percentUsed: 37, resetsAt: '2026-11-05T15:00:00Z' }, { kind: 'seven_day', percentUsed: 12 }];
+    expect(usagePayload(rl, { percent: 44 }, { usd: 1.234 }, 99)).toEqual({ source: 'claude-code', ts: 99, five_hour: { pct: 37, resets_at: '2026-11-05T15:00:00Z' }, seven_day: { pct: 12, resets_at: null }, context_pct: 44, cost_usd: 1.23 });
+    expect(usagePayload([{ kind: 'seven_day', percentUsed: 5, resetsAt: 1 }], undefined, undefined, 1)).toMatchObject({ five_hour: null, seven_day: { pct: 5, resets_at: 1 }, context_pct: null, cost_usd: null });
+    expect(usagePayload([], { percent: 3 }, { usd: 1 }, 1)).toBeNull(); expect(usagePayload(undefined, null, null, 1)).toBeNull();
+  });
+  it('session.measure posts usage only when there is a 5h/7d reading', async () => {
+    const f = fakeEngine(); register(f.on, {}); await f.fire('session.start', { cwd: 'C:/Users/m/proj' }); await flush();
+    const n = f.posts.length;
+    expect(await f.fire('session.measure', { rateLimits: [], context: { percent: 9 } })).toEqual({ rateLimits: [], context: { percent: 9 } }); await flush();
+    expect(f.posts.length).toBe(n);
+    f.fire('session.measure', { rateLimits: [{ kind: 'five_hour', percentUsed: 61, resetsAt: 'R' }], cost: { usd: 0.5 } }); await flush();
+    const u = f.posts.at(-1); expect(u.type).toBe('usage'); expect(u.usage).toMatchObject({ source: 'claude-code', five_hour: { pct: 61, resets_at: 'R' }, seven_day: null, cost_usd: 0.5 });
   });
 });
