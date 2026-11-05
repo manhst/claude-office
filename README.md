@@ -46,7 +46,7 @@ The Vanphong view (the only view) puts the voxel office inside a small town. Ses
 - **Side characters** are simulated in the browser (`web/src/town/sim.ts`) and walk around the building, not through it:
   - Tèo, Tý, Bờm and Mít wander, chat nonsense, drink coffee or beer and run outside, and sometimes slip into the pond.
   - **Chos An** the dog barks wildly. **Meow** the cat picks fights with him.
-- **IT Ops** watches a Prometheus-compatible HTTP API from the kiosk on the front street. When it sees a problem it runs to the **Architect** and reports the alert in a red speech bubble. The kiosk label shows the monitor state.
+- **IT Ops** watches a Prometheus-compatible HTTP API and reports alerts from the indoor desk in a red speech bubble.
 
 | Env / flag | Meaning |
 |---|---|
@@ -57,6 +57,9 @@ The Vanphong view (the only view) puts the voxel office inside a small town. Ses
 Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kiosk, with no fake alerts. If the API can't be read, the error itself is reported.
 `--demo` with no URL runs a monitor labelled **(demo)** that alternates ok and `DEMO HighLatency` every 15 s.
 **Xuka Mát xa** sits across the back street from Crossian Cafe; NPCs and free office agents walk there, lie on a bed and chat about massages (PG, comedic), then walk back.
+**Xém Nướng** is opposite the crocodile pond (northwest): BBQ and crocodile-meat hotpot. Side NPCs and free agents occasionally walk over, sit/eat, chat, then return.
+**Flower garden** between Xuka and Xém Nướng: rarely two characters sneak there for a secret PG office-soap affair (stand close, kiss, flat SVG heart pops).
+Speech bubbles are paced slower (longer display + gaps, less idle chatter) so lines are readable.
 
 **Main-road traffic** (front street, `web/src/town/traffic.ts`, at most 5 vehicles plus responders): 22 voxel vehicle types (xe máy, xe đạp, xe ôm Grab, ô tô con, taxi, bán tải, xe buýt, ô tô tải, container, trộn bê tông, xe rác, xe cẩu, xe lu, máy xúc, máy ủi, xe tăng, ba gác, cứu thương, cứu hỏa, cảnh sát, xe kiểm tra đường, xe bán kem). Vehicles sometimes knock a pedestrian over (they get back up), rear-end each other (both drivers get out and argue in turns), or catch fire and explode. Police, fire truck and ambulance are dispatched to incidents; wrecks are cleared after a while. Comedic only.
 
@@ -65,7 +68,7 @@ Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kio
 
 **Character labels** show the name plus at most a short status bit, scaled to about 70% of the previous size.
 
-**Dialogue** lives in `web/src/town/dialogue.ts`: 31 line categories plus two-sided argument pairs (work arguments, crash arguments); `web/test/dialogue.test.ts` checks every category has at least 30 unique lines.
+**Dialogue** lives in `web/src/town/dialogue.ts`: line categories (incl. BBQ / romance) plus two-sided argument pairs; `web/test/dialogue.test.ts` checks every category has at least 30 unique lines.
 
 Screenshots: `docs/screens/town-*.png` (`cd web && npm run build && node scripts/screens-town.mjs`).
 
@@ -169,7 +172,7 @@ event ingest auth (loopback, Origin, Content-Type, preflight), payload sanitizin
 
 Demo mode (`npm run screens` in `web/`, headless Chrome):
 - `docs/screens/session-1280-vanphong.png`, `session-1280-vanphong-claude-md.png`, `session-390-vanphong.png`
-- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`); `town-office-itops.png`, `town-labels.png`, `town-agent-massage.png`, `town-ambulance.png` (`node scripts/screens-followup.mjs`)
+- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`); `town-office-itops.png`, `town-labels.png`, `town-agent-massage.png`, `town-ambulance.png` (`node scripts/screens-followup.mjs`); `town-xem-nuong.png`, `town-flower-garden.png`, `town-slower-talk.png` (`node scripts/screens-north.mjs`)
 
 The old 2D (SVG) and 3D (React Three Fiber + Quaternius model) views were removed; the Vanphong view replaces both.
 

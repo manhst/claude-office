@@ -1,18 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentUI, MessageUI } from '../src/reducer';
-import { idleLine, idlePlans, vpGoal, vpObstacles, vpPlan, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, ROOM, VP_BOUNDS, type IdlePlan } from '../src/ref-vanphong/adapter';
+import { idleLine, idlePlans, vpGoal, vpObstacles, vpPlan, BBQ_SPOTS, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, ROMANCE_CENTERS, ROOM, VP_BOUNDS, type IdlePlan } from '../src/ref-vanphong/adapter';
 import { clearLine, findPath, type Rect } from '../src/walk';
 import { DOOR, allDesks } from '../src/layout';
 
 const ag = (id: string, p: Partial<AgentUI> = {}): AgentUI => ({ id, role: 'coder', name: id, state: 'idle', desk: { x: 0, y: 0 }, tools: [], ...p });
 const pairPts = (cs: [number, number, number][], d: number) => cs.flatMap((c) => [[c[0] - d, 0, c[2]], [c[0] + d, 0, c[2]]] as [number, number, number][]);
-const allSpots = (): [number, number, number][] => [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to), ...pairPts(CHAT_SPOTS, PAIR_GAP.chat), ...pairPts(FIGHT_SPOTS, PAIR_GAP.fight)];
+const allSpots = (): [number, number, number][] => [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to), ...BBQ_SPOTS.map((s) => s.to), ...pairPts(CHAT_SPOTS, PAIR_GAP.chat), ...pairPts(FIGHT_SPOTS, PAIR_GAP.fight)]; // romance pairs stand close on purpose
 
 describe('idle behaviour gaps', () => {
   it('idle spots keep their distance so two people never overlap', () => {
     const pts = allSpots(); let min = Infinity;
     for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) min = Math.min(min, Math.hypot(pts[i][0] - pts[j][0], pts[i][2] - pts[j][2]));
     expect(min).toBeGreaterThanOrEqual(0.7);
+  });
+  it('romance pairs stand closer than chat pairs (kiss distance)', () => {
+    expect(PAIR_GAP.romance).toBeLessThan(PAIR_GAP.chat);
+    expect(PAIR_GAP.romance * 2).toBeLessThan(0.7);
   });
   it('an agent visiting a colleague (ask without reply) gets no idle plan', () => {
     const order = ['a', 'b', 'c', 'd']; const agents = Object.fromEntries(order.map((id) => [id, ag(id)]));
@@ -24,7 +28,7 @@ describe('idle behaviour gaps', () => {
   it('a single free agent never chats or fights and nothing throws', () => {
     const agents = { a: ag('a') }; const kinds = new Set<string>();
     for (let slot = 0; slot < 200; slot++) { const plans = idlePlans(agents, ['a'], [], slot * IDLE_SLOT_MS + 1); for (const p of Object.values(plans)) { kinds.add(p.kind); expect(p.partner).toBeUndefined(); } }
-    expect(kinds.has('chat')).toBe(false); expect(kinds.has('fight')).toBe(false);
+    expect(kinds.has('chat')).toBe(false); expect(kinds.has('fight')).toBe(false); expect(kinds.has('romance')).toBe(false);
     expect(idlePlans({}, [], [], 0)).toEqual({});
     expect(idlePlans(agents, ['ghost'], [], 0)).toEqual({});
   });
@@ -88,7 +92,7 @@ describe('idle behaviour gaps', () => {
     }
   });
   it('idleLine is deterministic for the same inputs', () => {
-    const plans: IdlePlan[] = (['chat', 'fight', 'coffee', 'pool', 'massage'] as const).map((kind) => ({ kind, key: `${kind}:3:x`, to: [0, 0, 0], face: 0, partner: 'y', first: true }));
+    const plans: IdlePlan[] = (['chat', 'fight', 'coffee', 'pool', 'massage', 'bbq', 'romance'] as const).map((kind) => ({ kind, key: `${kind}:3:x`, to: [0, 0, 0], face: 0, partner: 'y', first: true }));
     for (const p of plans) for (let t = 0; t < 120_000; t += 700) expect(idleLine('x', { ...p }, t)).toBe(idleLine('x', p, t));
   });
 });

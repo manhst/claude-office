@@ -4,13 +4,14 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { ItOpsStatus } from '../types';
-import { CAFE, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POND, PX, ROADS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
+import { BBQ, BBQ_SEATS, CAFE, GARDEN, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POND, PX, ROADS, ROMANCE_SPOTS, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
-import { initialWorld, knockDown, step, throwIntoPond, type Ent, type World } from '../town/sim';
+import { forceRomance, initialWorld, knockDown, step, throwIntoPond, type Ent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
+import { HeartFX } from './hearts';
 
 export interface TownCtx {
   nhom: THREE.Group; soft: boolean; own: <T extends { dispose(): void }>(m: T) => T;
@@ -27,6 +28,8 @@ const ICON = {
   croc: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 9.5c2-2 5-2.5 8-2l4.5-1.5-1 2.5 1 1.5-4.5-.5c-3 1.5-6 1.5-8 0z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   spa: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2c2 2.5 2 5 0 7-2-2-2-4.5 0-7zM2 8c2.5 0 4.5 1.2 6 3.5C9.5 9.2 11.5 8 14 8c0 3.5-2.7 6-6 6S2 11.5 2 8z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
   pulse: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.5-3 2 6 1.5-3h5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+  grill: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h10v1.5H3zm1 2.5h8v5H4zm2-4.5h4v1.5H6z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 5.5V3.5M8 5.5V2.5M11 5.5V3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  flower: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor"/><path d="M8 2.5c1.2 1.5 1.2 3.2 0 4.5-1.2-1.3-1.2-3 0-4.5zm0 6.5c1.2 1.5 1.2 3.2 0 4.5-1.2-1.3-1.2-3 0-4.5zM2.5 8c1.5-1.2 3.2-1.2 4.5 0-1.3 1.2-3 1.2-4.5 0zm6.5 0c1.5-1.2 3.2-1.2 4.5 0-1.3 1.2-3 1.2-4.5 0z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
 };
 const boxW = (b: Box) => { const [x0, z0] = toWorld(b), [x1, z1] = toWorld({ x: b.x + b.w, y: b.y + b.h }); return { x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 }; };
 function sign(ctx: TownCtx, html: string, text: string, sub: string, mau: string, x: number, y: number, z: number, testid: string) {
@@ -112,6 +115,61 @@ function massage(ctx: TownCtx) {
   if (!ctx.soft) { const l = new THREE.PointLight('#ffc2da', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
   sign(ctx, ICON.spa, 'Xuka Mát xa', 'cổ vai gáy · ngâm chân', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-massage');
 }
+/** Xém Nướng: BBQ + crocodile-meat hotpot opposite the pond. Voxel like Crossian / Xuka. */
+function xemNuong(ctx: TownCtx) {
+  const b = boxW(BBQ), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  const W = b.w, D = b.d, H = 2.55, go = '#6b3a2a', accent = '#c45c26';
+  khoi(g, W, 0.08, D, '#c4a882', 0, 0.04, 0, false);
+  for (let i = 0; i < 6; i++) khoi(g, W, 0.004, 0.02, '#a88860', 0, 0.082, -D / 2 + (i + 0.5) * D / 6, false);
+  khoi(g, W, H, 0.18, go, 0, H / 2, -D / 2 + 0.09);
+  for (const s of [-1, 1]) khoi(g, 0.18, H, D, go, s * (W / 2 - 0.09), H / 2, 0);
+  khoi(g, W + 0.3, 0.14, D + 0.3, '#3d2418', 0, H + 0.07, 0, false);
+  const N = 8; for (let i = 0; i < N; i++) { const a = khoi(g, W / N, 0.06, 1.1, i % 2 ? accent : '#f3e0c8', -W / 2 + (i + 0.5) * W / N, H - 0.25, D / 2 + 0.35); a.rotation.x = 0.35; }
+  // grill + hotpot table
+  khoi(g, 1.6, 0.7, 0.7, '#3a3a44', -0.9, 0.4, -D / 2 + 1.1); khoi(g, 1.5, 0.08, 0.6, '#1f1f24', -0.9, 0.78, -D / 2 + 1.1);
+  for (let i = 0; i < 5; i++) khoi(g, 1.35, 0.02, 0.04, '#8a8f99', -0.9, 0.84, -D / 2 + 0.9 + i * 0.08, false);
+  khoi(g, 0.55, 0.2, 0.55, vatLieuSang('#ff6a2a'), -0.9, 0.95, -D / 2 + 1.1, false);
+  khoi(g, 1.1, 0.55, 1.1, '#5d4037', 1.0, 0.35, -0.2); khoi(g, 0.7, 0.25, 0.7, '#b71c1c', 1.0, 0.75, -0.2);
+  khoi(g, 0.55, 0.18, 0.55, vatLieu('#ef5350', { transparent: true, opacity: 0.7 }), 1.0, 0.95, -0.2, false);
+  // tables + stools at BBQ_SEATS
+  for (const p of BBQ_SEATS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    khoi(g, 0.7, 0.05, 0.7, '#8d6e4c', lx, 0.72, lz); khoi(g, 0.06, 0.7, 0.06, '#4e342e', lx, 0.35, lz);
+    khoi(g, 0.14, 0.1, 0.14, '#ffffff', lx + 0.15, 0.8, lz + 0.1);
+    for (const [dx, dz] of [[-0.55, 0.1], [0.55, 0.1]]) { khoi(g, 0.34, 0.06, 0.34, accent, lx + dx, 0.45, lz + dz); khoi(g, 0.05, 0.42, 0.05, '#4e342e', lx + dx, 0.21, lz + dz); }
+  }
+  // croc-themed menu board + smoke lanterns
+  khoi(g, 1.6, 0.9, 0.04, '#2b1a12', 0.2, 1.85, -D / 2 + 0.2, false);
+  for (let i = 0; i < 3; i++) khoi(g, 1.1 - i * 0.15, 0.05, 0.01, '#f6d7a7', 0.15, 2.1 - i * 0.2, -D / 2 + 0.225, false);
+  ctx.plant(g, -W / 2 + 0.45, D / 2 - 0.35, 0.85); ctx.plant(g, W / 2 - 0.45, D / 2 - 0.35, 0.85);
+  const chao = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd4a8', emissive: '#ff8a3d', emissiveIntensity: 0 }));
+  for (const x of [-1.1, 0.2, 1.3]) khoi(g, 0.28, 0.28, 0.28, chao, x, H - 0.3, 0.4, false); ctx.shades.push(chao);
+  if (!ctx.soft) { const l = new THREE.PointLight('#ffb070', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.4); g.add(l); ctx.lights.push(l); }
+  sign(ctx, ICON.grill, 'Xém Nướng', 'BBQ · lẩu cá sấu', accent, b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-xem-nuong');
+}
+/** Flower garden between Xuka and Xém Nướng — secret-affair hangout. */
+function garden(ctx: TownCtx) {
+  const b = boxW(GARDEN), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  khoi(g, b.w, 0.06, b.d, '#7cbc5a', 0, 0.02, 0, false);
+  // gravel path through the middle
+  khoi(g, b.w * 0.9, 0.04, 0.7, '#d5c4a1', 0, 0.04, 0, false);
+  const petals = ['#f48fb1', '#ce93d8', '#fff59d', '#ef9a9a', '#80cbc4', '#ffcc80'];
+  for (let i = 0; i < 28; i++) {
+    const lx = -b.w / 2 + 0.6 + (i % 14) * (b.w - 1.2) / 13, lz = (i < 14 ? -1 : 1) * (0.7 + (i % 5) * 0.22);
+    khoi(g, 0.08, 0.35, 0.08, '#2e7d32', lx, 0.2, lz);
+    khoi(g, 0.28, 0.1, 0.28, petals[i % petals.length], lx, 0.42, lz, false);
+    khoi(g, 0.1, 0.1, 0.1, '#ffe082', lx, 0.5, lz, false);
+  }
+  // benches at romance spots
+  for (const p of ROMANCE_SPOTS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    khoi(g, 1.1, 0.08, 0.4, '#8d6e4c', lx, 0.42, lz + 0.35); khoi(g, 1.1, 0.45, 0.08, '#6d4c35', lx, 0.55, lz + 0.55);
+    for (const s of [-1, 1]) khoi(g, 0.08, 0.4, 0.08, '#5d4037', lx + s * 0.45, 0.2, lz + 0.35);
+  }
+  // low hedges at the edges
+  for (const s of [-1, 1]) khoi(g, b.w - 0.4, 0.45, 0.22, '#4caf50', 0, 0.25, s * (b.d / 2 - 0.2));
+  sign(ctx, ICON.flower, 'Vườn hoa', 'đi bộ · hẹn hò…?', '#ad1457', b.cx, 1.6, b.cz - b.d / 2 + 0.3, 'vp-garden');
+}
 function trada(ctx: TownCtx) {
   const b = boxW(TRADA), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
   khoi(g, b.w, 0.03, b.d, '#bdb6a8', 0, 0.015, 0, false);
@@ -186,17 +244,23 @@ function petMesh(meo: boolean): Pet {
 interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
 /** Short act bit under the name — only when it adds info beyond the name. */
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã' };
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò' };
 const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo' };
 
 export class TownLayer {
   private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
   private p: ReturnType<typeof pond>; private traffic: Traffic; private cars: TrafficLayer; private k: ReturnType<typeof noc>; private nocKey = '';
+  private hearts: HeartFX; private heartCd = 0;
   constructor(private ctx: TownCtx, now = Date.now()) {
-    ground(ctx); cafe(ctx); massage(ctx); trada(ctx); this.p = pond(ctx); this.k = noc(ctx);
+    ground(ctx); cafe(ctx); massage(ctx); xemNuong(ctx); garden(ctx); trada(ctx); this.p = pond(ctx); this.k = noc(ctx);
+    this.hearts = new HeartFX(ctx.nhom);
     this.world = initialWorld(now); this.lastStep = now; this.traffic = initialTraffic(now); this.cars = new TrafficLayer(ctx.nhom);
-    // Screenshot/debug hook, opt-in via localStorage 'vp-debug' = '1': trigger a crash or a fire on the main road now.
-    try { if (localStorage.getItem('vp-debug') === '1') (window as unknown as Record<string, unknown>).__vpTraffic = { crash: (x = 700) => { this.traffic = forceCrash(this.traffic, Date.now(), x); }, fire: (x = 1000) => { this.traffic = forceFire(this.traffic, Date.now(), x); } }; } catch { /* no storage */ }
+    // Screenshot/debug hook, opt-in via localStorage 'vp-debug' = '1': trigger a crash/fire or a garden affair.
+    try { if (localStorage.getItem('vp-debug') === '1') {
+      const w = window as unknown as Record<string, unknown>;
+      w.__vpTraffic = { crash: (x = 700) => { this.traffic = forceCrash(this.traffic, Date.now(), x); }, fire: (x = 1000) => { this.traffic = forceFire(this.traffic, Date.now(), x); } };
+      w.__vpTown = { romance: () => { this.world = forceRomance(this.world, Date.now(), Math.random); }, hearts: (x = 0, z = -14.5) => { this.hearts.burst(x, z, Date.now(), true); } };
+    }; } catch { /* no storage */ }
     for (const e of this.world.ents) this.figs.set(e.id, this.fig(e));
     this.setItops(undefined);
   }
@@ -265,6 +329,11 @@ export class TownLayer {
       if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
       if (e.act === 'knocked') { f.g.rotation.x = THREE.MathUtils.lerp(f.g.rotation.x, -Math.PI / 2, 1); y = 0.15; }
       if (e.act === 'massage') { f.g.rotation.x = -Math.PI / 2; y = 0.72; f.heading = 0; }
+      if (e.act === 'bbq') { /* sit-ish: slight lean */ }
+      if (e.act === 'romance' && e.partner) {
+        const o = this.world.ents.find((z) => z.id === e.partner); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); }
+        if (nowMs > this.heartCd) { this.hearts.burst(f.x, f.z, nowMs); this.heartCd = nowMs + 900; }
+      }
       f.g.position.set(f.x, y, f.z);
       this.pose(f, t, dt, moving);
       // label + bubble
@@ -296,6 +365,8 @@ export class TownLayer {
     else if (a === 'chat') { tP = -0.7 + 0.35 * Math.sin(w * 3); tT = -0.25 + 0.2 * Math.sin(w * 2.3); }
     else if (a === 'fall') { tT = tP = -2.9; }
     else if (a === 'massage') { tT = tP = -0.2; }
+    else if (a === 'bbq') { tP = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); tT = -0.3; dau = -0.05; }
+    else if (a === 'romance') { tP = -0.9; tT = -0.9; than = 0.15; dau = -0.12; }
     else if (f.e.kind === 'itops') { tT = tP = -1.1; dau = 0.15; } // typing at the indoor panel
     h.chan[0].rotation.x = THREE.MathUtils.lerp(h.chan[0].rotation.x, chan, k); h.chan[1].rotation.x = THREE.MathUtils.lerp(h.chan[1].rotation.x, -chan, k);
     h.than.rotation.x = THREE.MathUtils.lerp(h.than.rotation.x, than, k); h.dau.rotation.x = THREE.MathUtils.lerp(h.dau.rotation.x, dau, k);

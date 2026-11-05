@@ -1,5 +1,5 @@
 export const STATE_COLORS: Record<string, string> = { idle: '#94a3b8', thinking: '#a78bfa', working: '#f59e0b', talking: '#38bdf8', done: '#22c55e', error: '#ef4444' };
-export const BUBBLE_MS = 8000, DESK_COLS = 3, DESK_COUNT = 6;
+export const BUBBLE_MS = 12000, DESK_COLS = 3, DESK_COUNT = 6;
 export type Vec3 = [number, number, number];
 /** 3D: desk grid cell → world position (x right, z toward camera), centred on origin. */
 export const DESK_SPACING = { x: 4.2, z: 4 };

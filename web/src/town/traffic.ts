@@ -28,12 +28,12 @@ export interface Vehicle {
 export interface Traffic { vs: Vehicle[]; nextId: number; nextSpawn: number; t: number }
 /** Max vehicles on the road at once (responders get +2 headroom). */
 export const CAP = 5;
-export const ARGUE_MS = 2200;
-export const P = { hit: 0.5, crash: 0.35, fireAfterCrash: 0.4, randomFire: 0.0006, fireMs: 7000, boomMs: 1400, wreckMs: 9000, argueMs: 11000 };
+export const ARGUE_MS = 4000;
+export const P = { hit: 0.5, crash: 0.35, fireAfterCrash: 0.4, randomFire: 0.0006, fireMs: 7000, boomMs: 1400, wreckMs: 9000, argueMs: 18000 };
 
 export const initialTraffic = (now: number): Traffic => ({ vs: [], nextId: 1, nextSpawn: now + 1500, t: now });
 const front = (v: Vehicle) => v.x + (LANES[v.lane].dir * VEHICLES[v.type].len) / 2;
-const say = (v: Vehicle, s: string, now: number, ms = 3000): Vehicle => ({ ...v, say: s, sayUntil: now + ms });
+const say = (v: Vehicle, s: string, now: number, ms = 5000): Vehicle => ({ ...v, say: s, sayUntil: now + ms });
 function spawn(t: Traffic, type: VType, lane: 0 | 1, now: number, target?: number): Traffic {
   const L = LANES[lane], len = VEHICLES[type].len, x = L.dir > 0 ? -len : TOWN.w + len;
   const v: Vehicle = { id: t.nextId, type, lane, x, y: L.y, speed: VEHICLES[type].speed, state: 'drive', until: 0, target };
@@ -68,7 +68,7 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
       }
       if (now > v.until) return { ...v, state: 'drive' as const, speed: VEHICLES[v.type].speed, other: undefined, say: undefined };
     }
-    if (v.state === 'fire' && now > v.until) return say({ ...v, state: 'boom' as const, until: now + P.boomMs }, pick(LINES.boom, r), now, 3500);
+    if (v.state === 'fire' && now > v.until) return say({ ...v, state: 'boom' as const, until: now + P.boomMs }, pick(LINES.boom, r), now, 5500);
     if (v.state === 'boom' && now > v.until) return { ...v, state: 'wreck' as const, until: now + P.wreckMs };
     if (v.state === 'parked' && now > v.until) return { ...v, state: 'drive' as const, speed: VEHICLES[v.type].speed, target: undefined };
     return v;
@@ -95,7 +95,7 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
     const dir = LANES[v.lane].dir, len = VEHICLES[v.type].len;
     const ahead = vs.filter((o) => o.id !== v.id && o.lane === v.lane && (o.x - v.x) * dir > 0).sort((a, b) => Math.abs(a.x - v.x) - Math.abs(b.x - v.x))[0];
     let nx = v.x + dir * v.speed * dt;
-    if (v.target !== undefined && (v.target - nx) * dir < len) { return say({ ...v, x: v.target - dir * len, state: 'parked' as const, until: now + 9000 }, pick(v.type === 'cuu-hoa' ? LINES.fireCrew : v.type === 'cuu-thuong' ? LINES.hit : LINES.police, r), now, 5000); }
+    if (v.target !== undefined && (v.target - nx) * dir < len) { return say({ ...v, x: v.target - dir * len, state: 'parked' as const, until: now + 9000 }, pick(v.type === 'cuu-hoa' ? LINES.fireCrew : v.type === 'cuu-thuong' ? LINES.hit : LINES.police, r), now, 7000); }
     if (ahead) {
       const gap = (ahead.x - dir * VEHICLES[ahead.type].len / 2 - (nx + dir * len / 2)) * dir;
       if (gap < 6) {
@@ -105,7 +105,7 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
         }
         nx = ahead.x - dir * (VEHICLES[ahead.type].len + len) / 2 - dir * 8; // queue
         const stuck = ahead.state !== 'drive';
-        return stuck && !v.say && r() < 0.05 ? say({ ...v, x: Math.abs(nx - v.x) < v.speed * dt ? nx : v.x }, pick(LINES.honk, r), now, 2000) : { ...v, x: (nx - v.x) * dir > 0 ? nx : v.x, speed: stuck ? v.speed : Math.min(v.speed, ahead.speed), hitCd: 1 };
+        return stuck && !v.say && r() < 0.05 ? say({ ...v, x: Math.abs(nx - v.x) < v.speed * dt ? nx : v.x }, pick(LINES.honk, r), now, 3500) : { ...v, x: (nx - v.x) * dir > 0 ? nx : v.x, speed: stuck ? v.speed : Math.min(v.speed, ahead.speed), hitCd: 1 };
       }
     }
     return { ...v, x: nx };

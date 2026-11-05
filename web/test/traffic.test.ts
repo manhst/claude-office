@@ -3,7 +3,8 @@ import { CAP, P, VEHICLES, forceCrash, forceFire, initialTraffic, stepTraffic, t
 import { LANES } from '../src/town/map';
 import { PAIRS } from '../src/town/dialogue';
 import { initialWorld, knockDown, step } from '../src/town/sim';
-import { MASSAGE_BEDS } from '../src/town/map';
+import { BBQ_SEATS, MASSAGE_BEDS } from '../src/town/map';
+import { forceRomance } from '../src/town/sim';
 
 const run = (t: Traffic, from: number, to: number, r: () => number = () => 0.5, peds: { id: string; x: number; y: number }[] = []) => {
   const hits: string[] = []; for (let n = from; n <= to; n += 200) { const o = stepTraffic(t, n, r, peds); t = o.traffic; hits.push(...o.hits); } return { t, hits };
@@ -49,5 +50,15 @@ describe('main-road traffic', () => {
   it('NPCs sometimes go to Xuka Mát xa and lie on a bed', () => {
     const w = step(initialWorld(0), 2000, () => 0.45); const n = w.ents.find((e) => e.id === 'npc-1')!;
     expect(n.next).toBe('massage'); expect(Math.min(...MASSAGE_BEDS.map((b) => Math.hypot(b.x - n.tx, b.y - n.ty)))).toBeLessThan(10);
+  });
+  it('NPCs sometimes go to Xém Nướng for BBQ', () => {
+    const w = step(initialWorld(0), 2000, () => 0.50); const n = w.ents.find((e) => e.id === 'npc-1')!;
+    expect(n.next).toBe('bbq'); expect(Math.min(...BBQ_SEATS.map((b) => Math.hypot(b.x - n.tx, b.y - n.ty)))).toBeLessThan(12);
+  });
+  it('forceRomance sends two NPCs to the garden', () => {
+    let w = forceRomance(initialWorld(0), 0, () => 0.2);
+    const a = w.ents.find((e) => e.id === 'npc-1')!, b = w.ents.find((e) => e.id === 'npc-2')!;
+    expect(a.next).toBe('romance'); expect(b.next).toBe('romance');
+    expect(a.partner).toBe('npc-2'); expect(b.partner).toBe('npc-1');
   });
 });

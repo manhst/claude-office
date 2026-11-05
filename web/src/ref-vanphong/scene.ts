@@ -12,6 +12,7 @@ import { allDesks } from '../layout';
 import { newWalker, resolveOverlaps, stepWalker, type LabelBox, type Walker } from '../walk';
 import { khoi, tron, vatLieu, vatLieuSang, dungNguoi, setShadows, type Hinh } from './characters';
 import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, subtitleFor, vpBubble, vpChair, vpGoal, vpPlan, vpStatus, type IdlePlan, type VpStatus } from './adapter';
+import { HeartFX } from './hearts';
 import { buildGameRoom, buildPantry } from './amenities';
 import { CANH, TownLayer } from './town3d';
 import { agentKey, currentLook, currentName } from '../town/looks';
@@ -57,7 +58,7 @@ export class VanphongScene {
   private rieng: { dispose(): void }[] = []; private denPhong: THREE.PointLight[] = []; private chaoDen: THREE.MeshLambertMaterial[] = [];
   private nhom = new THREE.Group(); private ban = new Map<string, Ban>(); private nguoi = new Map<string, Nguoi>(); private bay: Bay[] = [];
   private s: OfficeState | null = null; private idle: Record<string, IdlePlan> = {}; private freeSince: Record<string, number> = {}; private lastMsg = 0; private dem = false; private gocVe: null | { tuMay: THREE.Vector3; tuDich: THREE.Vector3; denMay: THREE.Vector3; denDich: THREE.Vector3; bat: number; lau: number } = null;
-  private town!: TownLayer; private nem: Nem[] = []; private xaTu = 26;
+  private town!: TownLayer; private hearts!: HeartFX; private heartCd = 0; private nem: Nem[] = []; private xaTu = 26;
   private ro: ResizeObserver; private vung: HTMLDivElement; private nutDem: HTMLButtonElement; private soft = softwareGL();
 
   constructor(private khung: HTMLElement, private store?: Pick<Storage, 'getItem' | 'setItem'>, private onMenu?: (m: MenuTarget) => void) {
@@ -192,6 +193,7 @@ export class VanphongScene {
       plant: (cha: THREE.Object3D, x: number, z: number, co?: number) => this.cayCanh(cha, x, z, co) };
     buildPantry(ctx); buildGameRoom(ctx);
     this.town = new TownLayer(ctx);
+    this.hearts = new HeartFX(this.nhom);
   }
   private choNgoi(cha: THREE.Object3D, x: number, z: number, mauPhong: string, i: number): Ban {
     const g = new THREE.Group(); g.position.set(x, 0, z); cha.add(g);
@@ -394,6 +396,10 @@ export class VanphongScene {
       tP = -1.9 + 0.35 * Math.max(0, Math.sin(w * 0.9)); tT = -0.2; dau = -0.08 * Math.max(0, Math.sin(w * 0.9)); noi = n.noiIdle;
     } else if (n.idleKind === 'massage') { // ours: lying on a Xuka bed
       tT = tP = -0.2; than = 0; dau = 0.1; noi = n.noiIdle;
+    } else if (n.idleKind === 'bbq') { // ours: eating at Xém Nướng
+      tP = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); tT = -0.3; dau = -0.05; noi = n.noiIdle;
+    } else if (n.idleKind === 'romance') { // ours: secret garden kiss lean
+      tP = -0.95; tT = -0.95; than = 0.18; dau = -0.15; noi = n.noiIdle;
     } else if (n.idleKind === 'chat' && !n.noiIdle) { // ours: listening, arms down, nodding
       dau = 0.08 * Math.max(0, Math.sin(w * 2.4)); dauY = 0.05 * Math.sin(w * 0.9); than = 0.012 * Math.sin(w * 2);
     } else { // standing at a colleague's desk: the reference's "le_tan" chatting pose
@@ -428,6 +434,10 @@ export class VanphongScene {
     n.dung.goc.position.set(x, massage ? 0.72 : 0, z);
     n.dung.goc.rotation.y = n.walker.heading;
     n.dung.goc.rotation.x = massage ? -Math.PI / 2 : 0;
+    if (n.idleKind === 'romance') {
+      const now = Date.now();
+      if (now > this.heartCd) { this.hearts.burst(x, z, now); this.heartCd = now + 900; }
+    }
     this.tuTheDung(n, t, dt, n.walker.phase === 'walking');
     this.capNhatBan(n.ban, null, t, dt);
   }

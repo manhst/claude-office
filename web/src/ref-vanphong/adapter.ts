@@ -1,6 +1,6 @@
 // Adapter (our code): maps OUR reducer state onto the display states used by the Vanphong visuals. Pure, unit-tested.
 import { LINES, PAIRS } from '../town/dialogue';
-import { MASSAGE_BEDS, toWorld } from '../town/map';
+import { BBQ_SEATS, MASSAGE_BEDS, ROMANCE_SPOTS, toWorld } from '../town/map';
 import type { AgentUI, MessageUI, OfficeState } from '../reducer';
 import { BUBBLE_MS, DESK_COLS, add, allDesks, DOOR, type Vec3 } from '../layout';
 import { BODY_R, BOUNDS, DESK_HALF, findPath, visiting, type Goal, type Rect } from '../walk';
@@ -68,8 +68,8 @@ export const vpDeskRects = (): Rect[] => allDesks().map(vpDesk).map(([x, , z]) =
 // ---- Our additions: a pantry (left) and a game room (right) around the work room, and what free agents do there. ----
 /** Building floor drawn by the scene; walkers plan inside VP_BOUNDS (grid-aligned so x = 0, the door gap, is a cell). */
 export const BIEN = { x0: -12.8, x1: 12.8, z0: -8.4, z1: 7.6 };
-/** Walk grid covers the office floor plus the back-street strip out to Xuka Mát xa (agents leave through the door). */
-export const VP_BOUNDS: Rect = { x0: -12.5, x1: 21.5, z0: -15.5, z1: 7.25 };
+/** Walk grid covers the office floor plus the north strip out to Xuka, the garden, and Xém Nướng (agents leave through the door). */
+export const VP_BOUNDS: Rect = { x0: -20.5, x1: 21.5, z0: -18.5, z1: 7.25 };
 export const PANTRY_X1 = -8, GAME_X0 = 8;
 /** Furniture footprints (centre + half extents, x/z). The scene builds each piece here; walkers path around them. */
 export interface Item { x: number; z: number; hx: number; hz: number }
@@ -106,16 +106,20 @@ export const POOL_SPOTS: Spot[] = [spot(9.05, -2.6, POOL_TABLE), spot(11.75, -1.
 export const CHAT_SPOTS: Vec3[] = [[-10.3, 0, 1.7], [-4.4, 0, -6.5], [10.4, 0, 1.3], [-10.3, 0, -2.5]];
 export const FIGHT_SPOTS: Vec3[] = [[10.4, 0, -5.6], [-10.3, 0, 2.9], [4.4, 0, -6.5]];
 /** Half the gap between a pair (they stand at centre ± this on x). */
-export const PAIR_GAP = { chat: 0.5, fight: 0.38 };
+export const PAIR_GAP = { chat: 0.5, fight: 0.38, romance: 0.28 };
 /** Xuka Mát xa beds (plan → world); agents lie here facing the street. */
 export const MASSAGE_SPOTS: Spot[] = MASSAGE_BEDS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: 0 }; });
+/** Xém Nướng seats (plan → world); agents sit/eat BBQ and croc hotpot. */
+export const BBQ_SPOTS: Spot[] = BBQ_SEATS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: Math.PI }; });
+/** Garden affair meet points (plan → world). */
+export const ROMANCE_CENTERS: Vec3[] = ROMANCE_SPOTS.map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
 
-export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage';
+export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage' | 'bbq' | 'romance';
 export interface IdlePlan { kind: IdleKind; key: string; to: Vec3; face: number; partner?: string; first?: boolean }
-/** Free agents pick a new activity every slot. Picks hash (id, slot), so every client and frame agrees and nobody flickers. */
-export const IDLE_SLOT_MS = 24_000;
+/** Free agents pick a new activity every slot. Longer slots = fewer chatter bursts. */
+export const IDLE_SLOT_MS = 36_000;
 /** Only agents free this long leave their desk, so a session flipping between thinking and tools doesn't send people pacing. */
-export const IDLE_AFTER_MS = 10_000;
+export const IDLE_AFTER_MS = 12_000;
 export const isFree = (a: AgentUI) => a.state === 'idle' || a.state === 'done';
 /** What each free agent does this slot: stay at the desk (no entry), coffee, billiards, Xuka Mát xa, or meet a free colleague to chat / fight.
  *  freeSince[id] = when the agent last became free (the scene tracks it); without it every free agent counts. Eligibility is fixed at the
@@ -125,20 +129,23 @@ export function idlePlans(agents: Record<string, AgentUI>, order: string[], mess
   const hosts = new Set(order.map((x) => agents[x] && visiting(agents[x], agents, messages)).filter(Boolean)); // someone is at their desk
   const ids = order.filter((id) => agents[id] && isFree(agents[id]) && !visiting(agents[id], agents, messages) && !hosts.has(id) && (!freeSince || (freeSince[id] ?? Infinity) <= cut))
     .sort((x, y) => hash(`${x}:${slot}`) - hash(`${y}:${slot}`));
-  const taken = new Set<string>(); let coffee = 0, pool = 0, massage = 0, pairs = 0;
+  const taken = new Set<string>(); let coffee = 0, pool = 0, massage = 0, bbq = 0, pairs = 0;
   for (const id of ids) {
     if (taken.has(id)) continue; taken.add(id);
     const r = hash(`${slot}:${id}`) % 100;
-    if (r < 26) continue; // stays at the desk
-    if (r < 40) { if (coffee < COFFEE_SPOTS.length) out[id] = { kind: 'coffee', key: `coffee:${slot}:${coffee}`, ...COFFEE_SPOTS[coffee++] }; continue; }
+    if (r < 30) continue; // stays at the desk (more quiet time)
+    if (r < 42) { if (coffee < COFFEE_SPOTS.length) out[id] = { kind: 'coffee', key: `coffee:${slot}:${coffee}`, ...COFFEE_SPOTS[coffee++] }; continue; }
     if (r < 52) { if (pool < POOL_SPOTS.length) out[id] = { kind: 'pool', key: `pool:${slot}:${pool}`, ...POOL_SPOTS[pool++] }; continue; }
-    if (r < 64) { if (massage < MASSAGE_SPOTS.length) out[id] = { kind: 'massage', key: `massage:${slot}:${massage}`, ...MASSAGE_SPOTS[massage++] }; continue; }
+    if (r < 62) { if (massage < MASSAGE_SPOTS.length) out[id] = { kind: 'massage', key: `massage:${slot}:${massage}`, ...MASSAGE_SPOTS[massage++] }; continue; }
+    if (r < 74) { if (bbq < BBQ_SPOTS.length) out[id] = { kind: 'bbq', key: `bbq:${slot}:${bbq}`, ...BBQ_SPOTS[bbq++] }; continue; }
     const partner = ids.find((x) => !taken.has(x)); if (!partner) continue;
     taken.add(partner);
-    const kind: IdleKind = r >= 88 ? 'fight' : 'chat', spots = kind === 'fight' ? FIGHT_SPOTS : CHAT_SPOTS;
-    const si = (pairs++ + slot) % spots.length, c = spots[si], d = PAIR_GAP[kind], key = `${kind}:${slot}:${si}:${id}:${partner}`;
-    out[id] = { kind, key, to: [c[0] - d, 0, c[2]], face: Math.PI / 2, partner, first: true };
-    out[partner] = { kind, key, to: [c[0] + d, 0, c[2]], face: -Math.PI / 2, partner: id, first: false };
+    const kind: IdleKind = r >= 93 ? 'romance' : r >= 85 ? 'fight' : 'chat';
+    const spots = kind === 'fight' ? FIGHT_SPOTS : kind === 'romance' ? ROMANCE_CENTERS : CHAT_SPOTS;
+    const gap = kind === 'fight' ? PAIR_GAP.fight : kind === 'romance' ? PAIR_GAP.romance : PAIR_GAP.chat;
+    const si = (pairs++ + slot) % spots.length, c = spots[si], key = `${kind}:${slot}:${si}:${id}:${partner}`;
+    out[id] = { kind, key, to: [c[0] - gap, 0, c[2]], face: Math.PI / 2, partner, first: true };
+    out[partner] = { kind, key, to: [c[0] + gap, 0, c[2]], face: -Math.PI / 2, partner: id, first: false };
   }
   return out;
 }
@@ -148,20 +155,22 @@ export const FIGHT_PAIRS = PAIRS.workArgue;
 const COFFEE_LINES = LINES.agentCoffee, POOL_LINES = LINES.agentPool;
 /** Line shown in the bubble right now, or '' (silent). Pairs take turns; solo activities only speak now and then. */
 export function idleLine(id: string, p: IdlePlan, now: number): string {
-  const beat = p.kind === 'fight' ? 1800 : 3200, turn = Math.floor(now / beat), h = hash(`${p.key}:${turn}`);
-  if (p.kind === 'chat' || p.kind === 'fight') {
+  const beat = p.kind === 'fight' ? 3500 : p.kind === 'romance' ? 6000 : 5500, turn = Math.floor(now / beat), h = hash(`${p.key}:${turn}`);
+  if (p.kind === 'chat' || p.kind === 'fight' || p.kind === 'romance') {
     if ((turn % 2 === 0) !== !!p.first) return '';
     if (p.kind === 'fight') { const pair = FIGHT_PAIRS[hash(`${p.key}:${Math.floor(turn / 2)}`) % FIGHT_PAIRS.length]; return pair[turn % 2]; }
+    if (p.kind === 'romance') return LINES.romance[h % LINES.romance.length];
     return CHAT_LINES[h % CHAT_LINES.length];
   }
-  if (h % 3 !== 0) return '';
-  const lines = p.kind === 'coffee' ? COFFEE_LINES : p.kind === 'massage' ? LINES.massageTalk : POOL_LINES; return lines[hash(`${id}:${turn}`) % lines.length];
+  if (h % 5 !== 0) return ''; // speak less often while sipping / playing / eating
+  const lines = p.kind === 'coffee' ? COFFEE_LINES : p.kind === 'massage' ? LINES.massageTalk : p.kind === 'bbq' ? LINES.bbqTalk : POOL_LINES;
+  return lines[hash(`${id}:${turn}`) % lines.length];
 }
 
 /** Vanphong only: a state quip fills an otherwise empty / generic bubble (thinking or working with no text, done / error with no detail). */
 export function stateQuip(a: AgentUI, now: number): string {
   const lines = a.state === 'thinking' ? LINES.thinking : a.state === 'working' ? LINES.working : a.state === 'done' ? LINES.done : a.state === 'error' ? LINES.error : undefined;
-  return lines ? lines[hash(`${a.id}:${Math.floor(now / 6000)}`) % lines.length] : '';
+  return lines ? lines[hash(`${a.id}:${Math.floor(now / 10000)}`) % lines.length] : '';
 }
 function withQuip(a: AgentUI, b: BubbleView, now: number): BubbleView {
   const generic = (b.show && !b.text) || (a.state === 'done' && !a.result) || (a.state === 'error' && !a.error);

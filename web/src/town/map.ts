@@ -3,8 +3,8 @@
 export interface Pt { x: number; y: number }
 export interface Box { x: number; y: number; w: number; h: number }
 export const PX = 37.5;
-/** Town plan bounds: y0 < 0 makes room for Xuka Mát xa north of the back street. */
-export const TOWN = { y0: -250, w: 1600, h: 940 };
+/** Town plan bounds: y0 < 0 makes room for Xuka, the flower garden, and Xém Nướng north of the back street. */
+export const TOWN = { y0: -280, w: 1600, h: 970 };
 export const BUILDING: Box = { x: 290, y: 120, w: 960, h: 600 }; // = BIEN x -12.8..12.8, z -8.4..7.6
 export const ROADS: Box[] = [
   { x: 0, y: 30, w: TOWN.w, h: 70 }, // back street
@@ -16,6 +16,13 @@ export const CAFE: Box = { x: 1365, y: 140, w: 215, h: 250 };
 /** Xuka Mát xa: across the back street from Crossian Cafe (same x span), door facing the street. */
 export const MASSAGE: Box = { x: 1365, y: -215, w: 215, h: 215 };
 export const MASSAGE_BEDS: Pt[] = [{ x: 1405, y: -95 }, { x: 1472, y: -95 }, { x: 1540, y: -95 }];
+/** Xém Nướng: BBQ + crocodile-meat hotpot, northwest opposite the crocodile pond. */
+export const BBQ: Box = { x: 40, y: -240, w: 260, h: 230 };
+export const BBQ_SEATS: Pt[] = [{ x: 90, y: -110 }, { x: 155, y: -95 }, { x: 220, y: -110 }, { x: 120, y: -165 }, { x: 200, y: -165 }];
+/** Flower garden between Xuka (east) and Xém Nướng (west), north of the back street. */
+export const GARDEN: Box = { x: 360, y: -220, w: 960, h: 180 };
+/** Couple meet points in the garden (plan px); partners stand either side. */
+export const ROMANCE_SPOTS: Pt[] = [{ x: 620, y: -130 }, { x: 850, y: -145 }, { x: 1080, y: -125 }];
 /** Main road lanes (front street): eastbound top lane, westbound bottom lane. */
 export const LANES = [{ y: 778, dir: 1 }, { y: 812, dir: -1 }] as const;
 export const TRADA: Box = { x: 1370, y: 470, w: 190, h: 120 };

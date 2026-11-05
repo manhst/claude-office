@@ -146,3 +146,15 @@
 /* ours: names are not clickable here (the reference used them for voice call-by-name) */
 .vp-ref .ten-3d { cursor: default; }
 .stage-vp > .vp3d-stage { position: absolute; inset: 0; }
+
+/* ours: garden-affair heart pops (SVG particles, not emoji chrome) */
+.vp-ref .vp-heart {
+  pointer-events: none; line-height: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18));
+  animation: vp-heart-pop 1.45s ease-out forwards; animation-delay: var(--delay, 0ms);
+  transform: translate(calc(-50% + var(--dx, 0px)), 0) scale(0.4); opacity: 0;
+}
+@keyframes vp-heart-pop {
+  0% { transform: translate(calc(-50% + var(--dx, 0px)), 0) scale(0.35); opacity: 0; }
+  18% { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), -6px) scale(1); }
+  100% { transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.25); opacity: 0; }
+}

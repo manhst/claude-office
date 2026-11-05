@@ -51,6 +51,32 @@ export const LINES = {
     'Tay chị ấy mạnh hơn cả máy xúc ngoài đường', 'Đề xuất công ty cho mát xa vào phúc lợi', 'Mát xa đầu xong nhớ ra password', 'Đừng gọi tôi, tôi đang thư giãn', 'Ra về mà người như mới cài lại Windows',
     'Chị bảo lưng tôi như người 60 tuổi', 'Tuần sau tôi đặt lịch tiếp',
   ],
+  /** heading to Xém Nướng */
+  bbqGo: [
+    'Đi Xém Nướng ăn BBQ nào!', 'Thèm lẩu thịt cá sấu ghê', 'Ai đi Xém Nướng không?', 'Quán đối diện hồ cá sấu đó', 'BBQ chiều nay!', 'Đi ăn thịt nướng, bug để mai',
+    'Xém Nướng có combo cá sấu + ba chỉ', 'Ngửi mùi BBQ từ đây rồi', 'Đói quá, đi Xém Nướng', 'Sếp ơi em đi ăn lẩu cá sấu', 'Ai bao BBQ hôm nay?', 'Đi Xém Nướng team building',
+    'Lẩu cá sấu nghe nguy hiểm mà ngon', 'Đặt bàn Xém Nướng 4 người', 'BBQ rồi mới code được', 'Đi ăn trước khi cá sấu ăn mình', 'Xém Nướng gần hồ luôn', 'Thèm xiên nướng',
+    'Có ai ăn thử lẩu cá sấu chưa?', 'Đi Xém Nướng, quên deadline', 'Quán mới mở, phải ủng hộ', 'BBQ sốt cay cay', 'Đi lấy suất lẩu cho cả team', 'Ngồi nướng ngắm cá sấu bơi',
+    'Xém Nướng tên hay ghê', 'Đi ăn no rồi mới standup', 'Ai thích nướng than hoa?', 'Lẩu cá sấu: ăn kẻ thù của mình', 'Đi Xém Nướng lúc chiều mát', 'Thèm đùi ếch... à đùi cá sấu',
+    'Đặt thêm rau muống nhúng lẩu',
+  ],
+  /** eating / chatting at Xém Nướng about BBQ and croc hotpot */
+  bbqTalk: [
+    'Thịt nướng thơm quá!', 'Lẩu cá sấu này... có vị quen quen', 'Cá sấu nhìn mình ăn đồng loại kìa', 'Thêm chút ớt hiểm!', 'Ba chỉ cháy cạnh đúng chuẩn', 'Nước lẩu ngọt thanh',
+    'Xin thêm đĩa rau', 'Xiên này ngon hơn sprint review', 'Cá sấu trong lẩu không phải từ hồ chứ?!', 'Chủ quán bảo là nuôi riêng', 'BBQ + trà đá = chân ái', 'No rồi nhưng ăn thêm xiên',
+    'Lẩu này cay như on-call đêm', 'Chấm nước tương tỏi ớt đỉnh', 'Ai lấy hết miếng sụn rồi?', 'Nướng thêm xiên mực đi', 'Cá sấu hồ đang ghen tị', 'Ăn xong có cần viết post-mortem không?',
+    'Combo văn phòng: nướng + deadline', 'Thịt mềm, bug cứng', 'Ai bao lẩu lần sau?', 'Xém Nướng 5 sao trong tim tôi', 'Đừng vứt xương xuống hồ nhé', 'Lẩu cá sấu giải stress cực đã',
+    'Nướng than hoa thơm phức', 'Tôi ăn 3 suất rồi', 'Cá sấu này không biết code', 'Thêm nước lẩu!', 'Ngồi đây view hồ đẹp thật', 'Ấn độ ẩm thực: BBQ và cá sấu', 'No căng, về ngủ thôi',
+  ],
+  /** secret garden affair — comedic office soap, PG */
+  romance: [
+    'Psst, ra vườn hoa một chút...', 'Đừng để sếp thấy!', 'Tim tôi đập như P99', 'Hôn một cái rồi về code', 'Vườn hoa này lãng mạn ghê', 'Ai nhìn thấy thì chết với tôi',
+    'Anh/em... ý là đồng nghiệp ơi', 'Trái tim tôi merge conflict rồi', 'Hôn nhẹ thôi, có camera không?', 'Vườn này là nơi hẹn hò bí mật', 'Đừng viết cái này vào retro', 'Tôi thích cậu từ cái PR đầu',
+    'Hôn cái rồi đi standup', 'Tim nổ tung như xe cháy!', 'Lén lút như hotfix nửa đêm', 'Đừng nói với team nhé', 'Hoa đẹp nhưng cậu đẹp hơn', 'Ôi, tim tôi deploy thẳng prod',
+    'Hôn nhau rồi ai review PR?', 'Vườn hoa + deadline = drama', 'Tôi đỏ mặt như alert', 'Nắm tay thôi, hôn thì... thôi hôn', 'Cứ như phim Hàn bản văn phòng', 'Ai tới thì giả vờ ngắm hoa',
+    'Tim đập nhanh hơn CI', 'Hôn xong nhớ wipe git history', 'Đây là story 1 điểm hay 13?', 'Lãng mạn như comment code hay', 'Đừng để Chos An sủa lộ', 'Một nụ hôn, một commit sạch',
+    'Về nhanh kẻo Meow kể chuyện',
+  ],
   /** running outside / jogging around */
   run: [
     'Chạy bộ cho khỏe!', 'Ra ngoài hít thở tí', 'Tránh ra, tôi đang vội!', 'Chạy deadline đây', 'Đi lấy hàng shipper', 'Chạy trốn meeting', 'Ra cổng lấy cơm hộp', 'Chạy cho kịp xe buýt',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentUI, MessageUI } from '../src/reducer';
 import { bubbleFor, idleLine, idlePlans, lookFor, vpBubble, newFlights, roomWalls, subtitleFor, vpChair, vpDesk, vpGoal, vpHome, vpObstacles, vpPlan, vpStatus, vpVisit, ROOM,
-  BIEN, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, FURNITURE, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, VP_BOUNDS } from '../src/ref-vanphong/adapter';
+  BBQ_SPOTS, BIEN, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, FURNITURE, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, ROMANCE_CENTERS, VP_BOUNDS } from '../src/ref-vanphong/adapter';
 import { chuanHoa, MAU_SAN } from '../src/ref-vanphong/characters';
 import { blocked, clearLine } from '../src/walk';
 import { BUBBLE_MS, DOOR, allDesks } from '../src/layout';
@@ -72,8 +72,8 @@ describe('ref-vanphong adapter', () => {
   it('pantry and game room: furniture on the floor, every idle spot walkable and reachable without crossing glass or furniture', () => {
     for (const f of Object.values(FURNITURE)) { expect(f.x - f.hx).toBeGreaterThanOrEqual(BIEN.x0); expect(f.x + f.hx).toBeLessThanOrEqual(BIEN.x1); expect(f.z - f.hz).toBeGreaterThanOrEqual(BIEN.z0); }
     const obs = vpObstacles(), walls = roomWalls();
-    const pts = [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to),
-      ...([[CHAT_SPOTS, PAIR_GAP.chat], [FIGHT_SPOTS, PAIR_GAP.fight]] as const).flatMap(([cs, d]) => cs.flatMap((c) => [[c[0] - d, 0, c[2]], [c[0] + d, 0, c[2]]] as [number, number, number][]))];
+    const pts = [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to), ...BBQ_SPOTS.map((s) => s.to),
+      ...([[CHAT_SPOTS, PAIR_GAP.chat], [FIGHT_SPOTS, PAIR_GAP.fight], [ROMANCE_CENTERS, PAIR_GAP.romance]] as const).flatMap(([cs, d]) => cs.flatMap((c) => [[c[0] - d, 0, c[2]], [c[0] + d, 0, c[2]]] as [number, number, number][]))];
     for (const p of pts) {
       expect(blocked(p[0], p[2], obs), String(p)).toBe(false);
       expect(p[0] > VP_BOUNDS.x0 && p[0] < VP_BOUNDS.x1 && p[2] > VP_BOUNDS.z0 && p[2] < VP_BOUNDS.z1, String(p)).toBe(true);
@@ -88,7 +88,7 @@ describe('ref-vanphong adapter', () => {
     const order = allDesks().map((_, i) => `a${i}`);
     const agents = Object.fromEntries(order.map((id, i) => [id, ag(id, { desk: allDesks()[i] })]));
     const kinds = new Set<string>();
-    for (let slot = 0; slot < 40; slot++) {
+    for (let slot = 0; slot < 80; slot++) {
       const now = slot * IDLE_SLOT_MS + 1000, plans = idlePlans(agents, order, [], now);
       expect(idlePlans(agents, order, [], now + 5000)).toEqual(plans);
       for (const [id, p] of Object.entries(plans)) {
@@ -97,7 +97,7 @@ describe('ref-vanphong adapter', () => {
       }
       const spots = Object.values(plans).map((p) => p.to.join()); expect(new Set(spots).size).toBe(spots.length); // nobody shares a spot
     }
-    expect([...kinds].sort()).toEqual(['chat', 'coffee', 'fight', 'massage', 'pool']);
+    expect([...kinds].sort()).toEqual(['bbq', 'chat', 'coffee', 'fight', 'massage', 'pool', 'romance']);
     const busy = { ...agents, a0: ag('a0', { state: 'working' }) };
     for (let slot = 0; slot < 20; slot++) expect(idlePlans(busy, order, [], slot * IDLE_SLOT_MS)['a0']).toBeUndefined();
     const all = (t: number) => Object.fromEntries(order.map((id) => [id, t]));
