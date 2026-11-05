@@ -1,6 +1,6 @@
 // Adapter (our code): maps OUR reducer state onto the display states used by the Vanphong visuals. Pure, unit-tested.
 import { LINES, PAIRS } from '../town/dialogue';
-import { ATM_SPOTS, BBQ_SEATS, GATE_SPOTS, GYM_SPOTS, MASSAGE_BEDS, POD_SPOTS, PRINT_SPOTS, ROMANCE_SPOTS, SMOKE_SPOTS, toWorld } from '../town/map';
+import { ATM_SPOTS, BBQ_SEATS, BIA_SEATS, GATE_SPOTS, GYM_SPOTS, MASSAGE_BEDS, POD_SPOTS, PRINT_SPOTS, ROMANCE_SPOTS, SMOKE_SPOTS, toWorld } from '../town/map';
 import type { AgentUI, MessageUI, OfficeState } from '../reducer';
 import { BUBBLE_MS, DESK_COLS, add, allDesks, DOOR, type Vec3 } from '../layout';
 import { BODY_R, BOUNDS, DESK_HALF, findPath, visiting, type Goal, type Rect } from '../walk';
@@ -81,13 +81,16 @@ export const FURNITURE = {
 } satisfies Record<string, Item>;
 export const COFFEE_MACHINE: Vec3 = [-8.7, 0, -8.1];
 const furnitureRects = (): Rect[] => Object.values(FURNITURE).map((f) => ({ x0: f.x - f.hx - BODY_R, x1: f.x + f.hx + BODY_R, z0: f.z - f.hz - BODY_R, z1: f.z + f.hz + BODY_R }));
-/** Outer back + left walls of the office floor (door gap at DOOR) so walkers leave through the entrance, not through the wall. */
+/** Outer walls of the office floor (door gap at DOOR on the back; glass entrance gap on the road-facing front). */
 export function outerWalls(): Rect[] {
-  const t = 0.12 + BODY_R, { x0, x1, z0, z1 } = BIEN, door = 1.8, dx = DOOR[0];
+  const t = 0.12 + BODY_R, { x0, x1, z0, z1 } = BIEN, door = 1.8, dx = DOOR[0], frontDoor = 2.4, cx = (x0 + x1) / 2;
   return [
     { x0: x0 - t, x1: dx - door / 2, z0: z0 - t, z1: z0 + t },
     { x0: dx + door / 2, x1: x1 + t, z0: z0 - t, z1: z0 + t },
     { x0: x0 - t, x1: x0 + t, z0: z0 - t, z1: z1 + t },
+    { x0: x1 - t, x1: x1 + t, z0: z0 - t, z1: z1 + t },
+    { x0: x0 - t, x1: cx - frontDoor / 2, z0: z1 - t, z1: z1 + t },
+    { x0: cx + frontDoor / 2, x1: x1 + t, z0: z1 - t, z1: z1 + t },
   ];
 }
 export const vpObstacles = (): Rect[] => [...vpDeskRects(), ...roomWalls(), ...furnitureRects(), ...outerWalls()];
@@ -111,6 +114,7 @@ export const PAIR_GAP = { chat: 0.5, fight: 0.38, romance: 0.28 };
 export const MASSAGE_SPOTS: Spot[] = MASSAGE_BEDS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: 0 }; });
 /** Xém Nướng seats (plan → world); agents sit/eat BBQ and croc hotpot. */
 export const BBQ_SPOTS: Spot[] = BBQ_SEATS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: Math.PI }; });
+export const BIA_AGENT_SPOTS: Spot[] = BIA_SEATS.map((p) => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: Math.PI }; });
 /** Garden affair meet points (plan → world). */
 export const ROMANCE_CENTERS: Vec3[] = ROMANCE_SPOTS.map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
 const amenitySpot = (p: { x: number; y: number }): Spot => { const [x, z] = toWorld(p); return { to: [x, 0, z] as Vec3, face: Math.PI }; };
@@ -123,7 +127,7 @@ export const PRINT_AGENT_SPOTS: Spot[] = PRINT_SPOTS.map(amenitySpot);
 /** Outdoor amenity meet centers for gossip / drama pairs. */
 export const DRAMA_CENTERS: Vec3[] = [...SMOKE_SPOTS, ...POD_SPOTS].map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
 
-export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print';
+export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'bia';
 export interface IdlePlan { kind: IdleKind; key: string; to: Vec3; face: number; partner?: string; first?: boolean }
 /** Free agents pick a new activity every slot. Longer slots = fewer chatter bursts. */
 export const IDLE_SLOT_MS = 36_000;
@@ -138,16 +142,17 @@ export function idlePlans(agents: Record<string, AgentUI>, order: string[], mess
   const hosts = new Set(order.map((x) => agents[x] && visiting(agents[x], agents, messages)).filter(Boolean)); // someone is at their desk
   const ids = order.filter((id) => agents[id] && isFree(agents[id]) && !visiting(agents[id], agents, messages) && !hosts.has(id) && (!freeSince || (freeSince[id] ?? Infinity) <= cut))
     .sort((x, y) => hash(`${x}:${slot}`) - hash(`${y}:${slot}`));
-  const taken = new Set<string>(); let coffee = 0, pool = 0, massage = 0, bbq = 0, smoke = 0, gym = 0, atm = 0, gate = 0, pod = 0, print = 0, pairs = 0;
+  const taken = new Set<string>(); let coffee = 0, pool = 0, massage = 0, bbq = 0, bia = 0, smoke = 0, gym = 0, atm = 0, gate = 0, pod = 0, print = 0, pairs = 0;
   for (const id of ids) {
     if (taken.has(id)) continue; taken.add(id);
     const r = hash(`${slot}:${id}`) % 100;
-    if (r < 24) continue; // stays at the desk (more quiet time)
-    if (r < 34) { if (coffee < COFFEE_SPOTS.length) out[id] = { kind: 'coffee', key: `coffee:${slot}:${coffee}`, ...COFFEE_SPOTS[coffee++] }; continue; }
-    if (r < 42) { if (pool < POOL_SPOTS.length) out[id] = { kind: 'pool', key: `pool:${slot}:${pool}`, ...POOL_SPOTS[pool++] }; continue; }
-    if (r < 50) { if (massage < MASSAGE_SPOTS.length) out[id] = { kind: 'massage', key: `massage:${slot}:${massage}`, ...MASSAGE_SPOTS[massage++] }; continue; }
-    if (r < 58) { if (bbq < BBQ_SPOTS.length) out[id] = { kind: 'bbq', key: `bbq:${slot}:${bbq}`, ...BBQ_SPOTS[bbq++] }; continue; }
-    if (r < 63) { if (smoke < SMOKE_AGENT_SPOTS.length) out[id] = { kind: 'smoke', key: `smoke:${slot}:${smoke}`, ...SMOKE_AGENT_SPOTS[smoke++] }; continue; }
+    if (r < 22) continue; // stays at the desk (more quiet time)
+    if (r < 32) { if (coffee < COFFEE_SPOTS.length) out[id] = { kind: 'coffee', key: `coffee:${slot}:${coffee}`, ...COFFEE_SPOTS[coffee++] }; continue; }
+    if (r < 40) { if (pool < POOL_SPOTS.length) out[id] = { kind: 'pool', key: `pool:${slot}:${pool}`, ...POOL_SPOTS[pool++] }; continue; }
+    if (r < 48) { if (massage < MASSAGE_SPOTS.length) out[id] = { kind: 'massage', key: `massage:${slot}:${massage}`, ...MASSAGE_SPOTS[massage++] }; continue; }
+    if (r < 55) { if (bbq < BBQ_SPOTS.length) out[id] = { kind: 'bbq', key: `bbq:${slot}:${bbq}`, ...BBQ_SPOTS[bbq++] }; continue; }
+    if (r < 61) { if (bia < BIA_AGENT_SPOTS.length) out[id] = { kind: 'bia', key: `bia:${slot}:${bia}`, ...BIA_AGENT_SPOTS[bia++] }; continue; }
+    if (r < 65) { if (smoke < SMOKE_AGENT_SPOTS.length) out[id] = { kind: 'smoke', key: `smoke:${slot}:${smoke}`, ...SMOKE_AGENT_SPOTS[smoke++] }; continue; }
     if (r < 68) { if (gym < GYM_AGENT_SPOTS.length) out[id] = { kind: 'gym', key: `gym:${slot}:${gym}`, ...GYM_AGENT_SPOTS[gym++] }; continue; }
     if (r < 72) { if (atm < ATM_AGENT_SPOTS.length) out[id] = { kind: 'atm', key: `atm:${slot}:${atm}`, ...ATM_AGENT_SPOTS[atm++] }; continue; }
     if (r < 75) { if (gate < GATE_AGENT_SPOTS.length) out[id] = { kind: 'gate', key: `gate:${slot}:${gate}`, ...GATE_AGENT_SPOTS[gate++] }; continue; }
@@ -186,13 +191,14 @@ export function idleLine(id: string, p: IdlePlan, now: number): string {
   }
   if (h % 5 !== 0) return ''; // speak less often while sipping / playing / eating
   const solo: Partial<Record<IdleKind, readonly string[]>> = {
-    coffee: COFFEE_LINES, pool: POOL_LINES, massage: LINES.massageTalk, bbq: LINES.bbqTalk,
+    coffee: COFFEE_LINES, pool: POOL_LINES, massage: LINES.massageTalk, bbq: LINES.bbqTalk, bia: LINES.biaTalk,
     smoke: LINES.smokeTalk, gym: LINES.gymTalk, atm: LINES.atmTalk, gate: LINES.gateTalk, pod: LINES.podTalk, print: LINES.printTalk,
   };
   const lines = solo[p.kind] ?? POOL_LINES;
   // spice: occasionally gossip / drama at smoke & pod
   if ((p.kind === 'smoke' || p.kind === 'pod') && h % 4 === 0) return LINES.gossipBoss[hash(`${id}:${turn}`) % LINES.gossipBoss.length];
   if (p.kind === 'gym' && h % 6 === 0) { const pair = PAIRS.gymArgue[hash(`${id}:${turn}`) % PAIRS.gymArgue.length]; return pair[0]; }
+  if (p.kind === 'bia' && h % 5 === 0) { const pair = PAIRS.whoPays[hash(`${id}:${turn}`) % PAIRS.whoPays.length]; return pair[turn % 2]; }
   return lines[hash(`${id}:${turn}`) % lines.length];
 }
 

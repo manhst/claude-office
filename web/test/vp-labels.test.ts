@@ -20,6 +20,7 @@ describe('vpLabels', () => {
     expect(DEFAULT_LABELS.bbq).toBe(true);
     expect(DEFAULT_LABELS.trada).toBe(true);
     expect(DEFAULT_LABELS.pond).toBe(true);
+    expect(DEFAULT_LABELS.bia).toBe(true);
     for (const k of ['garden', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'pantry', 'game', 'workroom'] as const) {
       expect(DEFAULT_LABELS[k], k).toBe(false);
     }

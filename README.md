@@ -84,6 +84,9 @@ Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kio
 
 **Flower garden** between Xuka and Xém Nướng: rarely two characters sneak there for a secret PG office-soap affair (stand close, kiss, flat SVG heart pops).
 
+
+**Bia Hải Xồm + town events.** Beer stall opposite cổng/trạm gửi xe across the front street (trees cleared). Label default ON in Settings. Also: shipper/cơm hộp drama at the gate, occasional rain (wet pond path, quieter garden), sếp walkthrough (temporary, not Architect), and a payday beat (ATM queue / BBQ treat / Layoff more often). Office shell now has four walls + road-facing glass entrance and light interior dressing.
+
 **Outdoor amenities** on empty map edges (voxel, same style): smoking/cooler corner (west of pond), outdoor gym / table tennis (south yard), ATM + snack machine (east, by trà đá), parking/security gate (SW), glass outdoor meeting pod (south yard east of gym), photocopy/printer kiosk (front sidewalk). NPCs and free office agents visit occasionally. Office-drama dialogue packs (≥30 unique VN lines each) cover gossiping about the boss, trolling PR reviews, ghosting Slack, gossiping about colleagues (and getting caught), layoff/PIP rumors, fake sick leave (caught at Xém Nướng / Xuka), and remote vs onsite desk wars — plus amenity go/talk lines and two-sided `PAIRS`. Debug: `localStorage vp-debug=1` then `__vpTown.drama('smoke'|'gym'|'atm'|'print'|'pod'|'gate')`. Screenshots: `docs/screens/town-{smoke-corner,gym-yard,atm-snack,security-gate,meeting-pod,print-kiosk,drama-smoke}.png` (`cd web && npm run build && node scripts/screens-amenities.mjs`).
 Speech bubbles are paced slower (longer display + gaps, less idle chatter) so lines are readable.
 

@@ -97,7 +97,7 @@ describe('ref-vanphong adapter', () => {
       }
       const spots = Object.values(plans).map((p) => p.to.join()); expect(new Set(spots).size).toBe(spots.length); // nobody shares a spot
     }
-    expect([...kinds].sort()).toEqual(['atm', 'bbq', 'chat', 'coffee', 'fight', 'gate', 'gym', 'massage', 'pod', 'pool', 'print', 'romance', 'smoke']);
+    expect([...kinds].sort()).toEqual(['atm', 'bbq', 'bia', 'chat', 'coffee', 'fight', 'gate', 'gym', 'massage', 'pod', 'pool', 'print', 'romance', 'smoke']);
     const busy = { ...agents, a0: ag('a0', { state: 'working' }) };
     for (let slot = 0; slot < 20; slot++) expect(idlePlans(busy, order, [], slot * IDLE_SLOT_MS)['a0']).toBeUndefined();
     const all = (t: number) => Object.fromEntries(order.map((id) => [id, t]));

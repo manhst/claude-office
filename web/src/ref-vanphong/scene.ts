@@ -180,18 +180,43 @@ export class VanphongScene {
     const san = new THREE.Mesh(this.own(new THREE.PlaneGeometry(r, s)), vatLieuSan);
     san.rotation.x = -Math.PI / 2; san.position.set(cx, 0.002, cz); san.receiveShadow = !this.soft; nhom.add(san);
     const T = '#f4ede3', CAO = 2.7;
-    khoi(nhom, r + 0.4, CAO, 0.2, T, cx, CAO / 2, z0 - 0.1);
-    khoi(nhom, 0.2, CAO, s + 0.2, T, x0 - 0.1, CAO / 2, cz + 0.1);
+    // Four walls: keep functional door on the back (z0); glass entrance on the road-facing front (z1).
+    khoi(nhom, r + 0.4, CAO, 0.2, T, cx, CAO / 2, z0 - 0.1); // back
+    khoi(nhom, 0.2, CAO, s + 0.2, T, x0 - 0.1, CAO / 2, cz + 0.1); // left
+    khoi(nhom, 0.2, CAO, s + 0.2, T, x1 + 0.1, CAO / 2, cz + 0.1); // right (was missing)
+    // Front wall toward the road with a glass entrance gap (visual; walkers still use DOOR at back).
+    const frontDoor = 2.4, fw = (r - frontDoor) / 2;
+    khoi(nhom, fw + 0.2, CAO, 0.2, T, x0 + fw / 2, CAO / 2, z1 + 0.1);
+    khoi(nhom, fw + 0.2, CAO, 0.2, T, x1 - fw / 2, CAO / 2, z1 + 0.1);
+    const glass = vatLieu('#b3e5fc', { transparent: true, opacity: 0.4 });
+    khoi(nhom, frontDoor, CAO - 0.35, 0.06, glass, cx, (CAO - 0.35) / 2 + 0.1, z1 + 0.08, false);
+    khoi(nhom, frontDoor + 0.16, 0.12, 0.12, '#e2d5c4', cx, CAO - 0.1, z1 + 0.1, false); // lintel
+    for (const s of [-1, 1]) khoi(nhom, 0.12, CAO, 0.12, '#e2d5c4', cx + s * (frontDoor / 2), CAO / 2, z1 + 0.1); // jambs
+    // Caps / skirting
     khoi(nhom, r + 0.44, 0.06, 0.26, '#e2d5c4', cx, CAO + 0.03, z0 - 0.1, false);
+    khoi(nhom, r + 0.44, 0.06, 0.26, '#e2d5c4', cx, CAO + 0.03, z1 + 0.1, false);
     khoi(nhom, 0.26, 0.06, s + 0.24, '#e2d5c4', x0 - 0.1, CAO + 0.03, cz + 0.1, false);
+    khoi(nhom, 0.26, 0.06, s + 0.24, '#e2d5c4', x1 + 0.1, CAO + 0.03, cz + 0.1, false);
     khoi(nhom, r, 0.12, 0.03, '#d9cab6', cx, 0.06, z0 + 0.015, false);
+    khoi(nhom, r, 0.12, 0.03, '#d9cab6', cx, 0.06, z1 - 0.015, false);
     khoi(nhom, 0.03, 0.12, s, '#d9cab6', x0 + 0.015, 0.06, cz, false);
-    khoi(nhom, 1.8, 0.02, 0.7, '#8a6f5a', DOOR[0], 0.01, z0 + 0.45, false); // doormat inside the entrance
-    for (const x of [-10.6, -4.6, 4.6, 10.6]) this.cuaSo(x, z0 + 0.005, 0); // ours: wider floor, windows clear of the pantry/game furniture
+    khoi(nhom, 0.03, 0.12, s, '#d9cab6', x1 - 0.015, 0.06, cz, false);
+    khoi(nhom, 1.8, 0.02, 0.7, '#8a6f5a', DOOR[0], 0.01, z0 + 0.45, false); // doormat at character door
+    khoi(nhom, 2.2, 0.02, 0.8, '#8a6f5a', cx, 0.01, z1 - 0.5, false); // mat at glass entrance
+    for (const x of [-10.6, -4.6, 4.6, 10.6]) this.cuaSo(x, z0 + 0.005, 0);
     this.cua(DOOR[0], z0);
     for (let i = 0; i < 4; i++) this.cuaSo(x0 + 0.005, z0 + (i + 0.5) * s / 4, Math.PI / 2);
+    for (let i = 0; i < 4; i++) this.cuaSo(x1 - 0.005, z0 + (i + 0.5) * s / 4, -Math.PI / 2); // right-wall windows
+    // Light interior dressing: hanging lights, a board, extra plants (don't move desks / IT Ops).
+    for (const [lx, lz] of [[-6, 0], [0, 2], [6, -1], [-3, -3], [4, 3]]) {
+      khoi(nhom, 0.08, 0.4, 0.08, '#5d5f6b', lx, CAO - 0.35, lz, false);
+      khoi(nhom, 0.55, 0.08, 0.55, '#fff4d6', lx, CAO - 0.55, lz, false);
+    }
+    khoi(nhom, 1.6, 0.9, 0.04, '#eceff1', x0 + 1.2, 1.6, z0 + 0.15, false); // notice board on back wall
+    khoi(nhom, 1.4, 0.7, 0.02, '#bbdefb', x0 + 1.2, 1.6, z0 + 0.18, false);
     this.cayCanh(nhom, DOOR[0] - 1.4, z0 + 0.45, 1.1); this.cayCanh(nhom, DOOR[0] + 1.4, z0 + 0.45, 1.1);
     this.cayCanh(nhom, x0 + 0.6, z1 - 0.6); this.cayCanh(nhom, x1 - 0.6, z1 - 0.6);
+    this.cayCanh(nhom, x1 - 0.7, z0 + 1.2, 0.9); this.cayCanh(nhom, cx + 1.5, z1 - 0.7, 0.85);
     const ctx = { nhom, soft: this.soft, own: <T extends { dispose(): void }>(m: T) => this.own(m), lights: this.denPhong, shades: this.chaoDen,
       plant: (cha: THREE.Object3D, x: number, z: number, co?: number) => this.cayCanh(cha, x, z, co) };
     buildPantry(ctx); buildGameRoom(ctx);
@@ -320,6 +345,23 @@ export class VanphongScene {
     this.town.setItops(s.itops);
     for (const id of s.order) { const a = s.agents[id]; if (a && isFree(a)) this.freeSince[id] ??= now; else delete this.freeSince[id]; }
     this.idle = idlePlans(s.agents, s.order, s.messages, now, this.freeSince);
+    // Sếp đột nhập: cancel outdoor idle, sit up, whisper.
+    if (this.town?.bossActive) {
+      this.idle = {};
+      for (const id of s.order) {
+        const n = this.nguoi.get(id); if (!n) continue;
+        n.idleKind = undefined;
+        if (!n.el.classList.contains('sep-toi')) {
+          n.el.classList.add('sep-toi');
+          const line = ['Sếp tới kìa!', 'Ngồi ngay ngắn!', 'Cất điện thoại!', 'Giả vờ code!'][Math.abs(hashBoss(id + now)) % 4];
+          if (n.walker.phase === 'seated' || n.walker.phase === 'waiting') {
+            n.bb = `boss|${line}`; n.el.classList.add('co-bong'); n.bbEl.textContent = line;
+          }
+        }
+      }
+    } else {
+      for (const n of this.nguoi.values()) n.el.classList.remove('sep-toi');
+    }
     for (const id of s.order) {
       const a = s.agents[id]; if (!a) continue;
       const n = this.nguoi.get(id) ?? this.themNguoi(a);
@@ -403,7 +445,7 @@ export class VanphongScene {
       tP = -1.9 + 0.35 * Math.max(0, Math.sin(w * 0.9)); tT = -0.2; dau = -0.08 * Math.max(0, Math.sin(w * 0.9)); noi = n.noiIdle;
     } else if (n.idleKind === 'massage') { // ours: lying on a Xuka bed
       tT = tP = -0.2; than = 0; dau = 0.1; noi = n.noiIdle;
-    } else if (n.idleKind === 'bbq') { // ours: eating at Xém Nướng
+    } else if (n.idleKind === 'bbq' || n.idleKind === 'bia') { // ours: eating BBQ or nhậu at Hải Xồm
       tP = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); tT = -0.3; dau = -0.05; noi = n.noiIdle;
     } else if (n.idleKind === 'romance') { // ours: secret garden kiss lean
       tP = -0.95; tT = -0.95; than = 0.18; dau = -0.15; noi = n.noiIdle;
@@ -591,3 +633,5 @@ export class VanphongScene {
   }
 }
 
+
+function hashBoss(s: string) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }

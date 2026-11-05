@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { ItOpsStatus } from '../types';
-import { ATM, BBQ, BBQ_SEATS, CAFE, GATE, GARDEN, GYM, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POD, POND, PRINT, PX, ROADS, ROMANCE_SPOTS, SMOKE, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
+import { ATM, BBQ, BBQ_SEATS, BIA, BIA_SEATS, CAFE, GATE, GARDEN, GYM, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POD, POND, PRINT, PX, ROADS, ROMANCE_SPOTS, SMOKE, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
 import { forceDrama, forceLayoff, forceRomance, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
@@ -62,7 +62,7 @@ function ground(ctx: TownCtx) {
   // zebra crossing in front of the office
   const f = boxW(ROADS[1]); for (let i = 0; i < 6; i++) khoi(n, 0.32, 0.01, f.d - 0.3, '#f3ecd2', -1 + i * 0.42, 0.04, f.cz, false);
   // trees along the streets
-  for (const [x, z] of [[-19.5, -8], [-19.5, 9], [-12, 12.5], [0, 12.6], [9, 12.5], [16.5, 12.3], [21, 6], [-14.2, 12.5]]) tree(n, x, z);
+  for (const [x, z] of [[-19.5, -8], [-12, 12.5], [0, 12.6], [9, 12.5], [16.5, 12.3], [21, 6]]) tree(n, x, z); // dropped [-19.5,9] + [-14.2,12.5] for Bia Hải Xồm across from gate
 }
 function tree(cha: THREE.Object3D, x: number, z: number) {
   const g = new THREE.Group(); g.position.set(x, 0, z); cha.add(g);
@@ -311,6 +311,35 @@ function meetingPod(ctx: TownCtx) {
   khoi(g, 0.35, 0.02, 0.25, '#263238', 0.15, 0.78, 0.1, false); khoi(g, 0.35, 0.22, 0.02, vatLieuSang('#4fc3f7'), 0.15, 0.9, -0.02, false);
   sign(ctx, ICON.pod, 'Pod họp ngoài', 'meeting giả · ngủ', '#0288d1', b.cx, 2.6, b.cz, 'vp-pod', 'pod');
 }
+
+/** Bia Hải Xồm — beer stall opposite parking/gate across the front street. */
+function biaHaiXom(ctx: TownCtx) {
+  const b = boxW(BIA), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
+  const accent = '#c62828';
+  khoi(g, b.w, 0.06, b.d, '#d7ccc8', 0, 0.03, 0, false);
+  // open stall counter + roof
+  khoi(g, b.w * 0.9, 1.1, 0.18, '#efebe9', 0, 0.7, -b.d / 2 + 0.2);
+  khoi(g, b.w * 0.95, 0.08, b.d * 0.7, accent, 0, 2.05, 0, false);
+  khoi(g, 0.08, 2.0, 0.08, '#5d4037', -b.w / 2 + 0.2, 1.0, -b.d / 2 + 0.25);
+  khoi(g, 0.08, 2.0, 0.08, '#5d4037', b.w / 2 - 0.2, 1.0, -b.d / 2 + 0.25);
+  khoi(g, 0.08, 2.0, 0.08, '#5d4037', -b.w / 2 + 0.2, 1.0, b.d / 2 - 0.3);
+  khoi(g, 0.08, 2.0, 0.08, '#5d4037', b.w / 2 - 0.2, 1.0, b.d / 2 - 0.3);
+  // beer taps / kegs
+  khoi(g, 0.55, 0.9, 0.55, '#90a4ae', -1.3, 0.5, -0.5); khoi(g, 0.55, 0.9, 0.55, '#78909c', -0.5, 0.5, -0.5);
+  khoi(g, 0.08, 0.35, 0.08, '#eceff1', -1.3, 1.05, -0.2); khoi(g, 0.08, 0.35, 0.08, '#eceff1', -0.5, 1.05, -0.2);
+  // plastic stools + low tables at seats
+  for (const p of BIA_SEATS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    khoi(g, 0.55, 0.06, 0.55, '#fff59d', lx, 0.42, lz);
+    khoi(g, 0.08, 0.4, 0.08, '#f9a825', lx, 0.2, lz);
+    khoi(g, 0.32, 0.05, 0.32, ['#42a5f5', '#66bb6a', '#ef5350', '#ab47bc', '#29b6f6'][Math.abs(Math.round(lx * 3 + lz)) % 5], lx + 0.55, 0.38, lz + 0.15);
+    khoi(g, 0.05, 0.36, 0.05, '#546e7a', lx + 0.55, 0.18, lz + 0.15);
+  }
+  // signboard
+  khoi(g, 1.8, 0.45, 0.06, accent, 0, 2.35, -b.d / 2 + 0.15, false);
+  sign(ctx, ICON.glass, 'Bia Hải Xồm', 'bia hơi · lạc rang', accent, b.cx, 2.9, b.cz - b.d / 2 + 0.2, 'vp-bia', 'bia');
+}
+
 /** Photocopy / printer kiosk on the front sidewalk. */
 function printKiosk(ctx: TownCtx) {
   const b = boxW(PRINT), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
@@ -372,17 +401,29 @@ function trexMesh(): Trex {
 interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; trex?: Trex; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
 /** Short act bit under the name — only when it adds info beyond the name. */
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò', smoke: 'hút thuốc', gym: 'gym', atm: 'ATM', gate: 'cổng', pod: 'pod họp', print: 'máy in', drama: 'drama', hunt: 'săn', chomp: 'ăn', carry: 'tha', carried: 'bị tha' };
-const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo', trex: 'T-Rex' };
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', beer: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò', smoke: 'hút thuốc', gym: 'gym', atm: 'ATM', gate: 'cổng', pod: 'pod họp', print: 'máy in', drama: 'drama', bia: 'Hải Xồm', wobble: 'say', shipper: 'shipper', hunt: 'săn', chomp: 'ăn', carry: 'tha', carried: 'bị tha' };
+const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo', trex: 'T-Rex', boss: 'sếp', shipper: 'shipper' };
 
 export class TownLayer {
   private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
   private agentPrey: AgentPrey[] = []; private pendingLayoff?: LayoffEvent;
   private p: ReturnType<typeof pond>; private traffic: Traffic; private cars: TrafficLayer; private k: ReturnType<typeof noc>; private nocKey = '';
   private hearts: HeartFX; private heartCd = 0;
+  private rainG = new THREE.Group(); private rainDrops: THREE.Mesh[] = []; private flood?: THREE.Mesh; private rainOn = false;
   constructor(private ctx: TownCtx, now = Date.now()) {
-    ground(ctx); cafe(ctx); massage(ctx); xemNuong(ctx); garden(ctx); trada(ctx); smokeCorner(ctx); gymYard(ctx); atmSnack(ctx); securityGate(ctx); meetingPod(ctx); printKiosk(ctx); this.p = pond(ctx); this.k = noc(ctx);
+    ground(ctx); cafe(ctx); massage(ctx); xemNuong(ctx); garden(ctx); trada(ctx); smokeCorner(ctx); gymYard(ctx); atmSnack(ctx); securityGate(ctx);
+    biaHaiXom(ctx); meetingPod(ctx); printKiosk(ctx); this.p = pond(ctx); this.k = noc(ctx);
     this.hearts = new HeartFX(ctx.nhom);
+    // Soft rain streaks + a wet patch by the crocodile pond (readable, not a particle storm).
+    ctx.nhom.add(this.rainG); this.rainG.visible = false;
+    for (let i = 0; i < 48; i++) {
+      const d = khoi(this.rainG, 0.02, 0.35 + Math.random() * 0.25, 0.02, '#90caf9', (Math.random() - 0.5) * 36, 4 + Math.random() * 5, (Math.random() - 0.5) * 28, false);
+      d.material = vatLieu('#90caf9', { transparent: true, opacity: 0.45 });
+      this.rainDrops.push(d);
+    }
+    const [pcx, pcz] = toWorld(pondCenter());
+    this.flood = khoi(ctx.nhom, 6.5, 0.02, 4.2, vatLieu('#5b8fa8', { transparent: true, opacity: 0.35 }), pcx + 1.2, 0.04, pcz + 0.4, false);
+    this.flood.visible = false;
     this.world = initialWorld(now); this.lastStep = now; this.traffic = initialTraffic(now); this.cars = new TrafficLayer(ctx.nhom);
     // Screenshot/debug hook, opt-in via localStorage 'vp-debug' = '1': trigger a crash/fire or a garden affair.
     try { if (localStorage.getItem('vp-debug') === '1') {
@@ -411,6 +452,10 @@ export class TownLayer {
   /** Free office agents (plan px) Layoff may hunt. */
   setAgentPrey(list: AgentPrey[]) { this.agentPrey = list; }
   consumeLayoffEvent(): LayoffEvent | undefined { const e = this.pendingLayoff; this.pendingLayoff = undefined; return e; }
+  /** Sếp đột nhập active — office agents sit up / whisper. */
+  get bossActive(): boolean { return !!(this.world.bossUntil && this.world.bossUntil > Date.now()); }
+  isRaining(): boolean { return this.world.weather === 'rain'; }
+  get payday(): boolean { return !!this.world.payday; }
   /** Traffic state (screenshots / debugging can inject incidents). */
   get road() { return this.traffic; }
   set road(t: Traffic) { this.traffic = t; }
@@ -471,8 +516,29 @@ export class TownLayer {
     }
     this.cars.update(this.traffic, t, dt);
     let eating = nowMs < this.eatUntil;
+    // Sync rain / flooded pond path.
+    const raining = this.world.weather === 'rain';
+    if (raining !== this.rainOn) {
+      this.rainOn = raining; this.rainG.visible = raining;
+      if (this.flood) this.flood.visible = raining;
+      try { this.ctx.nhom.parent; } catch { /* */ }
+    }
+    if (raining) {
+      for (const d of this.rainDrops) {
+        d.position.y -= dt * (6 + (d.position.x % 3 + 3));
+        if (d.position.y < 0.2) d.position.y = 5 + Math.random() * 4;
+      }
+    }
+    // Drop figs for removed ents (boss/shipper left).
+    for (const id of [...this.figs.keys()]) {
+      if (!this.world.ents.some((e) => e.id === id)) {
+        const f = this.figs.get(id)!; this.ctx.nhom.remove(f.g); this.figs.delete(id);
+      }
+    }
     for (const e of this.world.ents) {
-      const f = this.figs.get(e.id)!; const prev = f.e.act; f.e = e; this.relook(f);
+      let f = this.figs.get(e.id);
+      if (!f) { f = this.fig(e); this.figs.set(e.id, f); }
+      const prev = f.e.act; f.e = e; this.relook(f);
       if (e.act === 'eaten') eating = true;
       if (e.act === 'chomp' && e.kind === 'trex') { /* jaw anim via pose */ }
       if (e.act === 'carried') { /* held by Layoff */ }

@@ -4,7 +4,7 @@ export const VP_LABELS_EVENT = 'vp-labels-changed';
 
 /** Stable keys for every structure label in the town / office. */
 export type LabelKey =
-  | 'cafe' | 'massage' | 'bbq' | 'trada' | 'pond'
+  | 'cafe' | 'massage' | 'bbq' | 'trada' | 'pond' | 'bia'
   | 'garden' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print'
   | 'pantry' | 'game' | 'workroom'
   | 'monitor';
@@ -21,6 +21,7 @@ export const LABEL_ROWS: { key: LabelKey; title: string }[] = [
   { key: 'bbq', title: 'Xém Nướng' },
   { key: 'trada', title: 'Trà đá vỉa hè' },
   { key: 'pond', title: 'Hồ cá sấu' },
+  { key: 'bia', title: 'Bia Hải Xồm' },
   { key: 'garden', title: 'Vườn hoa' },
   { key: 'smoke', title: 'Góc hút thuốc' },
   { key: 'gym', title: 'Gym / bóng bàn' },
@@ -35,7 +36,7 @@ export const LABEL_ROWS: { key: LabelKey; title: string }[] = [
 ];
 
 export const DEFAULT_LABELS: LabelPrefs = {
-  cafe: true, massage: true, bbq: true, trada: true, pond: true,
+  cafe: true, massage: true, bbq: true, trada: true, pond: true, bia: true,
   garden: false, smoke: false, gym: false, atm: false, gate: false, pod: false, print: false,
   pantry: false, game: false, workroom: false,
   monitor: 'alert',

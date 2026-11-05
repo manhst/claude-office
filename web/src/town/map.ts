@@ -46,6 +46,11 @@ export const ATM_SPOTS: Pt[] = [{ x: 1430, y: 740 }, { x: 1480, y: 755 }, { x: 1
 /** Parking / security gate at the SW approach (left avenue → front street). */
 export const GATE: Box = { x: 40, y: 690, w: 150, h: 70 };
 export const GATE_SPOTS: Pt[] = [{ x: 70, y: 720 }, { x: 120, y: 735 }, { x: 165, y: 720 }];
+/** Bia Hải Xồm — beer stall opposite cổng/trạm gửi xe, across the front street (south). */
+export const BIA: Box = { x: 40, y: 850, w: 200, h: 110 };
+export const BIA_SEATS: Pt[] = [{ x: 70, y: 900 }, { x: 120, y: 915 }, { x: 170, y: 900 }, { x: 95, y: 940 }, { x: 155, y: 940 }];
+/** Shipper drop-off spots by the security gate / parking. */
+export const SHIPPER_SPOTS: Pt[] = [{ x: 90, y: 710 }, { x: 140, y: 725 }, { x: 180, y: 710 }];
 /** Glass outdoor meeting pod in the south yard (east of gym) — fake meetings / naps. */
 export const POD: Box = { x: 900, y: 860, w: 170, h: 110 };
 export const POD_SPOTS: Pt[] = [{ x: 940, y: 910 }, { x: 990, y: 920 }, { x: 1040, y: 910 }];

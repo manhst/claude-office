@@ -161,3 +161,7 @@
   18% { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), -6px) scale(1); }
   100% { transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.25); opacity: 0; }
 }
+
+/* Sếp đột nhập: sit up / hide phone vibe */
+.vp-ref .nguoi-3d.sep-toi .ten-3d { border-color: #f59e0b; }
+.vp-ref .nguoi-3d.sep-toi.co-bong .bong-3d { border-color: #f59e0b; font-weight: 800; }
