@@ -17,6 +17,10 @@ export interface SessionView {
   agentIds: string[];
 }
 
+/** IT Ops monitor (Prometheus HTTP API). mode demo = labelled fake alerts, only with --demo and no endpoint. */
+export interface ItOpsAlert { name: string; detail?: string; value?: string }
+export interface ItOpsStatus { mode: 'prometheus' | 'demo' | 'unconfigured'; state: 'unconfigured' | 'checking' | 'ok' | 'alert' | 'error'; endpoint?: string; query?: string; alerts: ItOpsAlert[]; error?: string; checkedAt?: number }
+
 type Base = { ts: number };
 export type OfficeEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }
@@ -30,5 +34,6 @@ export type OfficeEvent = Base & (
   | { t: 'agent.error'; id: string; error: string }
   | { t: 'agent.left'; id: string }
   | { t: 'sessions.update'; sessions: SessionView[] }
-  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[] }
+  | { t: 'itops.status'; status: ItOpsStatus }
+  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus }
 );

@@ -37,6 +37,27 @@ runs 3 simulated sessions, one per agent-profile source below. For a server with
 Manual alternative: `/plugin marketplace add C:\path\to\claude-office\mod` then `/plugin install office@office-mods`.
 The next run of `start.cmd` then detects the installed plugin and removes the plugin-dirs entry.
 
+## Town around the office (2D view)
+
+The 2D view now shows the office inside a small town (it scales to fit; the corner button switches to 100%). Sessions and agents work exactly as before.
+- Roads, **Crossian Cafe**, a sidewalk **trà đá** stall, and a **crocodile pond** next to the office.
+- **Right-click an agent** (or click a side character) for **Đặt tên & avatar** or **Ném cho cá sấu**. A thrown agent flies into the pond, the crocodiles eat it, and it is back at its desk 20 s later. Side characters reappear on the street after 15 s.
+- **Name and avatar** reuse Phúc's VanphongAI picker: the 20 chibi presets (`web/src/ref-vanphong/nhanVat.ts`, Nữ/Nam tabs). Choices are kept in this browser's localStorage. Agents are keyed by profile name, so the same agent keeps its look in every session. The Vanphong 3D view uses the chosen preset for agents it creates afterwards.
+- **Side characters** are simulated in the browser:
+  - Tèo, Tý, Bờm and Mít wander, chat nonsense, drink coffee or beer and run outside, and sometimes slip into the pond.
+  - **Chos An** the dog barks wildly. **Meow** the cat picks fights with him.
+- **IT Ops** watches a Prometheus-compatible HTTP API. When it sees a problem it runs to the **Architect** and reports the alert in a speech bubble. A badge next to it shows the monitor state.
+
+| Env / flag | Meaning |
+|---|---|
+| `OFFICE_PROMETHEUS_URL` or `--prometheus URL` | Base URL, e.g. `http://prometheus:9090`. The server calls `GET <url>/api/v1/query?query=…`. Credentials in the URL are used but never shown or sent to the UI. |
+| `OFFICE_PROMETHEUS_QUERY` | Instant query; every returned series counts as a problem. Default `ALERTS{alertstate="firing"}`. |
+| `OFFICE_PROMETHEUS_INTERVAL_MS` | Poll interval, default 30000 (min 2000). |
+
+Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kiosk, with no fake alerts. If the API can't be read, the error itself is reported.
+`--demo` with no URL runs a monitor labelled **(demo)** that alternates ok and `DEMO HighLatency` every 15 s.
+Screenshots: `docs/screens/town-*.png` (`cd web && npm run build && node scripts/screens-town.mjs`).
+
 ## Which agents a session shows
 
 For each session the server (same PC) reads, in priority order:

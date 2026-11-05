@@ -10,6 +10,8 @@ Origin of the files in this folder (reference copy: /workspace/vo-ref/src/Vanpho
                     pantry/game-room (amenities.ts) wiring.
 - vanphong.css   <- style.css (:root palette, .nguoi-3d / .ten-3d / .bong-3d / .zzz-3d / .nhan-phong-3d / .nut-3d / .vp3d-*),
                     scoped under .vp-ref. Copied verbatim except scoping and dropped selectors; the .cai-nhau (scuffle bubble) rule is ours.
+- nhanVat.ts     <- nhan_vat.js verbatim (chibi SVG avatar `ve`, `chuanHoa`, the 20 presets MAU_SAN); only the IIFE/window global became ES exports.
+                    Used by the 2D town for avatars and the name/avatar picker (same flow as cai_dat.js moChonMau: Nữ/Nam tabs, preset grid).
 - adapter.ts     <- new code (ours): maps our AgentUI/MessageUI to the reference's display states; wider desk grid, pantry/game-room
                     layout and the idle behaviour (coffee, billiards, chats, scuffles) of free agents.
 - amenities.ts   <- new code (ours): pantry (coffee machine, fridge, tables) and game room (billiard table, arcade, sofa), built with

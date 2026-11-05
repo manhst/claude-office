@@ -3,7 +3,7 @@ import { reduce, initialState, type OfficeState } from './reducer';
 import { takeToken, connect } from './connection';
 import type { OfficeEvent } from './types';
 import { STATE_COLORS, loadView, saveView, type ViewMode } from './layout';
-import { Office2D } from './Office2D';
+import { Town } from './town/Town';
 import { EventLog } from './EventLog';
 import { SessionPanel } from './SessionPanel';
 import { pickSelected } from './sessionView';
@@ -36,7 +36,7 @@ export function App() {
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
           : view === '3d' ? <Suspense fallback={<div className="empty stage3d">Loading 3D…</div>}><Office3D s={s} now={now} /></Suspense>
           : view === 'vanphong' ? <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} /></Suspense>
-          : <Office2D s={s} now={now} selected={selected} onSelect={setPicked} />}
+          : <div className="town-wrap"><Town s={s} now={now} selected={selected} onSelect={setPicked} /></div>}
         <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><EventLog s={s} /></div>
       </main>
     </div>

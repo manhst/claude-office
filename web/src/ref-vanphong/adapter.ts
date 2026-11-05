@@ -3,6 +3,8 @@ import type { AgentUI, MessageUI, OfficeState } from '../reducer';
 import { BUBBLE_MS, DESK_COLS, add, allDesks, DOOR, type Vec3 } from '../layout';
 import { BODY_R, BOUNDS, DESK_HALF, findPath, visiting, type Goal, type Rect } from '../walk';
 import { MAU_SAN, type NgoaiHinh } from './characters';
+import { currentLook } from '../town/looks';
+import { MAU_SAN as PRESETS } from './nhanVat';
 
 /** Reference status keys (CSS classes tt-*): ranh idle, dang-nghi thinking, dang-lam working, dang-nghe talking, xong done, loi error. */
 export type VpStatus = 'ranh' | 'dang-nghi' | 'dang-lam' | 'dang-nghe' | 'xong' | 'loi';
@@ -14,7 +16,7 @@ export const STATUS_LABEL: Record<VpStatus, string> = { ranh: 'idle', 'dang-nghi
 const ROLE_LOOK: Record<string, string> = { researcher: 'nu_01', coder: 'nam_01', reviewer: 'nu_05', writer: 'nu_03', planner: 'nam_02', tester: 'nu_04' };
 const POOL = ['nam_04', 'nu_03', 'nam_07', 'nu_04', 'nam_02', 'nu_01'];
 export function hash(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
-export function lookFor(a: Pick<AgentUI, 'role' | 'id'>): NgoaiHinh { return MAU_SAN[ROLE_LOOK[a.role.toLowerCase()] ?? POOL[hash(a.id) % POOL.length]]; }
+export function lookFor(a: Pick<AgentUI, 'role' | 'id'> & { name?: string }): NgoaiHinh { const c = a.name ? currentLook(`agent:${a.name}`) : undefined; const p = c ? (PRESETS as { id: string; ngoai_hinh: NgoaiHinh }[]).find((x) => x.id === c) : undefined; if (p) return p.ngoai_hinh; return MAU_SAN[ROLE_LOOK[a.role.toLowerCase()] ?? POOL[hash(a.id) % POOL.length]]; }
 /** Room tint per desk row, from the reference's room palette default. */
 export const ROOM_COLOR = '#7b6cf6';
 
