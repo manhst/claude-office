@@ -68,7 +68,7 @@ export const vpDeskRects = (): Rect[] => allDesks().map(vpDesk).map(([x, , z]) =
 // ---- Our additions: a pantry (left) and a game room (right) around the work room, and what free agents do there. ----
 /** Building floor drawn by the scene; walkers plan inside VP_BOUNDS (grid-aligned so x = 0, the door gap, is a cell). */
 export const BIEN = { x0: -12.8, x1: 12.8, z0: -8.4, z1: 7.6 };
-/** Walk grid covers the office floor, north strip (Xuka / garden / Xém Nướng), and south yard amenities (gym / pod / gate / ATM / print). */
+/** Walk grid covers the office floor, north strip (Xuka / garden / Xém Nướng), and south yard amenities (gym / pod / gate / ATM); print is inside at the back wall. */
 export const VP_BOUNDS: Rect = { x0: -20.5, x1: 21.5, z0: -18.5, z1: 13.5 };
 export const PANTRY_X1 = -8, GAME_X0 = 8;
 /** Furniture footprints (centre + half extents, x/z). The scene builds each piece here; walkers path around them. */
@@ -78,7 +78,7 @@ export const FURNITURE = {
   table1: { x: -10.3, z: -4.6, hx: 1, hz: 1 }, table2: { x: -10.3, z: -0.4, hx: 1, hz: 1 }, shelf: { x: -12.5, z: 3.6, hx: 0.25, hz: 0.9 },
   pool: { x: 10.4, z: -2.2, hx: 0.85, hz: 1.45 }, sofa: { x: 10.4, z: 4.4, hx: 1.25, hz: 0.45 }, coffeeTable: { x: 10.4, z: 3, hx: 0.6, hz: 0.3 },
   arcade: { x: 12.15, z: -7.85, hx: 0.35, hz: 0.3 },
-  printer: { x: -12.4, z: -6.1, hx: 0.36, hz: 1.05 },
+  printer: { x: 4.6, z: -7.95, hx: 1.1, hz: 0.38 },
 } satisfies Record<string, Item>;
 export const COFFEE_MACHINE: Vec3 = [-8.7, 0, -8.1];
 const furnitureRects = (): Rect[] => Object.values(FURNITURE).map((f) => ({ x0: f.x - f.hx - BODY_R, x1: f.x + f.hx + BODY_R, z0: f.z - f.hz - BODY_R, z1: f.z + f.hz + BODY_R }));

@@ -54,9 +54,9 @@ export const SHIPPER_SPOTS: Pt[] = [{ x: 90, y: 710 }, { x: 140, y: 725 }, { x: 
 /** Glass outdoor meeting pod in the south yard (east of gym) — fake meetings / naps. */
 export const POD: Box = { x: 900, y: 860, w: 170, h: 110 };
 export const POD_SPOTS: Pt[] = [{ x: 940, y: 910 }, { x: 990, y: 920 }, { x: 1040, y: 910 }];
-/** Printer + photocopier inside the office, against the pantry's left wall next to the kitchen counter/fridge (= adapter FURNITURE.printer). */
-export const PRINT: Box = { x: 290, y: 150, w: 32, h: 107 };
-export const PRINT_SPOTS: Pt[] = [{ x: 346, y: 172 }, { x: 346, y: 203 }, { x: 373, y: 187 }];
+/** Printer + photocopier inside the office, against the back/north wall by the window right of the back door (= adapter FURNITURE.printer). */
+export const PRINT: Box = { x: 901, y: 123, w: 82, h: 27 };
+export const PRINT_SPOTS: Pt[] = [{ x: 890, y: 171 }, { x: 976, y: 171 }, { x: 1018, y: 169 }];
 export const pondCenter = (): Pt => ({ x: POND.cx, y: POND.cy });
 export const inPond = (p: Pt) => ((p.x - POND.cx) / POND.rx) ** 2 + ((p.y - POND.cy) / POND.ry) ** 2 <= 1;
 /** Plan px → world [x, z]. */

@@ -1,4 +1,4 @@
-// Screenshots: Bia Hải Xồm across from gate + completed office shell.
+// Screenshots: front glass facade + printer/photocopier at the back wall.
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -26,7 +26,7 @@ try {
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
   const steps = JSON.parse(process.env.SHOTS ?? JSON.stringify([
     ['town-front-glass-facade', []],
-    ['town-printer-pantry', [['pan', -200, -120], ['plus', 3]]],
+    ['town-printer-back-wall', [['pan', 30, -180], ['plus', 4], ['rot', -5, 20]]],
   ]));
   for (const [name, ops] of steps) {
     for (const [op, a, b] of ops) {
