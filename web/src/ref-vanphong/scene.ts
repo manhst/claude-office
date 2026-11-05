@@ -188,10 +188,10 @@ export class VanphongScene {
     const frontDoor = 2.4, fz = z1 + 0.1, AL = '#9aa4ae', DF = '#37474f';
     const glass = vatLieu('#e3f4fb', { transparent: true, opacity: 0.16, depthWrite: false });
     for (const [a, b] of [[x0 - 0.2, cx - frontDoor / 2 - 0.12], [cx + frontDoor / 2 + 0.12, x1 + 0.2]]) {
-      const w = b - a, n = Math.max(1, Math.round(w / 1.6)), pw = w / n;
+      const w = b - a, n = Math.max(1, Math.round(w / 3.2)), pw = w / n; // panes ~2× wider (was /1.6)
       khoi(nhom, w, CAO - 0.2, 0.03, glass, (a + b) / 2, (CAO - 0.2) / 2 + 0.12, fz, false);
       for (let i = 0; i <= n; i++) khoi(nhom, 0.07, CAO, 0.12, AL, a + i * pw, CAO / 2, fz, false); // mullions
-      for (const y of [0.06, 1.0, CAO - 0.06]) khoi(nhom, w, 0.07, 0.12, AL, (a + b) / 2, y, fz, false); // sill, transom rail, head
+      for (const y of [0.06, CAO - 0.06]) khoi(nhom, w, 0.07, 0.12, AL, (a + b) / 2, y, fz, false); // sill + head only (no mid rail)
     }
     // main door: thick dark frame, double glass leaves with handles, transom above
     const dh = CAO - 0.5;

@@ -24,7 +24,10 @@ try {
   const stage = pg.locator('[data-testid=office-vanphong]');
   const box = await stage.boundingBox();
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
-  const steps = JSON.parse(process.env.SHOTS ?? '[]');
+  const steps = JSON.parse(process.env.SHOTS ?? JSON.stringify([
+    ['town-front-glass-facade', []],
+    ['town-printer-pantry', [['pan', -200, -120], ['plus', 3]]],
+  ]));
   for (const [name, ops] of steps) {
     for (const [op, a, b] of ops) {
       await pg.mouse.move(cx, cy);
