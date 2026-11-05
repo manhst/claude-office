@@ -27,7 +27,7 @@ export function isPayday(now: number): boolean { return Math.floor(now / PAYDAY_
 /** NPC acts that count as idle/useless (not working a Claude session task). */
 export const USELESS_ACTS: ReadonlySet<Act> = new Set(['idle', 'drink', 'beer', 'chat', 'run', 'massage', 'bbq', 'romance', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'drama', 'bia', 'wobble', 'shipper']);
 export function initialWorld(now: number): World {
-  const e = (id: string, kind: Kind, name: string, p: Pt, look?: string, speed = 90): Ent => ({ id, kind, name, look, x: p.x, y: p.y, tx: p.x, ty: p.y, speed, act: 'idle', until: now + 1500 });
+  const e = (id: string, kind: Kind, name: string, p: Pt, look?: string, speed = 45): Ent => ({ id, kind, name, look, x: p.x, y: p.y, tx: p.x, ty: p.y, speed, act: 'idle', until: now + 1500 });
   return { t: now, ents: [
     e('itops', 'itops', 'IT Ops', ITOPS_SPOT, 'nam_01', 90),
     e('npc-1', 'npc', 'Tèo', YARD[0], 'nam_04'), e('npc-2', 'npc', 'Tý', CAFE_SEATS[0], 'nu_04'), e('npc-3', 'npc', 'Bờm', TRADA_STOOLS[1], 'nam_06'), e('npc-4', 'npc', 'Mít', STREET[1], 'nu_07'),
@@ -169,7 +169,7 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
       if (x < 0.86) return say(go(e, jitter(pick(PRINT_SPOTS, r), r, 6), 'print'), pick(LINES.printGo, r), now);
       if (x < 0.89) return say(go(e, jitter(pick(BIA_SEATS, r), r, 8), 'bia'), pick(LINES.biaGo, r), now);
       if (x < 0.91) return say(go(e, jitter(pick(SHIPPER_SPOTS, r), r, 6), 'shipper'), pick(LINES.shipperGo, r), now);
-      if (x < 0.94) return say(go(e, pick(STREET, r), 'idle', townRunSpeed()), pick(w.weather === 'rain' ? LINES.rainReact : LINES.run, r), now);
+      if (x < 0.94) return say(go(e, pick(STREET, r), 'idle', Math.round(townRunSpeed() / 2)), pick(w.weather === 'rain' ? LINES.rainReact : LINES.run, r), now);
       if (x < 0.96) { const o = pick(w.ents.filter((z) => z.kind === 'npc' && z.id !== e.id && z.act !== 'gone' && z.act !== 'carried'), r); return o ? go(e, jitter({ x: o.x + 28, y: o.y }, r, 6), 'chat') : e; }
       if (x < 0.98) return go(e, pick(POND_EDGE, r), r() < 0.35 ? 'fall' : 'idle');
       return go({ ...e, partner: undefined }, pick(YARD, r), 'idle');
@@ -180,7 +180,7 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
     }
     case 'cat': {
       const dog = w.ents.find((z) => z.kind === 'dog');
-      if (dog && dog.act !== 'gone' && dog.act !== 'eaten' && dog.act !== 'fall' && r() < 0.14) return say(go(e, { x: dog.x + 18, y: dog.y }, 'fight', 200), pick(LINES.catFight, r), now);
+      if (dog && dog.act !== 'gone' && dog.act !== 'eaten' && dog.act !== 'fall' && r() < 0.14) return say(go(e, { x: dog.x + 18, y: dog.y }, 'fight', 100), pick(LINES.catFight, r), now);
       return go(e, jitter(pick([...YARD, ...CAFE_SEATS, ...TRADA_STOOLS], r), r, 30), 'idle');
     }
     case 'trex': {
@@ -442,12 +442,12 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   // Shipper visit at the gate (occasional).
   if (!ents.some((e) => e.kind === 'shipper') && r() < 0.006) {
     const s = pick(SHIPPER_SPOTS, r);
-    ents = [...ents, { id: 'shipper-1', kind: 'shipper', name: 'Shipper', look: 'nam_05', x: s.x - 40, y: s.y, tx: s.x, ty: s.y, speed: 150, act: 'walk', next: 'shipper', until: now + 14_000 }];
+    ents = [...ents, { id: 'shipper-1', kind: 'shipper', name: 'Shipper', look: 'nam_05', x: s.x - 40, y: s.y, tx: s.x, ty: s.y, speed: 75, act: 'walk', next: 'shipper', until: now + 14_000 }];
     // Pull one idle NPC to argue over the order.
     const n = ents.find((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner);
     if (n) {
       const pair = pick(PAIRS.shipperArgue, r);
-      ents = ents.map((e) => (e.id === n.id ? say(go({ ...e, topic: 'shipperArgue' }, pick(SHIPPER_SPOTS, r), 'shipper', 120), pair[0], now, 7000) : e));
+      ents = ents.map((e) => (e.id === n.id ? say(go({ ...e, topic: 'shipperArgue' }, pick(SHIPPER_SPOTS, r), 'shipper', 60), pair[0], now, 7000) : e));
     }
   }
   ents = ents.map((e) => {
@@ -459,7 +459,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   if (weather === 'rain') {
     ents = ents.map((e) => {
       if (e.kind === 'npc' && (e.act === 'walk' || e.act === 'idle' || e.act === 'wobble') && !e.say && r() < 0.03) {
-        return say({ ...e, speed: Math.max(e.speed, townRunSpeed()) }, pick(LINES.rainReact, r), now, 5000);
+        return say({ ...e, speed: Math.max(e.speed, Math.round(townRunSpeed() / 2)) }, pick(LINES.rainReact, r), now, 5000);
       }
       // Clear garden romance during rain.
       if (e.act === 'romance') return { ...e, act: 'idle' as const, partner: undefined, until: now + 2000, say: pick(LINES.rainReact, r), sayUntil: now + 5000 };

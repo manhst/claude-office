@@ -43,7 +43,7 @@ describe('vpRunSpeed', () => {
     expect(townRunSpeed()).toBe(Math.round(3.2 * PX));
   });
 
-  it('walkerSpeedFor: active desk return = max; amenity = setting; visit/home free = walk', () => {
+  it('walkerSpeedFor: active desk return = max; amenity = half setting; visit/home free = walk', () => {
     saveRunSpeed(2.8);
     expect(walkerSpeedFor(home, 'working')).toBe(RUN_SPEED_MAX);
     expect(walkerSpeedFor(home, 'thinking')).toBe(RUN_SPEED_MAX);
@@ -51,8 +51,8 @@ describe('vpRunSpeed', () => {
     expect(walkerSpeedFor(home, 'idle')).toBe(WALK_SPEED);
     expect(walkerSpeedFor(home, 'done')).toBe(WALK_SPEED);
     expect(walkerSpeedFor(visit, 'working')).toBe(WALK_SPEED);
-    expect(walkerSpeedFor(cafe, 'idle')).toBeCloseTo(2.8, 5);
-    expect(walkerSpeedFor(cafe, 'done')).toBeCloseTo(2.8, 5);
+    expect(walkerSpeedFor(cafe, 'idle')).toBeCloseTo(1.4, 5);
+    expect(walkerSpeedFor(cafe, 'done')).toBeCloseTo(1.4, 5);
     expect(WALK_SPEED).toBe(1.6);
   });
 });
