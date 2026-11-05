@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { khoi, vatLieu, vatLieuSang } from './characters';
 import { BIEN, COFFEE_MACHINE, FURNITURE, GAME_X0, PANTRY_X1, type Item } from './adapter';
+import { applyLabelVisibility, isLabelOn, type LabelKey } from '../vpLabels';
+type StructureLabel = Exclude<LabelKey, 'monitor'>;
 
 export interface AmenityCtx {
   nhom: THREE.Group; soft: boolean; own: <T extends { dispose(): void }>(m: T) => T;
@@ -25,10 +27,11 @@ function lamp(ctx: AmenityCtx, x: number, z: number, w: number, d: number, mau: 
   if (ctx.soft) return; // software GL: every point light costs shader time; the glowing shade is enough
   const den = new THREE.PointLight('#ffd9a0', 0, 9, 1.6); den.position.set(x, cao - 0.3, z); ctx.nhom.add(den); ctx.lights.push(den);
 }
-function label(ctx: AmenityCtx, text: string, sub: string, mau: string, x: number, z: number) {
-  const div = document.createElement('div'); div.className = 'nhan-phong-3d'; div.style.setProperty('--mau', mau);
+function label(ctx: AmenityCtx, text: string, sub: string, mau: string, x: number, z: number, labelKey: StructureLabel) {
+  const div = document.createElement('div'); div.className = 'nhan-phong-3d'; div.style.setProperty('--mau', mau); div.dataset.label = labelKey;
   const small = document.createElement('small'); small.textContent = sub;
   div.append(document.createElement('i'), document.createTextNode(text), small);
+  applyLabelVisibility(div, isLabelOn(labelKey));
   const o = new CSS2DObject(div); o.center.set(0, 1); o.position.set(x, 0.1, z); ctx.nhom.add(o);
 }
 
@@ -77,7 +80,7 @@ export function buildPantry(ctx: AmenityCtx) {
   }
   lamp(ctx, F.table1.x, F.table1.z, 0.5, 0.5, '#fff4d6'); lamp(ctx, F.table2.x, F.table2.z, 0.5, 0.5, '#fff4d6');
   ctx.plant(nhom, PANTRY_X1 - 0.7, BIEN.z1 - 0.7, 1.1);
-  label(ctx, 'Pantry', 'coffee · snacks', '#f59e0b', BIEN.x0 + 0.8, BIEN.z1 - 0.4);
+  label(ctx, 'Pantry', 'coffee · snacks', '#f59e0b', BIEN.x0 + 0.8, BIEN.z1 - 0.4, 'pantry');
 }
 
 export function buildGameRoom(ctx: AmenityCtx) {
@@ -116,5 +119,5 @@ export function buildGameRoom(ctx: AmenityCtx) {
   khoi(ct, 1.2, 0.06, 0.6, '#d9b68f', 0, 0.4, 0); for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) khoi(ct, 0.06, 0.37, 0.06, '#8a6f5a', sx * 0.52, 0.185, sz * 0.24);
   khoi(ct, 0.3, 0.02, 0.22, '#3b82f6', -0.25, 0.44, 0.02, false); khoi(ct, 0.09, 0.1, 0.09, '#ffffff', 0.3, 0.48, -0.05);
   ctx.plant(nhom, BIEN.x1 - 0.7, BIEN.z1 - 0.7, 1.1); ctx.plant(nhom, GAME_X0 + 0.6, BIEN.z1 - 0.7);
-  label(ctx, 'Game room', 'billiards · darts', '#22c55e', GAME_X0 + 0.5, BIEN.z1 - 0.4);
+  label(ctx, 'Game room', 'billiards · darts', '#22c55e', GAME_X0 + 0.5, BIEN.z1 - 0.4, 'game');
 }

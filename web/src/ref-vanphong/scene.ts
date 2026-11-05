@@ -14,6 +14,7 @@ import { khoi, tron, vatLieu, vatLieuSang, dungNguoi, setShadows, type Hinh } fr
 import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, subtitleFor, vpBubble, vpChair, vpGoal, vpPlan, vpStatus, type IdlePlan, type VpStatus } from './adapter';
 import { HeartFX } from './hearts';
 import { buildGameRoom, buildPantry } from './amenities';
+import { VP_LABELS_EVENT, applyLabelVisibility, isLabelOn } from '../vpLabels';
 import { CANH, TownLayer } from './town3d';
 import { fromWorld } from '../town/map';
 import { agentKey, currentLook, currentName } from '../town/looks';
@@ -194,6 +195,7 @@ export class VanphongScene {
       plant: (cha: THREE.Object3D, x: number, z: number, co?: number) => this.cayCanh(cha, x, z, co) };
     buildPantry(ctx); buildGameRoom(ctx);
     this.town = new TownLayer(ctx);
+    try { window.addEventListener(VP_LABELS_EVENT, this.onLabelsChanged); } catch { /* */ }
     this.hearts = new HeartFX(this.nhom);
   }
   private choNgoi(cha: THREE.Object3D, x: number, z: number, mauPhong: string, i: number): Ban {
@@ -241,12 +243,15 @@ export class VanphongScene {
     const den = new THREE.PointLight('#ffd9a0', 0, Math.max(rong, sau) * 1.3, 1.6); den.position.set(0, 2.4, 0); g.add(den); this.denPhong.push(den);
     this.cayCanh(g, -nr + 0.4, -ns + 0.4, 0.8);
     allDesks().forEach((d, i) => { const [x, , z] = vpChair(d); this.ban.set(`${d.x},${d.y}`, this.choNgoi(this.nhom, x, z, mau, i)); });
-    const div = document.createElement('div'); div.className = 'nhan-phong-3d'; div.style.setProperty('--mau', mau);
+    const div = document.createElement('div'); div.className = 'nhan-phong-3d'; div.style.setProperty('--mau', mau); div.dataset.label = 'workroom';
     div.append(document.createElement('i'), document.createTextNode('Work room'), document.createElement('small'));
+    applyLabelVisibility(div, isLabelOn('workroom'));
     const nhan = new CSS2DObject(div); nhan.center.set(0, 1); nhan.position.set(-nr + 0.1, CAO + 0.2, ns); g.add(nhan);
     this.roomLabel = div.querySelector('small')!;
+    this.roomLabelEl = div;
   }
   private roomLabel!: HTMLElement;
+  private roomLabelEl!: HTMLElement;
   private dung() {
     const anh = this.anhSan();
     const vatLieuSan = this.own(new THREE.MeshLambertMaterial({ map: anh }));
@@ -567,7 +572,12 @@ export class VanphongScene {
     }
   }
 
+  private onLabelsChanged = () => {
+    applyLabelVisibility(this.roomLabelEl, isLabelOn('workroom'));
+    this.town.refreshLabels();
+  };
   dispose() {
+    try { window.removeEventListener(VP_LABELS_EVENT, this.onLabelsChanged); } catch { /* */ }
     this.renderer.setAnimationLoop(null);
     this.ro.disconnect(); this.khung.removeEventListener('click', this.onClick); this.khung.removeEventListener('contextmenu', this.onMenuEv); this.dk.dispose(); this.town.dispose();
     for (const b of this.bay) this.canh.remove(b.m);

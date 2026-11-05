@@ -12,6 +12,7 @@ import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
 import { HeartFX } from './hearts';
+import { VP_LABELS_EVENT, applyLabelVisibility, isLabelOn, loadLabels, monitorLabelVisible, type LabelKey } from '../vpLabels';
 
 export interface TownCtx {
   nhom: THREE.Group; soft: boolean; own: <T extends { dispose(): void }>(m: T) => T;
@@ -38,10 +39,12 @@ const ICON = {
   print: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v3H4zm-1 4h10v5H3zm2 2h2v1H5zm6-5v8H5V3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
 };
 const boxW = (b: Box) => { const [x0, z0] = toWorld(b), [x1, z1] = toWorld({ x: b.x + b.w, y: b.y + b.h }); return { x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 }; };
-function sign(ctx: TownCtx, html: string, text: string, sub: string, mau: string, x: number, y: number, z: number, testid: string) {
+function sign(ctx: TownCtx, html: string, text: string, sub: string, mau: string, x: number, y: number, z: number, testid: string, labelKey?: LabelKey) {
   const div = document.createElement('div'); div.className = 'nhan-phong-3d nhan-pho'; div.style.setProperty('--mau', mau); div.dataset.testid = testid;
+  if (labelKey) div.dataset.label = labelKey;
   div.innerHTML = html; div.append(document.createTextNode(text));
   if (sub) { const s = document.createElement('small'); s.textContent = sub; div.append(s); }
+  if (labelKey && labelKey !== 'monitor') applyLabelVisibility(div, isLabelOn(labelKey));
   const o = new CSS2DObject(div); o.center.set(0.5, 1); o.position.set(x, y, z); ctx.nhom.add(o); return div;
 }
 
@@ -92,7 +95,7 @@ function cafe(ctx: TownCtx) {
   const chao = ctx.own(new THREE.MeshLambertMaterial({ color: '#fff4d6', emissive: '#ffd27a', emissiveIntensity: 0 }));
   for (const x of [-1, 1]) khoi(g, 0.3, 0.2, 0.3, chao, x, H - 0.25, 0, false); ctx.shades.push(chao);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffd9a0', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
-  sign(ctx, ICON.coffee, 'Crossian Cafe', 'cà phê · bạc xỉu', '#2f7d6d', b.cx, H + 0.6, b.cz - D / 2 + 0.2, 'vp-cafe');
+  sign(ctx, ICON.coffee, 'Crossian Cafe', 'cà phê · bạc xỉu', '#2f7d6d', b.cx, H + 0.6, b.cz - D / 2 + 0.2, 'vp-cafe', 'cafe');
 }
 /** Xuka Mát xa: across the back street from Crossian Cafe, open front facing the street. Beds + towels + lanterns, PG. */
 function massage(ctx: TownCtx) {
@@ -119,7 +122,7 @@ function massage(ctx: TownCtx) {
   const chao = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd6e6', emissive: '#ff8fb8', emissiveIntensity: 0 }));
   for (const x of [-1.2, 0, 1.2]) khoi(g, 0.26, 0.34, 0.26, chao, x, H - 0.3, 0.6, false); ctx.shades.push(chao);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffc2da', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
-  sign(ctx, ICON.spa, 'Xuka Mát xa', 'cổ vai gáy · ngâm chân', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-massage');
+  sign(ctx, ICON.spa, 'Xuka Mát xa', 'cổ vai gáy · ngâm chân', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-massage', 'massage');
 }
 /** Xém Nướng: BBQ + crocodile-meat hotpot opposite the pond. Voxel like Crossian / Xuka. */
 function xemNuong(ctx: TownCtx) {
@@ -151,7 +154,7 @@ function xemNuong(ctx: TownCtx) {
   const chao = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd4a8', emissive: '#ff8a3d', emissiveIntensity: 0 }));
   for (const x of [-1.1, 0.2, 1.3]) khoi(g, 0.28, 0.28, 0.28, chao, x, H - 0.3, 0.4, false); ctx.shades.push(chao);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffb070', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.4); g.add(l); ctx.lights.push(l); }
-  sign(ctx, ICON.grill, 'Xém Nướng', 'BBQ · lẩu cá sấu', accent, b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-xem-nuong');
+  sign(ctx, ICON.grill, 'Xém Nướng', 'BBQ · lẩu cá sấu', accent, b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'vp-xem-nuong', 'bbq');
 }
 /** Flower garden between Xuka and Xém Nướng — secret-affair hangout. */
 function garden(ctx: TownCtx) {
@@ -174,7 +177,7 @@ function garden(ctx: TownCtx) {
   }
   // low hedges at the edges
   for (const s of [-1, 1]) khoi(g, b.w - 0.4, 0.45, 0.22, '#4caf50', 0, 0.25, s * (b.d / 2 - 0.2));
-  sign(ctx, ICON.flower, 'Vườn hoa', 'đi bộ · hẹn hò…?', '#ad1457', b.cx, 1.6, b.cz - b.d / 2 + 0.3, 'vp-garden');
+  sign(ctx, ICON.flower, 'Vườn hoa', 'đi bộ · hẹn hò…?', '#ad1457', b.cx, 1.6, b.cz - b.d / 2 + 0.3, 'vp-garden', 'garden');
 }
 function trada(ctx: TownCtx) {
   const b = boxW(TRADA), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.nhom.add(g);
@@ -190,7 +193,7 @@ function trada(ctx: TownCtx) {
   khoi(g, 0.6, 0.35, 0.42, '#2e7d32', 1.7, 0.18, -0.7); for (let i = 0; i < 6; i++) khoi(g, 0.07, 0.18, 0.07, '#8bc34a', 1.5 + (i % 3) * 0.2, 0.44, -0.8 + Math.floor(i / 3) * 0.2, false);
   khoi(g, 0.06, 2.3, 0.06, '#5d5f6b', 0.1, 1.15, -0.3);
   for (let i = 0; i < 4; i++) khoi(g, 0.6, 0.06, 2.4, i % 2 ? '#f5d547' : '#e23d3d', -0.8 + i * 0.6, 2.32, -0.2, false);
-  sign(ctx, ICON.glass, 'Trà đá vỉa hè', '3 nghìn một cốc', '#d89a2b', b.cx, 2.75, b.cz, 'vp-trada');
+  sign(ctx, ICON.glass, 'Trà đá vỉa hè', '3 nghìn một cốc', '#d89a2b', b.cx, 2.75, b.cz, 'vp-trada', 'trada');
 }
 export interface Croc { g: THREE.Group; ham: THREE.Group; a: number; r: number; v: number }
 function crocMesh(cha: THREE.Object3D): Croc {
@@ -213,7 +216,7 @@ function pond(ctx: TownCtx) {
   for (const [dx, dz] of [[-0.6, 1.6], [0.5, -2.2]]) khoi(ctx.nhom, 0.6, 0.02, 0.5, '#5fae4f', cx + dx, 0.18, cz + dz, false); // lily pads
   // warning sign
   khoi(ctx.nhom, 0.08, 1.2, 0.08, '#6b5544', cx + rx + 0.7, 0.6, cz - rz * 0.6); khoi(ctx.nhom, 0.7, 0.45, 0.05, '#f5d547', cx + rx + 0.7, 1.25, cz - rz * 0.6);
-  sign(ctx, ICON.croc, 'Hồ cá sấu', 'cấm cho ăn', '#3f7d3a', cx, 1.4, cz - rz - 0.3, 'vp-pond');
+  sign(ctx, ICON.croc, 'Hồ cá sấu', 'cấm cho ăn', '#3f7d3a', cx, 1.4, cz - rz - 0.3, 'vp-pond', 'pond');
   const crocs = [0, 1, 2].map((i) => { const c = crocMesh(ctx.nhom); c.a = i * 2.1; c.r = 0.45 + i * 0.12; c.v = 0.25 + i * 0.07; return c; });
   const splash = new THREE.Mesh(ctx.own(new THREE.RingGeometry(0.7, 0.9, 32)), ctx.own(new THREE.MeshBasicMaterial({ color: '#e8f8ff', transparent: true, side: THREE.DoubleSide })));
   splash.rotation.x = -Math.PI / 2; splash.position.set(cx, 0.2, cz); splash.visible = false; ctx.nhom.add(splash);
@@ -226,7 +229,7 @@ function noc(ctx: TownCtx) {
   const man = ctx.own(new THREE.MeshLambertMaterial({ color: '#1c2030', emissive: '#94a3b8', emissiveIntensity: 0.4 }));
   khoi(g, 0.9, 0.5, 0.04, '#2a2833', 0, 1.05, -0.1); khoi(g, 0.82, 0.42, 0.01, man, 0, 1.05, -0.07, false);
   khoi(g, 0.12, 1.1, 0.12, '#3a3a44', 0.55, 0.55, -0.15); const den = ctx.own(new THREE.MeshLambertMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.3 })); khoi(g, 0.2, 0.2, 0.2, den, 0.55, 1.2, -0.15);
-  const el = sign(ctx, ICON.pulse, 'Monitor', '', '#64748b', x + 0.85, 2.05, z - 0.1, 'noc');
+  const el = sign(ctx, ICON.pulse, 'Monitor', '', '#64748b', x + 0.85, 2.05, z - 0.1, 'noc', 'monitor');
   const b = document.createElement('b'); el.append(document.createTextNode(': '), b);
   return { man, den, el, b };
 }
@@ -245,7 +248,7 @@ function smokeCorner(ctx: TownCtx) {
   // cigarette butt tray hint
   khoi(g, 0.2, 0.04, 0.2, '#c4cad3', 0.4, 0.96, 0.3, false);
   ctx.plant(g, b.w / 2 - 0.3, -b.d / 2 + 0.3, 0.7);
-  sign(ctx, ICON.smoke, 'Góc hút thuốc', 'cooler · tin đồn', '#64748b', b.cx, 1.8, b.cz, 'vp-smoke');
+  sign(ctx, ICON.smoke, 'Góc hút thuốc', 'cooler · tin đồn', '#64748b', b.cx, 1.8, b.cz, 'vp-smoke', 'smoke');
 }
 /** Outdoor gym + table tennis in the south yard. */
 function gymYard(ctx: TownCtx) {
@@ -260,7 +263,7 @@ function gymYard(ctx: TownCtx) {
   for (let i = 0; i < 4; i++) { khoi(g, 0.08, 0.08, 0.55, '#8a8f99', 1.3 + i * 0.3, 0.55, -0.6); khoi(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.85); khoi(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.35); }
   // mat
   khoi(g, 1.6, 0.03, 1.0, '#ef5350', 2.0, 0.04, 0.8, false);
-  sign(ctx, ICON.gym, 'Gym ngoài trời', 'bóng bàn · tạ', '#1565c0', b.cx, 1.7, b.cz - b.d / 2 + 0.2, 'vp-gym');
+  sign(ctx, ICON.gym, 'Gym ngoài trời', 'bóng bàn · tạ', '#1565c0', b.cx, 1.7, b.cz - b.d / 2 + 0.2, 'vp-gym', 'gym');
 }
 /** ATM + snack machine near trà đá. */
 function atmSnack(ctx: TownCtx) {
@@ -273,7 +276,7 @@ function atmSnack(ctx: TownCtx) {
   khoi(g, 0.85, 1.7, 0.55, '#e53935', 0.7, 0.85, -0.15); khoi(g, 0.7, 1.2, 0.04, vatLieu('#81d4fa', { transparent: true, opacity: 0.55 }), 0.7, 0.95, 0.14, false);
   for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) khoi(g, 0.14, 0.14, 0.1, ['#ffeb3b', '#8bc34a', '#ff9800', '#e91e63', '#fff', '#2196f3'][(r * 3 + c) % 6], 0.4 + c * 0.22, 1.35 - r * 0.3, 0.1, false);
   khoi(g, 0.35, 0.08, 0.12, '#1a1a1a', 0.7, 0.25, 0.15, false);
-  sign(ctx, ICON.atm, 'ATM · Snack', 'rút tiền · mì tôm', '#c62828', b.cx, 2.1, b.cz, 'vp-atm');
+  sign(ctx, ICON.atm, 'ATM · Snack', 'rút tiền · mì tôm', '#c62828', b.cx, 2.1, b.cz, 'vp-atm', 'atm');
 }
 /** Parking / security gate SW. */
 function securityGate(ctx: TownCtx) {
@@ -287,7 +290,7 @@ function securityGate(ctx: TownCtx) {
   khoi(g, 0.15, 0.9, 0.15, '#455a64', 0.2, 0.45, 0); khoi(g, 2.4, 0.1, 0.12, '#fdd835', 1.4, 0.95, 0); khoi(g, 2.4, 0.1, 0.04, '#212121', 1.4, 0.95, 0.02, false);
   // parking lines
   for (let i = 0; i < 3; i++) khoi(g, 0.08, 0.02, 1.0, '#ffffff', 0.6 + i * 0.9, 0.03, 0.3, false);
-  sign(ctx, ICON.gate, 'Cổng bảo vệ', 'đỗ xe · xin vào', '#455a64', b.cx, 2.4, b.cz, 'vp-gate');
+  sign(ctx, ICON.gate, 'Cổng bảo vệ', 'đỗ xe · xin vào', '#455a64', b.cx, 2.4, b.cz, 'vp-gate', 'gate');
 }
 /** Glass outdoor meeting pod — fake meetings / naps. */
 function meetingPod(ctx: TownCtx) {
@@ -306,7 +309,7 @@ function meetingPod(ctx: TownCtx) {
   }
   // laptop decoy
   khoi(g, 0.35, 0.02, 0.25, '#263238', 0.15, 0.78, 0.1, false); khoi(g, 0.35, 0.22, 0.02, vatLieuSang('#4fc3f7'), 0.15, 0.9, -0.02, false);
-  sign(ctx, ICON.pod, 'Pod họp ngoài', 'meeting giả · ngủ', '#0288d1', b.cx, 2.6, b.cz, 'vp-pod');
+  sign(ctx, ICON.pod, 'Pod họp ngoài', 'meeting giả · ngủ', '#0288d1', b.cx, 2.6, b.cz, 'vp-pod', 'pod');
 }
 /** Photocopy / printer kiosk on the front sidewalk. */
 function printKiosk(ctx: TownCtx) {
@@ -321,7 +324,7 @@ function printKiosk(ctx: TownCtx) {
   khoi(g, 0.5, 0.02, 0.4, '#fafafa', 1.0, 1.12, 0.05, false);
   // paper stack mess
   for (let i = 0; i < 3; i++) khoi(g, 0.35, 0.02, 0.28, '#fff', -0.1 + i * 0.05, 0.2 + i * 0.03, 0.5, false);
-  sign(ctx, ICON.print, 'Máy in · photocopy', 'kẹt giấy · lương sếp?', '#546e7a', b.cx, 1.9, b.cz, 'vp-print');
+  sign(ctx, ICON.print, 'Máy in · photocopy', 'kẹt giấy · lương sếp?', '#546e7a', b.cx, 1.9, b.cz, 'vp-print', 'print');
 }
 
 // ---------- side characters ----------
@@ -396,7 +399,10 @@ export class TownLayer {
     }; } catch { /* no storage */ }
     for (const e of this.world.ents) this.figs.set(e.id, this.fig(e));
     this.setItops(undefined);
+    try { window.addEventListener(VP_LABELS_EVENT, this.onLabelsChanged); } catch { /* no window */ }
   }
+  private onLabelsChanged = () => { this.refreshLabels(); };
+  disposeLabelsListener() { try { window.removeEventListener(VP_LABELS_EVENT, this.onLabelsChanged); } catch { /* */ } }
   /** Pond centre in world units (thrown agents fly here). */
   get pondAt(): THREE.Vector3 { return new THREE.Vector3(this.p.cx, 0.2, this.p.cz); }
   /** Crocodiles chomp + splash for a while (an agent was thrown in). */
@@ -414,11 +420,23 @@ export class TownLayer {
     const un = !s || s.mode === 'unconfigured', st = un ? 'idle' : s!.state;
     const label = un ? 'chưa cấu hình' : st === 'alert' ? `${s!.alerts.length} cảnh báo` : st === 'error' ? 'lỗi đọc metrics' : st === 'checking' ? 'đang kiểm tra…' : 'ổn định';
     const mode = s?.mode === 'demo' ? 'Monitor (demo)' : s?.mode === 'prometheus' ? 'Monitor · Prometheus' : 'Monitor';
-    const key = `${st}|${label}|${mode}|${s?.endpoint ?? ''}`; if (key === this.nocKey) return; this.nocKey = key;
+    const show = monitorLabelVisible(s);
+    const key = `${st}|${label}|${mode}|${s?.endpoint ?? ''}|${show}`; if (key === this.nocKey) return; this.nocKey = key;
     const el = this.k.el; el.className = `nhan-phong-3d nhan-pho noc-${st}`; (el.childNodes[1] as Text).textContent = mode; this.k.b.textContent = label;
     el.title = s?.endpoint ? `${s.endpoint} · ${s.query ?? ''}` : 'Set OFFICE_PROMETHEUS_URL';
+    applyLabelVisibility(el, show);
     const c = st === 'ok' ? '#22c55e' : st === 'alert' || st === 'error' ? '#ef4444' : st === 'checking' ? '#f59e0b' : '#94a3b8';
     this.k.man.emissive.set(c); this.k.den.emissive.set(c); this.k.den.color.set(c); this.k.den.emissiveIntensity = st === 'idle' ? 0.3 : 0.9;
+  }
+  /** Re-apply every structure label from current prefs (Settings toggle / localStorage). */
+  refreshLabels() {
+    const prefs = loadLabels();
+    for (const el of document.querySelectorAll<HTMLElement>('[data-label]')) {
+      const key = el.dataset.label as LabelKey | undefined;
+      if (!key) continue;
+      if (key === 'monitor') applyLabelVisibility(el, monitorLabelVisible(this.itops, prefs));
+      else applyLabelVisibility(el, isLabelOn(key, prefs));
+    }
   }
   private lookOf(e: Ent) { return currentLook(`npc:${e.id}`) ?? e.look ?? ''; }
   private fig(e: Ent): Fig {
@@ -547,5 +565,5 @@ export class TownLayer {
     splash.visible = eating;
     if (eating) { const p = (t * 1.3) % 1; splash.scale.setScalar(0.4 + p * 1.6); (splash.material as THREE.MeshBasicMaterial).opacity = 1 - p; }
   }
-  dispose() { for (const f of this.figs.values()) f.el.remove(); this.cars.dispose(); }
+  dispose() { this.disposeLabelsListener(); for (const f of this.figs.values()) f.el.remove(); this.cars.dispose(); }
 }

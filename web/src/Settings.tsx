@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { IconCross, IconGear } from './icons';
 import { fetchSettings, saveSettings, type SettingsView } from './settingsApi';
+import { DEFAULT_LABELS, LABEL_ROWS, loadLabels, saveLabels, type LabelPrefs, type MonitorLabelMode } from './vpLabels';
 
 const MODE_VI: Record<string, string> = {
   prometheus: 'Prometheus',
@@ -26,6 +27,7 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
   const [urlDirty, setUrlDirty] = useState(false);
   const [vpDebug, setVpDebug] = useState(() => localStorage.getItem('vp-debug') === '1');
   const [advanced, setAdvanced] = useState(false);
+  const [labels, setLabels] = useState<LabelPrefs>(() => loadLabels());
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +75,22 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
     else localStorage.removeItem('vp-debug');
   };
 
+  const setLabelBool = (key: Exclude<keyof LabelPrefs, 'monitor'>, on: boolean) => {
+    const next = { ...labels, [key]: on };
+    setLabels(next);
+    saveLabels(next);
+  };
+  const setMonitorMode = (mode: MonitorLabelMode) => {
+    const next = { ...labels, monitor: mode };
+    setLabels(next);
+    saveLabels(next);
+  };
+  const resetLabels = () => {
+    const next = { ...DEFAULT_LABELS };
+    setLabels(next);
+    saveLabels(next);
+  };
+
   return (
     <div className="editor-back" role="dialog" aria-modal="true" aria-labelledby="settings-title" data-testid="settings-panel" onClick={onClose}>
       <div className="editor settings-panel" onClick={(e) => e.stopPropagation()}>
@@ -115,6 +133,38 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
               <div className="editor-foot">
                 <button type="button" disabled={busy || !view.prometheus.urlSet} onClick={onClearUrl}>Xóa URL</button>
                 <button type="button" className="primary" disabled={busy} data-testid="settings-save" onClick={onSave}>Lưu</button>
+              </div>
+            </section>
+
+            <section className="settings-sec" data-testid="settings-labels">
+              <h4>Nhãn công trình</h4>
+              <p className="muted">Bật/tắt label trên bản đồ (lưu localStorage). Mặc định chỉ quán + hồ; Monitor chỉ hiện khi lỗi/cảnh báo.</p>
+              <div className="settings-label-grid">
+                {LABEL_ROWS.filter((r) => r.key !== 'monitor').map(({ key, title }) => (
+                  <label key={key} className="settings-check settings-label-item">
+                    <input
+                      type="checkbox"
+                      checked={labels[key as Exclude<keyof LabelPrefs, 'monitor'>]}
+                      onChange={(e) => setLabelBool(key as Exclude<keyof LabelPrefs, 'monitor'>, e.target.checked)}
+                      data-testid={`settings-label-${key}`}
+                    />
+                    {title}
+                  </label>
+                ))}
+              </div>
+              <label className="settings-monitor-mode">Monitor / IT Ops
+                <select
+                  value={labels.monitor}
+                  onChange={(e) => setMonitorMode(e.target.value as MonitorLabelMode)}
+                  data-testid="settings-label-monitor"
+                >
+                  <option value="alert">Chỉ khi lỗi / cảnh báo</option>
+                  <option value="off">Luôn ẩn</option>
+                  <option value="always">Luôn hiện</option>
+                </select>
+              </label>
+              <div className="editor-foot">
+                <button type="button" data-testid="settings-labels-reset" onClick={resetLabels}>Mặc định</button>
               </div>
             </section>
 

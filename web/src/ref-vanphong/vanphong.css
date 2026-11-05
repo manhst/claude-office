@@ -134,6 +134,9 @@
 .vp-ref .vp3d-nhan.xa .ten-3d small, .vp-ref .vp3d-nhan.xa .viec-cho { display: none; }
 .vp-ref .vp3d-nhan.xa .nguoi-3d:not(.thu-ky):not(.hover) .bong-3d { display: none; }
 .vp-ref .vp3d-nhan.xa .ten-3d { font-size: 11px; padding: 2px 7px 2px 6px; }
+/* ours: structure-label prefs (Settings → Nhãn công trình); !important beats CSS2DRenderer clearing inline display */
+.vp-ref .nhan-phong-3d.nhan-an, .vp-ref .nhan-an { display: none !important; }
+
 .vp-ref .nhan-phong-3d {
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; pointer-events: none;
   padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 13px;

@@ -65,6 +65,7 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 | Desk / session limits | read-only (6 desks, 6 agents/session, 3 cols) | Layout defaults; not runtime-editable. |
 | Name & avatar | right-click agent name (localStorage) | Linked from Settings notes; not duplicated. |
 | `vp-debug` | Advanced → localStorage `vp-debug=1` | Enables `__vpTraffic` / `__vpTown` console hooks after reload. |
+| Structure labels | Settings → **Nhãn công trình** | localStorage `vp-labels`. Defaults: ON for Crossian / Xuka / Xém Nướng / trà đá / hồ cá sấu; OFF for other amenities & rooms; Monitor = chỉ khi lỗi/cảnh báo. |
 
 Screenshot: `docs/screens/settings.png` (`cd web && npm run build && node scripts/screens-settings.mjs`).
 
@@ -191,7 +192,7 @@ event ingest auth (loopback, Origin, Content-Type, preflight), payload sanitizin
 
 Demo mode (`npm run screens` in `web/`, headless Chrome):
 - `docs/screens/session-1280-vanphong.png`, `session-1280-vanphong-claude-md.png`, `session-390-vanphong.png`
-- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`); `town-office-itops.png`, `town-labels.png`, `town-agent-massage.png`, `town-ambulance.png` (`node scripts/screens-followup.mjs`); `town-xem-nuong.png`, `town-flower-garden.png`, `town-slower-talk.png` (`node scripts/screens-north.mjs`); outdoor amenities + drama: `town-smoke-corner.png`, `town-gym-yard.png`, `town-atm-snack.png`, `town-security-gate.png`, `town-meeting-pod.png`, `town-print-kiosk.png`, `town-drama-smoke.png` (`node scripts/screens-amenities.mjs`)
+- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build); `town-massage.png`, `town-traffic.png`, `town-crash-argue.png`, `town-fire.png`, `town-explosion.png` (`node scripts/screens-traffic.mjs`); `town-office-itops.png`, `town-labels.png`, `town-labels.png`, `town-agent-massage.png`, `town-ambulance.png` (`node scripts/screens-followup.mjs`); `town-labels-clean.png` (`node scripts/screens-labels-clean.mjs`); `town-xem-nuong.png`, `town-flower-garden.png`, `town-slower-talk.png` (`node scripts/screens-north.mjs`); outdoor amenities + drama: `town-smoke-corner.png`, `town-gym-yard.png`, `town-atm-snack.png`, `town-security-gate.png`, `town-meeting-pod.png`, `town-print-kiosk.png`, `town-drama-smoke.png` (`node scripts/screens-amenities.mjs`)
 
 The old 2D (SVG) and 3D (React Three Fiber + Quaternius model) views were removed; the Vanphong view replaces both.
 
