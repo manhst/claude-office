@@ -3,6 +3,7 @@
 import type { ItOpsStatus } from '../types';
 import { LINES, PAIRS } from './dialogue';
 import { ATM_SPOTS, BBQ_SEATS, CAFE_SEATS, GATE_SPOTS, GYM_SPOTS, ITOPS_SPOT, MASSAGE_BEDS, POD_SPOTS, POND_EDGE, PRINT_SPOTS, ROMANCE_SPOTS, SMOKE_SPOTS, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
+import { townRunSpeed } from '../vpRunSpeed';
 export type Kind = 'itops' | 'npc' | 'dog' | 'cat' | 'trex';
 export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'drama' | 'hunt' | 'chomp' | 'carry' | 'carried';
 export interface Ent {
@@ -158,7 +159,7 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
       if (x < 0.79) return say(go(e, jitter(pick(GATE_SPOTS, r), r, 6), 'gate'), pick(LINES.gateGo, r), now);
       if (x < 0.83) return say(go(e, jitter(pick(POD_SPOTS, r), r, 6), 'pod'), pick(LINES.podGo, r), now);
       if (x < 0.87) return say(go(e, jitter(pick(PRINT_SPOTS, r), r, 6), 'print'), pick(LINES.printGo, r), now);
-      if (x < 0.92) return say(go(e, pick(STREET, r), 'idle', 190), pick(LINES.run, r), now);
+      if (x < 0.92) return say(go(e, pick(STREET, r), 'idle', townRunSpeed()), pick(LINES.run, r), now);
       if (x < 0.96) { const o = pick(w.ents.filter((z) => z.kind === 'npc' && z.id !== e.id && z.act !== 'gone' && z.act !== 'carried'), r); return o ? go(e, jitter({ x: o.x + 28, y: o.y }, r, 6), 'chat') : e; }
       if (x < 0.98) return go(e, pick(POND_EDGE, r), r() < 0.35 ? 'fall' : 'idle');
       return go({ ...e, partner: undefined }, pick(YARD, r), 'idle');

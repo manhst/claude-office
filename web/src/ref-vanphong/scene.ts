@@ -10,6 +10,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRe
 import type { AgentUI, OfficeState } from '../reducer';
 import { allDesks } from '../layout';
 import { newWalker, resolveOverlaps, stepWalker, type LabelBox, type Walker } from '../walk';
+import { walkerSpeedFor } from '../vpRunSpeed';
 import { khoi, tron, vatLieu, vatLieuSang, dungNguoi, setShadows, type Hinh } from './characters';
 import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, subtitleFor, vpBubble, vpChair, vpGoal, vpPlan, vpStatus, type IdlePlan, type VpStatus } from './adapter';
 import { HeartFX } from './hearts';
@@ -432,7 +433,8 @@ export class VanphongScene {
       if (gone) { this.capNhatBan(n.ban, null, t, dt); return; }
       n.goneUntil = undefined; n.walker = newWalker(DOOR); n.seated = false; n.dung.goc.visible = true; n.dung.goc.add(n.nhan); n.nhan.position.set(0, 2.05, 0);
     }
-    n.walker = stepWalker(n.walker, vpGoal(a, s.agents, s.messages, this.idle[n.id]), dt, vpPlan);
+    const goal = vpGoal(a, s.agents, s.messages, this.idle[n.id]);
+    n.walker = stepWalker(n.walker, goal, dt, vpPlan, walkerSpeedFor(goal, a.state));
     if (n.walker.phase !== 'waiting') n.idleKind = undefined;
     if (n.el.dataset.phase !== n.walker.phase) n.el.dataset.phase = n.walker.phase;
     const seated = n.walker.phase === 'seated';

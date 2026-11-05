@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconCross, IconGear } from './icons';
 import { fetchSettings, saveSettings, type SettingsView } from './settingsApi';
 import { DEFAULT_LABELS, LABEL_ROWS, loadLabels, saveLabels, type LabelPrefs, type MonitorLabelMode } from './vpLabels';
+import { RUN_SPEED_DEFAULT, RUN_SPEED_MAX, RUN_SPEED_MIN, loadRunSpeed, saveRunSpeed } from './vpRunSpeed';
 
 const MODE_VI: Record<string, string> = {
   prometheus: 'Prometheus',
@@ -26,6 +27,7 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
   const [intervalSec, setIntervalSec] = useState('30');
   const [urlDirty, setUrlDirty] = useState(false);
   const [vpDebug, setVpDebug] = useState(() => localStorage.getItem('vp-debug') === '1');
+  const [runSpeed, setRunSpeed] = useState(() => loadRunSpeed());
   const [advanced, setAdvanced] = useState(false);
   const [labels, setLabels] = useState<LabelPrefs>(() => loadLabels());
 
@@ -165,6 +167,30 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
               </label>
               <div className="editor-foot">
                 <button type="button" data-testid="settings-labels-reset" onClick={resetLabels}>Mặc định</button>
+              </div>
+            </section>
+
+            <section className="settings-sec" data-testid="settings-run-speed">
+              <h4>Tốc độ chạy</h4>
+              <p className="muted">Chỉ tốc độ <b>chạy</b> (đi bộ giữ nguyên). Ambient / NPC / ra quán dùng mức này; agent đang làm việc trở về bàn luôn chạy max.</p>
+              <label className="settings-run-speed">Tốc độ chạy
+                <input
+                  type="range"
+                  min={RUN_SPEED_MIN}
+                  max={RUN_SPEED_MAX}
+                  step={0.1}
+                  value={runSpeed}
+                  data-testid="settings-run-speed-input"
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setRunSpeed(v);
+                    saveRunSpeed(v);
+                  }}
+                />
+                <span className="mono" data-testid="settings-run-speed-value">{runSpeed.toFixed(1)} m/s</span>
+              </label>
+              <div className="editor-foot">
+                <button type="button" data-testid="settings-run-speed-reset" onClick={() => { setRunSpeed(RUN_SPEED_DEFAULT); saveRunSpeed(RUN_SPEED_DEFAULT); }}>Mặc định</button>
               </div>
             </section>
 

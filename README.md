@@ -65,6 +65,7 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 | Desk / session limits | read-only (6 desks, 6 agents/session, 3 cols) | Layout defaults; not runtime-editable. |
 | Name & avatar | right-click agent name (localStorage) | Linked from Settings notes; not duplicated. |
 | `vp-debug` | Advanced → localStorage `vp-debug=1` | Enables `__vpTraffic` / `__vpTown` console hooks after reload. |
+| Run speed / Tốc độ chạy | Settings → localStorage `vp-run-speed` | Ambient/NPC run (default 2.5 m/s, max ≈5.07 = old sprint). Walk unchanged at 1.6 m/s. Active agent returning to desk always uses max. |
 | Structure labels | Settings → **Nhãn công trình** | localStorage `vp-labels`. Defaults: ON for Crossian / Xuka / Xém Nướng / trà đá / hồ cá sấu; OFF for other amenities & rooms; Monitor = chỉ khi lỗi/cảnh báo. |
 
 **Session dump (left sidebar).** Selecting a session shows a CLI-like field list (sid, cwd, transcript, tool, prompt, cost, started/lastSeen, source, all subagents — not agent profile markdown bodies). Session dump and Events are collapsible (localStorage `vp-collapse`). Screenshot: `docs/screens/session-dump.png` (`cd web && npm run build && node scripts/screens-session-dump.mjs`).
