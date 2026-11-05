@@ -31,7 +31,9 @@ describe('vpRunSpeed', () => {
     expect(loadRunSpeed()).toBe(RUN_SPEED_DEFAULT);
     expect(TOWN_RUN_SPEED_MAX).toBe(190);
     expect(RUN_SPEED_MAX).toBeCloseTo(190 / PX, 5);
+    expect(RUN_SPEED_MIN).toBe(0.1);
     expect(clampRunSpeed(0)).toBe(RUN_SPEED_MIN);
+    expect(clampRunSpeed(0.1)).toBe(0.1);
     expect(clampRunSpeed(99)).toBe(RUN_SPEED_MAX);
   });
 

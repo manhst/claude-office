@@ -8,7 +8,7 @@ export const VP_RUN_SPEED_EVENT = 'vp-run-speed-changed';
 
 /** World m/s. Max matches prior town NPC sprint (190 plan-px/s ÷ PX). */
 export const RUN_SPEED_MAX = 190 / PX; // ≈ 5.067 m/s — previous "crazy fast" run
-export const RUN_SPEED_MIN = 1.8; // just above walk
+export const RUN_SPEED_MIN = 0.1;
 /** Default slower than the old sprint so the complaint is fixed out of the box. */
 export const RUN_SPEED_DEFAULT = 2.5;
 
