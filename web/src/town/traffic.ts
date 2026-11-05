@@ -26,8 +26,8 @@ export interface Vehicle {
   say?: string; sayUntil?: number; /** crash partner (both drivers argue in turns) */ other?: number; turn?: number; /** responding to this incident x */ target?: number; hitCd?: number;
 }
 export interface Traffic { vs: Vehicle[]; nextId: number; nextSpawn: number; t: number }
-/** Max vehicles on the road at once (responders get +2 headroom). */
-export const CAP = 5;
+/** Max vehicles on the road at once (was 5; cut to ~50%). Responders still spawn on call. */
+export const CAP = 2;
 export const ARGUE_MS = 4000;
 export const P = { hit: 0.5, crash: 0.35, fireAfterCrash: 0.4, randomFire: 0.0006, fireMs: 7000, boomMs: 1400, wreckMs: 9000, argueMs: 18000 };
 
