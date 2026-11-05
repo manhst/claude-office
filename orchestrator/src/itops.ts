@@ -20,14 +20,27 @@ export function parsePrometheus(body: unknown): ItOpsAlert[] {
   });
 }
 const safeUrl = (u: string) => { try { const x = new URL(u); x.username = ''; x.password = ''; x.search = ''; return x.toString().replace(/\/$/, ''); } catch { return 'invalid url'; } };
+function initialStatus(cfg: ItOpsConfig): ItOpsStatus {
+  return cfg.url ? { mode: 'prometheus', state: 'checking', endpoint: safeUrl(cfg.url), query: cfg.query, alerts: [] }
+    : cfg.demo ? { mode: 'demo', state: 'ok', query: 'demo', alerts: [] } : { mode: 'unconfigured', state: 'unconfigured', alerts: [] };
+}
 export class ItOpsMonitor {
   status: ItOpsStatus; private timer?: NodeJS.Timeout; private n = 0;
   constructor(private cfg: ItOpsConfig, private emit: (s: ItOpsStatus) => void, private fetchFn: typeof fetch = fetch, private now = () => Date.now()) {
-    this.status = cfg.url ? { mode: 'prometheus', state: 'checking', endpoint: safeUrl(cfg.url), query: cfg.query, alerts: [] }
-      : cfg.demo ? { mode: 'demo', state: 'ok', query: 'demo', alerts: [] } : { mode: 'unconfigured', state: 'unconfigured', alerts: [] };
+    this.status = initialStatus(cfg);
+  }
+  get config(): ItOpsConfig { return { ...this.cfg }; }
+  /** Live-apply a new config (Settings UI / API). Restarts the poll timer. */
+  reconfigure(cfg: ItOpsConfig) {
+    this.stop();
+    this.cfg = cfg;
+    this.n = 0;
+    this.status = initialStatus(cfg);
+    this.emit(this.status);
+    this.start();
   }
   start() { if (this.status.mode === 'unconfigured') return; void this.check(); this.timer = setInterval(() => void this.check(), this.cfg.demo ? 15_000 : this.cfg.intervalMs); this.timer.unref?.(); }
-  stop() { clearInterval(this.timer); }
+  stop() { clearInterval(this.timer); this.timer = undefined; }
   private set(p: Partial<ItOpsStatus>) { this.status = { ...this.status, ...p, checkedAt: this.now() }; this.emit(this.status); }
   async check() {
     if (this.status.mode === 'demo') { // alternates: ok, alert, ok, ... clearly labelled demo

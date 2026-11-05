@@ -7,9 +7,10 @@ import { OfficeServer, newToken } from './server.js';
 import { JsonlLog } from './log.js';
 import { simulate } from './simulate.js';
 import { UsageStore } from './usage.js';
-import { ItOpsMonitor, itopsConfigFromEnv } from './itops.js';
+import { ItOpsMonitor } from './itops.js';
+import { applyPatch, loadSettings, resolveItopsConfig, saveSettings, toView, type OfficeSettingsFile, type SettingsPatch } from './settings.js';
 const here = dirname(fileURLToPath(import.meta.url));
-export interface StartOpts { demo: boolean; port: number; logDir: string; printToken: boolean; webDir: string; stepMs: number; userAgentsDir?: string; prometheus?: string }
+export interface StartOpts { demo: boolean; port: number; logDir: string; printToken: boolean; webDir: string; stepMs: number; userAgentsDir?: string; prometheus?: string; settingsPath?: string }
 export function parseArgs(argv: string[]): StartOpts {
   const o: StartOpts = { demo: process.env.OFFICE_DEMO === '1', port: 7777, logDir: resolve(here, '../logs'), printToken: false, webDir: resolve(here, '../../web/dist'), stepMs: 1500,
     userAgentsDir: process.env.OFFICE_USER_AGENTS_DIR ?? join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'agents') };
@@ -19,18 +20,37 @@ export function parseArgs(argv: string[]): StartOpts {
     else if (a === '--log-dir') o.logDir = resolve(argv[++i]); else if (a === '--print-token') o.printToken = true;
     else if (a === '--step-ms') o.stepMs = Number(argv[++i]); else if (a === '--user-agents') o.userAgentsDir = argv[++i] || undefined;
     else if (a === '--prometheus') o.prometheus = argv[++i];
+    else if (a === '--settings') o.settingsPath = resolve(argv[++i]);
   }
   if (o.demo && !process.env.OFFICE_USER_AGENTS_DIR && !argv.includes('--user-agents')) o.userAgentsDir = undefined; // demo stays deterministic (A/B/C fixtures only)
   return o;
 }
 /** Starts the office server. Sessions come from the `office` Claude Code mod (POST /event); --demo runs the built-in simulator. */
 export async function start(o: StartOpts) {
+  const runDir = resolve(here, '../.run'); mkdirSync(runDir, { recursive: true, mode: 0o700 });
+  const settingsPath = o.settingsPath ?? join(runDir, 'office-settings.json');
+  let file: OfficeSettingsFile = loadSettings(settingsPath);
   const tracker = new SessionTracker({ userAgentsDir: o.userAgentsDir });
   const token = newToken();
   let server!: OfficeServer;
-  const itops = new ItOpsMonitor(itopsConfigFromEnv(process.env, o.demo, o.prometheus), (status) => server?.broadcast({ t: 'itops.status', status, ts: Date.now() }));
+  const itops = new ItOpsMonitor(resolveItopsConfig(process.env, o.demo, o.prometheus, file), (status) => server?.broadcast({ t: 'itops.status', status, ts: Date.now() }));
   const usage = new UsageStore(); usage.onChange = (u) => server?.broadcast({ t: 'usage.update', usage: u, ts: Date.now() });
-  server = new OfficeServer(token, () => ({ ...tracker.snapshot(), itops: itops.status, usage: usage.latest }) as any, { onEvent: (p) => ((p as any)?.type === 'usage' ? usage.accept(p) : tracker.ingest(p)), staticDir: existsSync(o.webDir) ? o.webDir : undefined });
+  const view = () => toView(file, itops.config, itops.status, o.demo);
+  server = new OfficeServer(token, () => ({ ...tracker.snapshot(), itops: itops.status, usage: usage.latest }) as any, {
+    onEvent: (p) => ((p as any)?.type === 'usage' ? usage.accept(p) : tracker.ingest(p)),
+    staticDir: existsSync(o.webDir) ? o.webDir : undefined,
+    getSettings: () => view(),
+    setSettings: (raw) => {
+      try {
+        const next = applyPatch(file, (raw ?? {}) as SettingsPatch);
+        saveSettings(settingsPath, next);
+        file = next;
+        // Settings UI/API is source of truth after save; CLI/env only seed the first load.
+        itops.reconfigure(resolveItopsConfig(process.env, o.demo, undefined, file));
+        return { ok: true as const, view: view() };
+      } catch (e) { return { ok: false as const, error: String((e as Error).message ?? e).slice(0, 200) }; }
+    },
+  });
   const log = new JsonlLog(join(o.logDir, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`));
   tracker.on((e) => { if (e.t !== 'sessions.update') log.write(e); server.broadcast(e); });
   const sweep = setInterval(() => tracker.sweep(), 5000); sweep.unref();
@@ -38,13 +58,13 @@ export async function start(o: StartOpts) {
   itops.start();
   console.error(`[office] IT Ops: ${itops.status.mode}${itops.status.endpoint ? ` ${itops.status.endpoint}` : ''}`);
   const uiUrl = `http://127.0.0.1:${port}/#token=${token}`;
-  const runDir = resolve(here, '../.run'); mkdirSync(runDir, { recursive: true, mode: 0o700 });
   writeFileSync(join(runDir, 'ui-url.txt'), uiUrl + '\n', { mode: 0o600 });
   console.error(`[office] mod events: POST http://127.0.0.1:${port}/event   log=${log.path}${o.demo ? '   (demo sessions)' : ''}`);
   console.error(`[office] UI: ${o.printToken ? uiUrl : uiUrl.replace(/#token=.*/, '#token=[REDACTED]')} (full URL in orchestrator/.run/ui-url.txt, mode 600)`);
+  console.error(`[office] settings: ${settingsPath}`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
   const close = async () => { clearInterval(sweep); itops.stop(); await server.close(); };
-  return { port, token, tracker, server, usage, close, logPath: log.path };
+  return { port, token, tracker, server, usage, itops, settingsPath, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

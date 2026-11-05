@@ -20,3 +20,4 @@ export const IconFile = (p: P) => <Svg {...p}><path d="M4 2h5.5L12 4.5V14H4z" />
 export const IconBranch = (p: P) => <Svg {...p}><circle cx="5" cy="3.5" r="1.5" /><circle cx="5" cy="12.5" r="1.5" /><circle cx="11" cy="6.5" r="1.5" /><path d="M5 5v6M11 8c0 2-3 2-6 3" /></Svg>;
 export const IconEdit = (p: P) => <Svg {...p}><path d="M10.5 2.5 13.5 5.5 6 13H3v-3z" /><path d="m9 4 3 3" /></Svg>;
 export const IconCroc = (p: P) => <Svg {...p}><path d="M1.5 9.5c2-2 5-2.5 8-2l4.5-1.5-1 2.5 1 1.5-4.5-.5c-3 1.5-6 1.5-8 0z" /><circle cx="8.5" cy="7" r=".6" fill="currentColor" stroke="none" /></Svg>;
+export const IconGear = (p: P) => <Svg {...p}><circle cx="8" cy="8" r="2.2" /><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M12.8 3.2l-1.1 1.1M4.3 11.7l-1.1 1.1" /></Svg>;

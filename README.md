@@ -54,6 +54,20 @@ The Vanphong view (the only view) puts the voxel office inside a small town. Ses
 | `OFFICE_PROMETHEUS_QUERY` | Instant query; every returned series counts as a problem. Default `ALERTS{alertstate="firing"}`. |
 | `OFFICE_PROMETHEUS_INTERVAL_MS` | Poll interval, default 30000 (min 2000). |
 
+### Settings (Cài đặt)
+
+Gear icon in the header opens **Cài đặt**. Useful knobs already in the product, surfaced there:
+
+| Setting | Where it lives | Notes |
+|---|---|---|
+| Prometheus URL / query / poll interval | UI → `GET`/`PUT /settings` (Bearer run token) → `orchestrator/.run/office-settings.json` (mode 600) | Live-reloads IT Ops without restart. Password in the URL is masked in the UI. Env/`--prometheus` still seed the first load when the file is empty. |
+| Demo mode | read-only badge when `--demo` / `OFFICE_DEMO=1` | Shown on the Settings panel. |
+| Desk / session limits | read-only (6 desks, 6 agents/session, 3 cols) | Layout defaults; not runtime-editable. |
+| Name & avatar | right-click agent name (localStorage) | Linked from Settings notes; not duplicated. |
+| `vp-debug` | Advanced → localStorage `vp-debug=1` | Enables `__vpTraffic` / `__vpTown` console hooks after reload. |
+
+Screenshot: `docs/screens/settings.png` (`cd web && npm run build && node scripts/screens-settings.mjs`).
+
 Not configured: the badge says **chưa cấu hình** and IT Ops stays at the kiosk, with no fake alerts. If the API can't be read, the error itself is reported.
 `--demo` with no URL runs a monitor labelled **(demo)** that alternates ok and `DEMO HighLatency` every 15 s.
 **Xuka Mát xa** sits across the back street from Crossian Cafe; NPCs and free office agents walk there, lie on a bed and chat about massages (PG, comedic), then walk back.

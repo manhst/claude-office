@@ -31,7 +31,10 @@ export function eventRequestRejection(req: Pick<IncomingMessage, 'headers'> & { 
 export class OfficeServer {
   private http: Server; private wss: WebSocketServer;
   port = 0;
-  constructor(private token: string, private snapshot: () => OfficeEvent, private opts: { onEvent?: (p: unknown) => boolean; staticDir?: string } = {}) {
+  constructor(private token: string, private snapshot: () => OfficeEvent, private opts: {
+    onEvent?: (p: unknown) => boolean; staticDir?: string;
+    getSettings?: () => unknown; setSettings?: (patch: unknown) => { ok: true; view: unknown } | { ok: false; error: string };
+  } = {}) {
     this.http = createServer((req, res) => { this.handle(req, res).catch(() => { if (!res.headersSent) res.writeHead(500).end(); }); });
     this.wss = new WebSocketServer({ noServer: true });
     this.http.on('upgrade', (req: IncomingMessage, socket, head) => {
@@ -46,6 +49,25 @@ export class OfficeServer {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const sec = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
     if (url.pathname === '/health') { res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end('{"ok":true}'); return; }
+    if (url.pathname === '/settings') {
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1] ?? url.searchParams.get('token');
+      if (!tokenOk(auth ?? null, this.token)) { res.writeHead(401, { ...sec, 'content-type': 'application/json' }).end('{"error":"unauthorized"}'); return; }
+      if (req.method === 'GET') {
+        if (!this.opts.getSettings) { res.writeHead(501, { ...sec, 'content-type': 'application/json' }).end('{"error":"unavailable"}'); return; }
+        res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(this.opts.getSettings())); return;
+      }
+      if (req.method === 'PUT' || req.method === 'PATCH') {
+        if (!this.opts.setSettings) { res.writeHead(501, { ...sec, 'content-type': 'application/json' }).end('{"error":"unavailable"}'); return; }
+        let body = ''; let tooBig = false;
+        for await (const chunk of req) { body += chunk; if (body.length > 16 * 1024) { tooBig = true; break; } }
+        if (tooBig) { res.writeHead(413, sec).end(); req.destroy(); return; }
+        let patch: unknown; try { patch = body ? JSON.parse(body) : {}; } catch { res.writeHead(400, { ...sec, 'content-type': 'application/json' }).end('{"error":"bad json"}'); return; }
+        const r = this.opts.setSettings(patch);
+        if (!r.ok) { res.writeHead(400, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ error: r.error })); return; }
+        res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(r.view)); return;
+      }
+      res.writeHead(405, sec).end(); return;
+    }
     if (url.pathname === '/event') {
       if (req.method !== 'POST') { res.writeHead(405, sec).end(); return; }
       const why = eventRequestRejection(req);

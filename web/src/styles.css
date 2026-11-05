@@ -47,3 +47,17 @@ main{display:flex;gap:14px;padding:14px;align-items:flex-start}
 @keyframes pulse{50%{box-shadow:0 0 0 6px #ef444466}} /* not transform: CSS2DRenderer owns it */
 .vp-ref .ent-3d.bao-dong .bong-3d{background:#fee2e2;color:#7f1d1d;border:1px solid #ef4444;font-weight:700}
 .vp-ref .ten-3d,.vp-ref .bong-3d{cursor:pointer}
+
+/* Settings panel */
+.settings-btn{margin-left:8px;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#cbd5e1;cursor:pointer;padding:6px!important;line-height:0}
+.settings-btn:hover{border-color:#3b82f6;color:#fff}
+.settings-panel{width:min(480px,94vw);max-height:min(90vh,720px);overflow:auto}
+.settings-panel h4{margin:0 0 6px;font-size:13px;color:#e2e8f0}
+.settings-sec{border-top:1px solid #23314f;padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.settings-sec:first-of-type{border-top:0;padding-top:0}
+.settings-err{margin:0;padding:6px 8px;border-radius:6px;background:#450a0a;color:#fecaca;font-size:12px}
+.settings-badge{margin:0;padding:6px 8px;border-radius:6px;background:#78350f;color:#fde68a;font-size:12px}
+.settings-adv-toggle{align-self:flex-start;background:none!important;border:0!important;color:#94a3b8!important;padding:0!important;cursor:pointer;font:inherit}
+.settings-adv{display:flex;flex-direction:column;gap:6px}
+.settings-check{flex-direction:row!important;align-items:center;gap:8px!important;color:#cbd5e1!important;cursor:pointer}
+.settings-check input{width:auto}
