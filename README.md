@@ -1,6 +1,6 @@
 # Văn phòng ảo (virtual office)
 
-A local web office that shows your **running Claude Code sessions** as staff at desks (2D, 3D and Vanphong views).
+A local web office that shows your **running Claude Code sessions** as staff at desks in a voxel office (the Vanphong view).
 The office does not run or define agents itself: a small Claude Code mod, `office`, reports each session's activity
 to a local server, and the server shows the agents defined for that project.
 
@@ -37,16 +37,16 @@ runs 3 simulated sessions, one per agent-profile source below. For a server with
 Manual alternative: `/plugin marketplace add C:\path\to\claude-office\mod` then `/plugin install office@office-mods`.
 The next run of `start.cmd` then detects the installed plugin and removes the plugin-dirs entry.
 
-## Town around the office (2D view)
+## Town around the office
 
-The 2D view now shows the office inside a small town (it scales to fit; the corner button switches to 100%). Sessions and agents work exactly as before.
-- Roads, **Crossian Cafe**, a sidewalk **trà đá** stall, and a **crocodile pond** next to the office.
-- **Right-click an agent** (or click a side character) for **Đặt tên & avatar** or **Ném cho cá sấu**. A thrown agent flies into the pond, the crocodiles eat it, and it is back at its desk 20 s later. Side characters reappear on the street after 15 s.
-- **Name and avatar** reuse Phúc's VanphongAI picker: the 20 chibi presets (`web/src/ref-vanphong/nhanVat.ts`, Nữ/Nam tabs). Choices are kept in this browser's localStorage. Agents are keyed by profile name, so the same agent keeps its look in every session. The Vanphong 3D view uses the chosen preset for agents it creates afterwards.
-- **Side characters** are simulated in the browser:
+The Vanphong view (the only view) puts the voxel office inside a small town. Sessions and agents work exactly as before.
+- Roads with a zebra crossing, **Crossian Cafe**, a sidewalk **trà đá** stall, and a **crocodile pond** next to the office, all in Vanphong's voxel style (`web/src/ref-vanphong/town3d.ts`).
+- **Click or right-click an agent's or side character's name** for **Đặt tên & avatar** or **Ném cho cá sấu**. A thrown agent flies into the pond, the crocodiles eat it, and it walks back in through the office door 20 s later. Side characters reappear on the street after 15 s.
+- **Name and avatar** reuse Phúc's VanphongAI picker: the 20 chibi presets (`web/src/ref-vanphong/nhanVat.ts`, Nữ/Nam tabs). Choices are kept in this browser's localStorage and apply at once, also to agents already in the office. Agents are keyed by profile name, so the same agent keeps its look in every session.
+- **Side characters** are simulated in the browser (`web/src/town/sim.ts`) and walk around the building, not through it:
   - Tèo, Tý, Bờm and Mít wander, chat nonsense, drink coffee or beer and run outside, and sometimes slip into the pond.
   - **Chos An** the dog barks wildly. **Meow** the cat picks fights with him.
-- **IT Ops** watches a Prometheus-compatible HTTP API. When it sees a problem it runs to the **Architect** and reports the alert in a speech bubble. A badge next to it shows the monitor state.
+- **IT Ops** watches a Prometheus-compatible HTTP API from the kiosk on the front street. When it sees a problem it runs to the **Architect** and reports the alert in a red speech bubble. The kiosk label shows the monitor state.
 
 | Env / flag | Meaning |
 |---|---|
@@ -77,7 +77,7 @@ Live activity is pushed onto those desks so it looks like the agents are working
 - each running **subagent** goes to the agent whose `name` equals the subagent type (e.g. a `coder` subagent lights up the `coder` desk);
   unmatched subagents are shown on the first agent's bubble.
 
-Click a session in the panel (or a desk in 2D) to see its agent profiles (name, description, tools, model, markdown body as text)
+Click a session in the panel to see its agent profiles (name, description, tools, model, markdown body as text)
 and live activity (state, tool, prompt first sentence, subagents, cost).
 
 ## The `office` mod
@@ -143,29 +143,14 @@ event ingest auth (loopback, Origin, Content-Type, preflight), payload sanitizin
 ## Screens
 
 Demo mode (`npm run screens` in `web/`, headless Chrome):
-- `docs/screens/session-1280-2d.png`, `session-1280-2d-claude-md.png`, `session-1280-3d.png`, `session-1280-vanphong.png`
-- `docs/screens/session-390-2d.png`, `session-390-vanphong.png`
+- `docs/screens/session-1280-vanphong.png`, `session-1280-vanphong-claude-md.png`, `session-390-vanphong.png`
+- Town: `docs/screens/town-overview.png`, `town-cafe-trada.png`, `town-croc-throw.png`, `town-itops-report.png`, `town-dog-cat.png`, `town-editor.png` (`node scripts/screens-town.mjs` after a build)
 
-Older `phase*` / `refui*` screenshots show the previous design (orchestrator spawning its own agents), kept for history.
+The old 2D (SVG) and 3D (React Three Fiber + Quaternius model) views were removed; the Vanphong view replaces both.
 
-## 3D characters and attribution
-
-The characters are the mannequin from **Universal Animation Library** by **Quaternius**
-(<https://quaternius.com/packs/universalanimationlibrary.html>, downloaded from <https://quaternius.itch.io/universal-animation-library>,
-file "Universal Animation Library[Standard].zip"). The pack's License.txt places it under **CC0 1.0 Universal** (public domain). A copy
-is at [web/public/models/LICENSE-Quaternius.txt](web/public/models/LICENSE-Quaternius.txt). Thanks to Quaternius
-(<https://www.patreon.com/quaternius>).
-
-`web/public/models/office-character.glb` is `Unreal-Godot/UAL1_Standard.glb` from that zip, pruned to 5 clips (Idle_Loop,
-Idle_Talking_Loop, Sitting_Idle_Loop, Sitting_Talking_Loop and Walk_Loop) and quantized with `web/scripts/prune-model.mjs`
-(@gltf-transform). That takes it from 7.6 MB to 0.6 MB (263 kB gzip). The model loads only when you open the 3D view. If it
-fails to load, each avatar falls back to a capsule.
-
-To add or swap a model: put a CC0 skinned GLB in `web/public/models/` that has clips with the names above, then point `modelUrl()` in
-`web/src/Character.tsx` at it. For testing, `?model=<file>.glb` in the URL overrides the file name. Only use CC0 assets.
+Older `phase*` / `refui*` screenshots show earlier designs (orchestrator spawning its own agents, and the removed 2D/3D views), kept for history.
 
 ## Known issues
 
-- Message arcs are drawn desk-to-desk (seat to seat), not from the walking agent's current position, so while an agent is
-  visiting a colleague the arc still starts at its empty seat.
-- The sitting pose hovers slightly above the simple box chair; the chair and seat height are not fitted to the animation.
+- IT Ops' Prometheus client sends no auth header (only credentials embedded in the URL), and has not been tried against a real Prometheus yet.
+- Headless screenshots use software WebGL (SwiftShader), so shadows are off in them.

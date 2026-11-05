@@ -103,14 +103,6 @@ export function turnToward(h: number, target: number, maxStep: number) {
   let d = ((target - h + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
   return Math.abs(d) <= maxStep ? target : h + Math.sign(d) * maxStep;
 }
-export type Clip = 'Walk_Loop' | 'Idle_Loop' | 'Idle_Talking_Loop' | 'Sitting_Idle_Loop' | 'Sitting_Talking_Loop';
-/** Animation clip for a walker phase + agent state: typing while working, chatting while waiting at a colleague's desk. */
-export function clipFor(phase: Phase, state: AgentUI['state']): Clip {
-  if (phase === 'walking') return 'Walk_Loop';
-  if (phase === 'waiting') return 'Idle_Talking_Loop';
-  return state === 'working' || state === 'talking' ? 'Sitting_Talking_Loop' : 'Sitting_Idle_Loop';
-}
-
 /** Screen-space label de-overlap. Name labels ("fixed") are placed first and only move to clear another name
  *  (e.g. a visitor standing next to its host); bubbles/cards/results are then pushed up until clear of everything,
  *  but never above minY (the canvas top): a stack that would leave the canvas continues below its blocker instead. */

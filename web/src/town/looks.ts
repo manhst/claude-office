@@ -20,7 +20,8 @@ export function setIdent(l: Looks, key: string, i: Ident): Looks {
   const name = i.name?.trim().slice(0, 40) || undefined, look = i.look && ID.test(i.look) ? i.look : undefined;
   const { [key]: _old, ...rest } = l; return name || look ? { ...rest, [key]: { name, look } } : rest;
 }
-/** Shared with the Vanphong 3D view (it reads the chosen preset). */
+/** Shared with the Vanphong scene (it reads the chosen preset and name). */
 let current: Looks = {};
 export const setCurrentLooks = (l: Looks) => { current = l; };
 export const currentLook = (key: string) => current[key]?.look;
+export const currentName = (key: string) => current[key]?.name;

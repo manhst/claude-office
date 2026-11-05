@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findPath, obstacles, clearLine, segmentHits, pathLength, seatOf, visitSpot, visiting, goalFor, newWalker, stepWalker, clipFor, resolveOverlaps, turnToward, blocked } from '../src/walk';
+import { findPath, obstacles, clearLine, segmentHits, pathLength, seatOf, visitSpot, visiting, goalFor, newWalker, stepWalker, resolveOverlaps, turnToward, blocked } from '../src/walk';
 import { DOOR, allDesks, type Vec3 } from '../src/layout';
 import type { AgentUI } from '../src/reducer';
 const ag = (id: string, x: number, y = 0, state: AgentUI['state'] = 'thinking'): AgentUI => ({ id, role: id, name: id, state, desk: { x, y }, tools: [] });
@@ -58,12 +58,6 @@ describe('walk state', () => {
     w1 = stepWalker(w1, goal, 0.5); for (let i = 0; i < 10; i++) w2 = stepWalker(w2, goal, 0.05);
     w1.pos.forEach((v, i) => expect(v).toBeCloseTo(w2.pos[i], 5));
   });
-  it('clips', () => {
-    expect(clipFor('walking', 'working')).toBe('Walk_Loop');
-    expect(clipFor('waiting', 'talking')).toBe('Idle_Talking_Loop');
-    expect(clipFor('seated', 'working')).toBe('Sitting_Talking_Loop');
-    expect(clipFor('seated', 'done')).toBe('Sitting_Idle_Loop');
-  });
 });
 describe('label layout', () => {
   it('fixed names stay, overlapping cards are pushed above them and each other', () => {
@@ -88,14 +82,5 @@ describe('label layout', () => {
   it('two names at the same spot (visitor beside host) are stacked, not overlapped', () => {
     const dy = resolveOverlaps([{ id: 'host', x: 0, y: 100, w: 80, h: 20, fixed: true }, { id: 'visitor', x: 30, y: 98, w: 80, h: 20, fixed: true }]);
     expect(dy.host).toBe(0); expect(98 + dy.visitor + 20).toBeLessThanOrEqual(100);
-  });
-});
-import { modelUrl } from '../src/Character';
-describe('model url', () => {
-  it('defaults to the bundled CC0 model; test hook only accepts a bare file name', () => {
-    expect(modelUrl('')).toBe('/models/office-character.glb');
-    expect(modelUrl('?model=missing.glb')).toBe('/models/missing.glb');
-    expect(modelUrl('?model=../../etc/passwd')).toBe('/models/office-character.glb');
-    expect(modelUrl('?model=..%2Fx.glb')).toBe('/models/office-character.glb');
   });
 });

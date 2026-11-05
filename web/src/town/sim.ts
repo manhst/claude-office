@@ -1,6 +1,6 @@
 // Side characters around the office: IT Ops, Architect, mindless NPCs, the dog Chos An, the cat Meow. Pure step function, rnd injected.
 import type { ItOpsStatus } from '../types';
-import { ARCHITECT_SPOT, CAFE_SEATS, NOC, POND_EDGE, STREET, TRADA_STOOLS, YARD, pondCenter, type Pt } from './map';
+import { ARCHITECT_SPOT, CAFE_SEATS, NOC, POND_EDGE, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
 export type Kind = 'itops' | 'architect' | 'npc' | 'dog' | 'cat';
 export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone';
 export interface Ent {
@@ -84,8 +84,9 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     if (e.kind === 'cat' && e.act === 'walk' && e.next === 'fight' && dog0) e = { ...e, tx: dog0.x + 18, ty: dog0.y }; // chase the dog
     if (e.sayUntil && now > e.sayUntil) e = { ...e, say: undefined, sayUntil: undefined };
     if (e.act === 'walk' || e.act === 'fall' || e.act === 'report') { // move toward target
-      const dx = e.tx - e.x, dy = e.ty - e.y, d = Math.hypot(dx, dy), s = e.speed * dt;
-      e = d <= s ? { ...e, x: e.tx, y: e.ty } : { ...e, x: e.x + (dx / d) * s, y: e.y + (dy / d) * s };
+      const goal = e.act === 'fall' ? { x: e.tx, y: e.ty } : waypoint(e, { x: e.tx, y: e.ty }); // thrown/slipping flies straight; walkers go round the building
+      const dx = goal.x - e.x, dy = goal.y - e.y, d = Math.hypot(dx, dy), s = e.speed * dt;
+      e = d <= s ? { ...e, x: goal.x, y: goal.y } : { ...e, x: e.x + (dx / d) * s, y: e.y + (dy / d) * s };
     }
     if (e.act === 'fall' && arrived(e)) return say({ ...e, act: 'eaten', until: now + 2200 }, 'Cứu với!!!', now, 2200);
     if (e.act === 'eaten' && now > e.until) return { ...e, act: 'gone', say: undefined, until: now + 15000 } as Ent;

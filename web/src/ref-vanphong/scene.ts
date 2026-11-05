@@ -2,7 +2,8 @@
 // Builders (floor, walls, windows, plants, desks, glass room, lamp), the per-state pose animation, the flying paper,
 // day/night and the camera buttons are copied from the reference with small edits. What is ours: the state now comes
 // from our reducer (update()), people walk with our walker (../walk.ts), and the server room, store-room door, reception,
-// lobby, help-desk wandering and all server/API calls are gone. Also ours: gocMacDinh's camera fit, the idle poses, freeSince and the amenity wiring.
+// lobby, help-desk wandering and all server/API calls are gone. Also ours: gocMacDinh's camera fit, the idle poses, freeSince and the amenity wiring,
+// the town around the building (./town3d.ts), throwing an agent to the crocodiles, and the chosen names/avatars (../town/looks.ts).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
@@ -12,6 +13,11 @@ import { newWalker, resolveOverlaps, stepWalker, type LabelBox, type Walker } fr
 import { khoi, tron, vatLieu, vatLieuSang, dungNguoi, setShadows, type Hinh } from './characters';
 import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, subtitleFor, vpBubble, vpChair, vpGoal, vpPlan, vpStatus, type IdlePlan, type VpStatus } from './adapter';
 import { buildGameRoom, buildPantry } from './amenities';
+import { CANH, TownLayer } from './town3d';
+import { agentKey, currentLook, currentName } from '../town/looks';
+
+export interface MenuTarget { kind: 'agent' | 'ent'; id: string; x: number; y: number }
+export const THROW_FLY = 0.9, RESPAWN_MS = 20_000;
 
 const BAN_CAO = 0.72;   // desk top
 const NAP_MO = 0.25, NAP_DONG = -1.5; // laptop lid angles
@@ -37,7 +43,10 @@ interface Nguoi {
   tt: VpStatus; noi: boolean; met: boolean; pha: number; cur: Pose; walker: Walker; seated: boolean; bb: string;
   /** ours: what the agent does while free (set once it has arrived), and whether its small-talk line is showing */
   idleKind?: IdlePlan['kind']; noiIdle: boolean;
+  /** ours: chosen preset id ('' = role default), and until when the agent is gone (thrown to the crocodiles) */
+  lookId: string; goneUntil?: number;
 }
+interface Nem { m: THREE.Group; tu: THREE.Vector3; den: THREE.Vector3; bat: number }
 interface Bay { m: THREE.Mesh; tu: THREE.Vector3; den: THREE.Vector3; bat: number; lau: number }
 
 export class VanphongScene {
@@ -48,9 +57,10 @@ export class VanphongScene {
   private rieng: { dispose(): void }[] = []; private denPhong: THREE.PointLight[] = []; private chaoDen: THREE.MeshLambertMaterial[] = [];
   private nhom = new THREE.Group(); private ban = new Map<string, Ban>(); private nguoi = new Map<string, Nguoi>(); private bay: Bay[] = [];
   private s: OfficeState | null = null; private idle: Record<string, IdlePlan> = {}; private freeSince: Record<string, number> = {}; private lastMsg = 0; private dem = false; private gocVe: null | { tuMay: THREE.Vector3; tuDich: THREE.Vector3; denMay: THREE.Vector3; denDich: THREE.Vector3; bat: number; lau: number } = null;
+  private town!: TownLayer; private nem: Nem[] = []; private xaTu = 26;
   private ro: ResizeObserver; private vung: HTMLDivElement; private nutDem: HTMLButtonElement; private soft = softwareGL();
 
-  constructor(private khung: HTMLElement, private store?: Pick<Storage, 'getItem' | 'setItem'>) {
+  constructor(private khung: HTMLElement, private store?: Pick<Storage, 'getItem' | 'setItem'>, private onMenu?: (m: MenuTarget) => void) {
     setShadows(!this.soft);
     this.renderer = new THREE.WebGLRenderer({ antialias: !this.soft });
     khung.classList.add('vp-ref');
@@ -61,7 +71,7 @@ export class VanphongScene {
         <button type="button" class="nut-3d" data-3d="xa" title="Zoom out" aria-label="Zoom out">${SVG.xa}</button>
         <button type="button" class="nut-3d" data-3d="goc" title="Reset view" aria-label="Reset view">${SVG.goc}</button>
       </div>
-      <p class="vp3d-goi-y">Drag to rotate · scroll to zoom · right-drag to pan</p>`;
+      <p class="vp3d-goi-y">Drag to rotate · scroll to zoom · right-drag to pan · click a name: đặt tên, avatar, ném cho cá sấu</p>`;
     this.vung = khung.querySelector('.vp3d-canh')!;
     this.nutDem = khung.querySelector('[data-3d="ngay-dem"]')!;
     const r = this.renderer;
@@ -75,7 +85,7 @@ export class VanphongScene {
     this.nang.castShadow = !this.soft; this.nang.shadow.mapSize.set(2048, 2048); this.nang.shadow.bias = -0.0004; this.nang.shadow.normalBias = 0.02;
     this.canh.add(this.nang, this.nang.target);
     this.dk = new OrbitControls(this.camera, r.domElement);
-    Object.assign(this.dk, { enableDamping: true, dampingFactor: 0.08, screenSpacePanning: false, minDistance: 3.5, maxDistance: 60, minPolarAngle: 0.15, maxPolarAngle: 1.32, rotateSpeed: 0.7 });
+    Object.assign(this.dk, { enableDamping: true, dampingFactor: 0.08, screenSpacePanning: false, minDistance: 3.5, maxDistance: 95, minPolarAngle: 0.15, maxPolarAngle: 1.32, rotateSpeed: 0.7 });
     this.dk.addEventListener('change', () => this.giuTrongBien());
     this.dk.addEventListener('start', () => { this.gocVe = null; });
     this.canh.add(this.nhom);
@@ -85,11 +95,18 @@ export class VanphongScene {
     const gio = new Date().getHours();
     this.datNgayDem(saved ? saved === '1' : gio < 6 || gio >= 18);
     this.ro = new ResizeObserver(() => this.doiCo()); this.ro.observe(this.vung); this.doiCo();
-    khung.addEventListener('click', this.onClick);
+    khung.addEventListener('click', this.onClick); khung.addEventListener('contextmenu', this.onMenuEv);
     r.setAnimationLoop(() => this.veKhung());
   }
 
-  private onClick = (e: Event) => {
+  /** ours: click / right-click on a name tag or bubble opens the town menu (name & avatar, throw to the crocodiles). */
+  private onMenuEv = (e: MouseEvent) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('.ten-3d, .bong-3d')?.closest<HTMLElement>('[data-nv], [data-ent]'); if (!t || !this.onMenu) return;
+    e.preventDefault(); e.stopPropagation();
+    this.onMenu(t.dataset.nv ? { kind: 'agent', id: t.dataset.nv, x: e.clientX, y: e.clientY } : { kind: 'ent', id: t.dataset.ent!, x: e.clientX, y: e.clientY });
+  };
+  private onClick = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.ten-3d, .bong-3d')) { this.onMenuEv(e); return; }
     const nut = (e.target as HTMLElement).closest<HTMLElement>('[data-3d]'); if (!nut) return;
     const hd = nut.dataset['3d'];
     if (hd === 'ngay-dem') { this.datNgayDem(!this.dem); try { this.store?.setItem('office.vp.night', this.dem ? '1' : '0'); } catch { /* private mode */ } }
@@ -174,6 +191,7 @@ export class VanphongScene {
     const ctx = { nhom, soft: this.soft, own: <T extends { dispose(): void }>(m: T) => this.own(m), lights: this.denPhong, shades: this.chaoDen,
       plant: (cha: THREE.Object3D, x: number, z: number, co?: number) => this.cayCanh(cha, x, z, co) };
     buildPantry(ctx); buildGameRoom(ctx);
+    this.town = new TownLayer(ctx);
   }
   private choNgoi(cha: THREE.Object3D, x: number, z: number, mauPhong: string, i: number): Ban {
     const g = new THREE.Group(); g.position.set(x, 0, z); cha.add(g);
@@ -231,7 +249,7 @@ export class VanphongScene {
     const vatLieuSan = this.own(new THREE.MeshLambertMaterial({ map: anh }));
     this.dungNen(vatLieuSan, anh);
     this.dungPhong();
-    const { x0, x1, z0, z1 } = BIEN, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const { x0, x1, z0, z1 } = CANH, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2; // ours: light the whole town
     const R = Math.hypot(x1 - x0, z1 - z0) / 2 + 1;
     this.nang.position.set(cx + R * 0.55, R * 1.3 + 6, cz + R * 0.8); this.nang.target.position.set(cx, 0, cz);
     Object.assign(this.nang.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 1, far: R * 5 + 20 });
@@ -241,7 +259,7 @@ export class VanphongScene {
   // ---------- People: our agents, reference look + labels ----------
   private themNguoi(a: AgentUI): Nguoi {
     const look = lookFor(a);
-    const ngoi = dungNguoi(look, true), dung = dungNguoi(look, false);
+    const ngoi = dungNguoi(look, true), dung = dungNguoi(look, false), lookId = currentLook(agentKey(a)) ?? '';
     const chair = vpChair(a.desk); ngoi.goc.position.set(chair[0], 0, chair[2]); ngoi.goc.visible = false;
     this.nhom.add(ngoi.goc, dung.goc);
     const el = document.createElement('div');
@@ -252,23 +270,52 @@ export class VanphongScene {
       id: a.id, ngoi, dung, ban: this.ban.get(`${a.desk.x},${a.desk.y}`) ?? null, desk: a.desk, nhan: new CSS2DObject(el), el,
       bongEl: el.querySelector('.bong-3d')!, bbEl: el.querySelector('.bb')!, tenEl: el.querySelector('.ten-3d b')!, phuEl: el.querySelector('.ten-3d small')!, choEl: el.querySelector('.viec-cho')!,
       tt: 'ranh', noi: false, met: false, pha: Math.random() * 20, cur: { than: 0, dau: 0, tT: 0.05, tP: 0.05, zT: 0, zP: 0 },
-      walker: newWalker(DOOR), seated: false, bb: '\u0000', noiIdle: false,
+      walker: newWalker(DOOR), seated: false, bb: '\u0000', noiIdle: false, lookId,
     };
-    n.tenEl.textContent = a.name;
     n.nhan.center.set(0.5, 1);
     dung.goc.add(n.nhan); n.nhan.position.set(0, 2.05, 0);
     this.nguoi.set(a.id, n);
     return n;
   }
 
+  /** ours: the chosen preset changed (also for agents already in the office): rebuild both bodies, keep the label. */
+  private relook(n: Nguoi, a: AgentUI) {
+    const id = currentLook(agentKey(a)) ?? ''; if (id === n.lookId) return;
+    n.lookId = id; const look = lookFor(a), ngoi = dungNguoi(look, true), dung = dungNguoi(look, false);
+    ngoi.goc.position.copy(n.ngoi.goc.position); ngoi.goc.rotation.copy(n.ngoi.goc.rotation); dung.goc.position.copy(n.dung.goc.position); dung.goc.rotation.copy(n.dung.goc.rotation);
+    ngoi.goc.visible = n.ngoi.goc.visible; dung.goc.visible = n.dung.goc.visible;
+    this.nhom.remove(n.ngoi.goc, n.dung.goc); this.nhom.add(ngoi.goc, dung.goc); n.ngoi = ngoi; n.dung = dung;
+    (n.seated ? ngoi.goc : dung.goc).add(n.nhan); n.el.style.setProperty('--mau', look.phu ?? ROOM_COLOR);
+  }
+  /** ours: throw an agent (or a side character) to the crocodiles. The agent flies in an arc, gets eaten, and walks back in 20 s later. */
+  throwIt(m: Pick<MenuTarget, 'kind' | 'id'>) {
+    if (m.kind === 'ent') { this.town.throwEnt(m.id); return; }
+    const n = this.nguoi.get(m.id), a = this.s?.agents[m.id]; if (!n || !a || n.goneUntil) return;
+    const tu = new THREE.Vector3(); (n.seated ? n.ngoi : n.dung).goc.getWorldPosition(tu);
+    const fig = dungNguoi(lookFor(a), false).goc; fig.position.copy(tu); this.nhom.add(fig);
+    this.nem.push({ m: fig, tu, den: this.town.pondAt, bat: this.dongHo.elapsedTime });
+    n.goneUntil = Date.now() + RESPAWN_MS;
+  }
+  private capNhatNem(t: number) {
+    for (let i = this.nem.length - 1; i >= 0; i--) {
+      const b = this.nem[i], p = (t - b.bat) / THROW_FLY;
+      if (p >= 1) { this.nhom.remove(b.m); this.nem.splice(i, 1); this.town.eat(Date.now()); continue; }
+      b.m.position.lerpVectors(b.tu, b.den, p); b.m.position.y = b.tu.y + Math.sin(p * Math.PI) * (3 + b.tu.distanceTo(b.den) * 0.15);
+      b.m.rotation.set(p * 9, p * 3, 0);
+    }
+  }
+
   /** Feed the latest reducer state. Cheap: only touches DOM when a value changed. */
   update(s: OfficeState, now: number) {
     this.s = s;
+    this.town.setItops(s.itops);
     for (const id of s.order) { const a = s.agents[id]; if (a && isFree(a)) this.freeSince[id] ??= now; else delete this.freeSince[id]; }
     this.idle = idlePlans(s.agents, s.order, s.messages, now, this.freeSince);
     for (const id of s.order) {
       const a = s.agents[id]; if (!a) continue;
       const n = this.nguoi.get(id) ?? this.themNguoi(a);
+      this.relook(n, a);
+      const ten = currentName(agentKey(a)) ?? a.name; if (n.tenEl.textContent !== ten) n.tenEl.textContent = ten;
       const tt = vpStatus(a.state);
       if (tt !== n.tt) { n.el.classList.remove(`tt-${n.tt}`); n.tt = tt; }
       n.el.classList.add(`tt-${tt}`);
@@ -361,6 +408,11 @@ export class VanphongScene {
   }
   private capNhat(n: Nguoi, t: number, dt: number) {
     const s = this.s!; const a = s.agents[n.id]; if (!a) return;
+    if (n.goneUntil) { // ours: eaten by the crocodiles; walks back in from the door afterwards
+      const gone = Date.now() < n.goneUntil; n.ngoi.goc.visible = false; n.dung.goc.visible = false; n.el.style.display = gone ? 'none' : '';
+      if (gone) { this.capNhatBan(n.ban, null, t, dt); return; }
+      n.goneUntil = undefined; n.walker = newWalker(DOOR); n.seated = false; n.dung.goc.visible = true; n.dung.goc.add(n.nhan); n.nhan.position.set(0, 2.05, 0);
+    }
     n.walker = stepWalker(n.walker, vpGoal(a, s.agents, s.messages, this.idle[n.id]), dt, vpPlan);
     if (n.walker.phase !== 'waiting') n.idleKind = undefined;
     if (n.el.dataset.phase !== n.walker.phase) n.el.dataset.phase = n.walker.phase;
@@ -407,13 +459,14 @@ export class VanphongScene {
     this.nutDem.title = laDem ? 'Night: click for day' : 'Day: click for night';
   }
   private gocMacDinh() {
-    const { x0, x1, z0, z1 } = BIEN;
+    const { x0, x1, z0, z1 } = CANH; // ours: fit the whole town
     const dich = new THREE.Vector3((x0 + x1) / 2, 0.5, (z0 + z1) / 2 + 0.6);
     // ours: fit the whole (wide) floor in the current frame instead of the reference's fixed R * 0.8 + 3
     const asp = (this.vung.clientWidth || 1200) / (this.vung.clientHeight || 800), tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const R = Math.max(((x1 - x0) / 2) / (tanV * asp) * 1.12, ((z1 - z0) / 2) / tanV * 0.95);
     const huong = new THREE.Vector3(0.05, 1.05, 1).normalize();
-    return { dich, may: dich.clone().addScaledVector(huong, Math.min(R, this.dk.maxDistance)) };
+    const d = Math.min(R, this.dk.maxDistance); this.xaTu = d * 1.2; // names/bubbles compact only when zoomed out past the fitted view
+    return { dich, may: dich.clone().addScaledVector(huong, d) };
   }
   private diChuyenGoc(denMay: THREE.Vector3, denDich: THREE.Vector3, lau = 0.6) {
     this.gocVe = { tuMay: this.camera.position.clone(), tuDich: this.dk.target.clone(), denMay, denDich, bat: this.dongHo.elapsedTime, lau };
@@ -431,7 +484,7 @@ export class VanphongScene {
   }
   private giuTrongBien() {
     const t = this.dk.target;
-    const x = THREE.MathUtils.clamp(t.x, BIEN.x0, BIEN.x1), z = THREE.MathUtils.clamp(t.z, BIEN.z0, BIEN.z1);
+    const x = THREE.MathUtils.clamp(t.x, CANH.x0, CANH.x1), z = THREE.MathUtils.clamp(t.z, CANH.z0, CANH.z1);
     if (x === t.x && z === t.z) return;
     this.camera.position.x += x - t.x; this.camera.position.z += z - t.z; t.x = x; t.z = z;
   }
@@ -440,8 +493,8 @@ export class VanphongScene {
     const dt = Math.min(0.1, this.dongHo.getDelta()), t = this.dongHo.elapsedTime;
     this.capNhatGoc(t); this.dk.update();
     if (this.s) for (const n of this.nguoi.values()) this.capNhat(n, t, dt);
-    this.capNhatBay(t);
-    this.nhanR.domElement.classList.toggle('xa', this.camera.position.distanceTo(this.dk.target) > 26);
+    this.capNhatBay(t); this.capNhatNem(t); this.town.tick(t, dt, Date.now());
+    this.nhanR.domElement.classList.toggle('xa', this.camera.position.distanceTo(this.dk.target) > this.xaTu);
     this.renderer.render(this.canh, this.camera); this.nhanR.render(this.canh, this.camera);
     if (t - this.lastLayout > 0.12) { this.lastLayout = t; this.tachNhan(); }
   }
@@ -465,7 +518,7 @@ export class VanphongScene {
 
   dispose() {
     this.renderer.setAnimationLoop(null);
-    this.ro.disconnect(); this.khung.removeEventListener('click', this.onClick); this.dk.dispose();
+    this.ro.disconnect(); this.khung.removeEventListener('click', this.onClick); this.khung.removeEventListener('contextmenu', this.onMenuEv); this.dk.dispose(); this.town.dispose();
     for (const b of this.bay) this.canh.remove(b.m);
     this.canh.traverse((o) => { if (o instanceof CSS2DObject) o.element.remove(); });
     for (const r of this.rieng) r.dispose();

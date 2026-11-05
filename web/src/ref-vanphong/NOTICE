@@ -11,9 +11,12 @@ Origin of the files in this folder (reference copy: /workspace/vo-ref/src/Vanpho
 - vanphong.css   <- style.css (:root palette, .nguoi-3d / .ten-3d / .bong-3d / .zzz-3d / .nhan-phong-3d / .nut-3d / .vp3d-*),
                     scoped under .vp-ref. Copied verbatim except scoping and dropped selectors; the .cai-nhau (scuffle bubble) rule is ours.
 - nhanVat.ts     <- nhan_vat.js verbatim (chibi SVG avatar `ve`, `chuanHoa`, the 20 presets MAU_SAN); only the IIFE/window global became ES exports.
-                    Used by the 2D town for avatars and the name/avatar picker (same flow as cai_dat.js moChonMau: Nữ/Nam tabs, preset grid).
+                    Used for town avatars and the name/avatar picker (same flow as cai_dat.js moChonMau: Nữ/Nam tabs, preset grid).
 - adapter.ts     <- new code (ours): maps our AgentUI/MessageUI to the reference's display states; wider desk grid, pantry/game-room
                     layout and the idle behaviour (coffee, billiards, chats, scuffles) of free agents.
 - amenities.ts   <- new code (ours): pantry (coffee machine, fridge, tables) and game room (billiard table, arcade, sofa), built with
                     the reference's voxel helpers (khoi/vatLieu) so they match its look.
+- town3d.ts      <- new code (ours): the town around the office (roads, Crossian Cafe, trà đá stall, croc pond, IT Ops kiosk,
+                    side characters and pets), built with the reference's voxel helpers (khoi/vatLieu/dungNguoi) so it matches its look.
+                    The menu/editor UI (web/src/town/Editor.tsx) is ours too, following cai_dat.js moChonMau.
 The reference's vendored three.js (MIT, see its LICENSE) is NOT copied; we use our npm `three` (MIT).

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { initialWorld, step, throwIntoPond, problemKey, problemText, type World } from '../src/town/sim';
-import { ARCHITECT_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, OFFICE_AT } from '../src/town/map';
+import { ARCHITECT_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld } from '../src/town/map';
+import { BIEN } from '../src/ref-vanphong/adapter';
 import { loadLooks, setIdent, agentKey } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
 import { lookFor } from '../src/ref-vanphong/adapter';
@@ -45,7 +46,18 @@ describe('town sim', () => {
     expect(ent(w2, 'npc-1').next).toBe('beer'); expect(ent(w2, 'npc-1').tx).toBeGreaterThan(TRADA.x - 20);
     let f = w, fought = false; for (let t = 2200; t < 10000; t += 200) { f = step(f, t, seq([0.99])); fought ||= ent(f, 'dog').act === 'fight' && ent(f, 'cat').act === 'fight'; }
     expect(fought).toBe(true);
-    expect(inPond(pondCenter())).toBe(true); expect(OFFICE_AT.x).toBeGreaterThan(BUILDING.x);
+    expect(inPond(pondCenter())).toBe(true); expect(toWorld(BUILDING)).toEqual([BIEN.x0, BIEN.z0]); expect(toWorld({ x: BUILDING.x + BUILDING.w, y: BUILDING.y + BUILDING.h })).toEqual([BIEN.x1, BIEN.z1]);
+    const p = fromWorld(3, -2); expect(toWorld(p)[0]).toBeCloseTo(3); expect(toWorld(p)[1]).toBeCloseTo(-2);
+  });
+});
+describe('side characters walk around the building', () => {
+  it('a straight line through the office is replaced by a corner waypoint; the full route never crosses it', () => {
+    const a = { x: 100, y: 420 }, b = { x: 1450, y: 420 };
+    expect(crossesBuilding(a, b)).toBe(true);
+    let p = a, hops = 0; const pts = [a];
+    while ((p.x !== b.x || p.y !== b.y) && hops++ < 6) { p = waypoint(p, b); pts.push(p); }
+    expect(p).toEqual(b); expect(pts.slice(1).every((q, i) => !crossesBuilding(pts[i], q))).toBe(true);
+    expect(waypoint({ x: 1400, y: 300 }, { x: 1500, y: 600 })).toEqual({ x: 1500, y: 600 });
   });
 });
 describe('names and avatars (Phúc presets)', () => {

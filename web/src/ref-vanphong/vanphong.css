@@ -1,5 +1,5 @@
 /* Ported from VanphongAI (Phuc) public/style.css. See ./NOTICE. Rules copied verbatim; ':root' became '.vp-ref' and every
-   selector is scoped under .vp-ref so nothing leaks into our 2D/3D views. The Google Fonts link is not used (CSP).
+   selector is scoped under .vp-ref so nothing leaks into the app shell (header, sessions, log). The Google Fonts link is not used (CSP).
    The 'Be Vietnam Pro' family stays first in the stack and falls back to system fonts. */
 .vp-ref {
   --nen: #f4efe7;

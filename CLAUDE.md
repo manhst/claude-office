@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Văn phòng ảo" (virtual office): a local web UI that shows the user's running Claude Code sessions as staff at desks (2D, 3D and Vanphong views). Three parts, each with its own role:
+"Văn phòng ảo" (virtual office): a local web UI that shows the user's running Claude Code sessions as staff at desks (the Vanphong voxel view). Three parts, each with its own role:
 
 ```
 Claude Code session ──(office mod, POST /event, loopback)──> orchestrator :7777 ──(WebSocket + per-run token)──> web UI
@@ -68,9 +68,8 @@ Files over 64 KB are ignored. Demo fixtures for each source live in `orchestrato
 **Web.**
 - `reducer.ts` is pure: events → `OfficeState`.
 - `connection.ts` reads the token from the URL fragment, strips it from the address bar, keeps it in sessionStorage, and reconnects with backoff.
-- The views are `Office2D.tsx` (SVG), `Office3D.tsx` (three + R3F + drei) and `ref-vanphong/` (Vanphong). The 3D and Vanphong views are lazy-loaded chunks.
-- Pure helpers live in `layout.ts` (layout, lerp, camera clamp, view persistence), `walk.ts` (grid A* walking between desks) and `sessionView.ts`, and are unit-tested under `web/test/`.
-- The 3D character is `web/public/models/office-character.glb`, a pruned CC0 Quaternius model; `scripts/prune-model.mjs` regenerates it. It needs clips named Idle_Loop, Idle_Talking_Loop, Sitting_Idle_Loop, Sitting_Talking_Loop and Walk_Loop. `?model=<file>.glb` overrides it, and a failed load falls back to capsules. Only use CC0 assets.
+- The only view is `ref-vanphong/` (Vanphong, plain three.js), a lazy-loaded chunk. The town around it is `ref-vanphong/town3d.ts`, driven by the pure sim in `town/` (`map.ts` plan pixels → world via `toWorld`, `sim.ts`, `looks.ts`); the context menu and name/avatar editor are `town/Editor.tsx`. The old 2D/3D views were removed.
+- Pure helpers live in `layout.ts` (desk layout), `walk.ts` (grid A* walking between desks) and `sessionView.ts`, and are unit-tested under `web/test/`.
 - `web/src/ref-vanphong/` is ported third-party code (see its `NOTICE`). Keep it isolated in that folder, and put mapping logic in `adapter.ts` rather than spreading reference code elsewhere.
 
 ## Style

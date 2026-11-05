@@ -13,14 +13,13 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/
 const errors = [];
 try {
   for (const [w, h] of [[1280, 860], [390, 1400]]) {
-    for (const view of w === 1280 ? ['2d', '3d', 'vanphong'] : ['2d', 'vanphong']) {
+    { const view = 'vanphong';
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
-      await ctx.addInitScript((v) => localStorage.setItem('office.view', v), view);
       const pg = await ctx.newPage(); pg.on('pageerror', (e) => errors.push(e.message));
       await pg.goto(url); await pg.waitForSelector('[data-testid=conn]:has-text("live")');
       await pg.waitForFunction(() => document.querySelectorAll('[data-testid^=session-demo]').length === 3, null, { timeout: 15000 });
-      await pg.waitForTimeout(view !== '2d' ? 7000 : 5500);
-      if (w === 1280 && view === '2d') { await pg.click('[data-testid=session-demo-blog-0002]'); await pg.waitForTimeout(300); await pg.screenshot({ path: out('1280-2d-claude-md') }); await pg.click('[data-testid=session-demo-shop-0001]'); await pg.waitForTimeout(300); }
+      await pg.waitForTimeout(7000);
+      if (w === 1280) { await pg.click('[data-testid=session-demo-blog-0002]'); await pg.waitForTimeout(300); await pg.screenshot({ path: out('1280-vanphong-claude-md') }); await pg.click('[data-testid=session-demo-shop-0001]'); await pg.waitForTimeout(300); }
       await pg.screenshot({ path: out(`${w}-${view}`), fullPage: w === 390 });
       console.log(view, w, 'sessions', await pg.locator('[data-testid^=session-demo]').count(), 'profiles', await pg.locator('[data-testid=profile]').count());
       await ctx.close();
