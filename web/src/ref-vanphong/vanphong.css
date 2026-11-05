@@ -115,6 +115,8 @@
 .vp-ref .nguoi-3d.tt-dang-lam .bong-3d, .vp-ref .nguoi-3d.tt-dang-nghi .bong-3d { border-color: color-mix(in srgb, var(--mau, var(--nhan)) 55%, var(--vien)); }
 .vp-ref .nguoi-3d.tt-loi .bong-3d { border-color: color-mix(in srgb, var(--do) 55%, var(--vien)); }
 .vp-ref .nguoi-3d.tt-xong .bong-3d { border-color: color-mix(in srgb, var(--xanh) 55%, var(--vien)); }
+/* ours: idle scuffle in the pantry / game room */
+.vp-ref .nguoi-3d.cai-nhau .bong-3d { border-color: var(--do); color: var(--do); font-weight: 800; }
 .vp-ref .nguoi-3d.thu-ky .bong-3d { max-width: 280px; font-size: 12.5px; }
 .vp-ref .nguoi-3d.thu-ky .bong-3d .bb { -webkit-line-clamp: 4; }
 .vp-ref .nguoi-3d.thu-ky .ten-3d { font-size: 12.5px; padding: 4px 11px 4px 8px; }

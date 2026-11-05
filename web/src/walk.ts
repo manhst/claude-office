@@ -22,14 +22,14 @@ export const clearLine = (a: Vec3, b: Vec3, obs: Rect[]) => !obs.some((r) => seg
 
 /** Grid A* (4-connected, 0.25 m cells) around the desks, then string-pulled to a few straight waypoints.
  *  Start/goal may sit inside an inflated desk rect (seats are tucked against the desk): they snap to the nearest free cell. */
-export function findPath(from: Vec3, to: Vec3, obs: Rect[] = obstacles(), step = 0.25): Vec3[] {
+export function findPath(from: Vec3, to: Vec3, obs: Rect[] = obstacles(), step = 0.25, b: Rect = BOUNDS): Vec3[] {
   if (clearLine(from, to, obs)) return [from, to];
-  const nx = Math.round((BOUNDS.x1 - BOUNDS.x0) / step) + 1, nz = Math.round((BOUNDS.z1 - BOUNDS.z0) / step) + 1;
-  const cx = (i: number) => BOUNDS.x0 + i * step, cz = (j: number) => BOUNDS.z0 + j * step;
+  const nx = Math.round((b.x1 - b.x0) / step) + 1, nz = Math.round((b.z1 - b.z0) / step) + 1;
+  const cx = (i: number) => b.x0 + i * step, cz = (j: number) => b.z0 + j * step;
   const free = (i: number, j: number) => i >= 0 && j >= 0 && i < nx && j < nz && !blocked(cx(i), cz(j), obs);
   const snap = (p: Vec3): [number, number] => {
     let best: [number, number] = [0, 0], bd = Infinity;
-    const i0 = Math.round((p[0] - BOUNDS.x0) / step), j0 = Math.round((p[2] - BOUNDS.z0) / step);
+    const i0 = Math.round((p[0] - b.x0) / step), j0 = Math.round((p[2] - b.z0) / step);
     for (let r = 0; r < 12 && bd === Infinity; r++) for (let i = i0 - r; i <= i0 + r; i++) for (let j = j0 - r; j <= j0 + r; j++) {
       if (!free(i, j)) continue; const d = (cx(i) - p[0]) ** 2 + (cz(j) - p[2]) ** 2; if (d < bd) { bd = d; best = [i, j]; } }
     return best;

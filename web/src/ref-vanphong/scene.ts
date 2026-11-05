@@ -2,7 +2,7 @@
 // Builders (floor, walls, windows, plants, desks, glass room, lamp), the per-state pose animation, the flying paper,
 // day/night and the camera buttons are copied from the reference with small edits. What is ours: the state now comes
 // from our reducer (update()), people walk with our walker (../walk.ts), and the server room, store-room door, reception,
-// lobby, help-desk wandering and all server/API calls are gone.
+// lobby, help-desk wandering and all server/API calls are gone. Also ours: gocMacDinh's camera fit, the idle poses, freeSince and the amenity wiring.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
@@ -10,12 +10,12 @@ import type { AgentUI, OfficeState } from '../reducer';
 import { allDesks } from '../layout';
 import { newWalker, resolveOverlaps, stepWalker, type LabelBox, type Walker } from '../walk';
 import { khoi, tron, vatLieu, vatLieuSang, dungNguoi, setShadows, type Hinh } from './characters';
-import { DOOR, ROOM, ROOM_COLOR, bubbleFor, lookFor, newFlights, subtitleFor, vpChair, vpGoal, vpPlan, vpStatus, type VpStatus } from './adapter';
+import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, subtitleFor, vpBubble, vpChair, vpGoal, vpPlan, vpStatus, type IdlePlan, type VpStatus } from './adapter';
+import { buildGameRoom, buildPantry } from './amenities';
 
 const BAN_CAO = 0.72;   // desk top
 const NAP_MO = 0.25, NAP_DONG = -1.5; // laptop lid angles
 const lerp = THREE.MathUtils.lerp;
-const BIEN = { x0: -10.4, x1: 10.4, z0: -8.4, z1: 7.6 }; // floor bounds around our walker BOUNDS
 const SVG = {
   dem: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.3A8 8 0 0 1 8.7 4a8 8 0 1 0 11.3 11.3Z"/></svg><span>Night</span>',
   ngay: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Day</span>',
@@ -35,6 +35,8 @@ interface Nguoi {
   id: string; ngoi: Hinh; dung: Hinh; ban: Ban | null; desk: { x: number; y: number }; nhan: CSS2DObject; el: HTMLDivElement;
   bongEl: HTMLDivElement; bbEl: HTMLSpanElement; tenEl: HTMLElement; phuEl: HTMLElement; choEl: HTMLElement;
   tt: VpStatus; noi: boolean; met: boolean; pha: number; cur: Pose; walker: Walker; seated: boolean; bb: string;
+  /** ours: what the agent does while free (set once it has arrived), and whether its small-talk line is showing */
+  idleKind?: IdlePlan['kind']; noiIdle: boolean;
 }
 interface Bay { m: THREE.Mesh; tu: THREE.Vector3; den: THREE.Vector3; bat: number; lau: number }
 
@@ -45,7 +47,7 @@ export class VanphongScene {
   private kinhCua = new THREE.MeshLambertMaterial({ color: '#bfe3ff', emissive: '#cfeaff', emissiveIntensity: 0.35 });
   private rieng: { dispose(): void }[] = []; private denPhong: THREE.PointLight[] = []; private chaoDen: THREE.MeshLambertMaterial[] = [];
   private nhom = new THREE.Group(); private ban = new Map<string, Ban>(); private nguoi = new Map<string, Nguoi>(); private bay: Bay[] = [];
-  private s: OfficeState | null = null; private lastMsg = 0; private dem = false; private gocVe: null | { tuMay: THREE.Vector3; tuDich: THREE.Vector3; denMay: THREE.Vector3; denDich: THREE.Vector3; bat: number; lau: number } = null;
+  private s: OfficeState | null = null; private idle: Record<string, IdlePlan> = {}; private freeSince: Record<string, number> = {}; private lastMsg = 0; private dem = false; private gocVe: null | { tuMay: THREE.Vector3; tuDich: THREE.Vector3; denMay: THREE.Vector3; denDich: THREE.Vector3; bat: number; lau: number } = null;
   private ro: ResizeObserver; private vung: HTMLDivElement; private nutDem: HTMLButtonElement; private soft = softwareGL();
 
   constructor(private khung: HTMLElement, private store?: Pick<Storage, 'getItem' | 'setItem'>) {
@@ -164,11 +166,14 @@ export class VanphongScene {
     khoi(nhom, r, 0.12, 0.03, '#d9cab6', cx, 0.06, z0 + 0.015, false);
     khoi(nhom, 0.03, 0.12, s, '#d9cab6', x0 + 0.015, 0.06, cz, false);
     khoi(nhom, 1.8, 0.02, 0.7, '#8a6f5a', DOOR[0], 0.01, z0 + 0.45, false); // doormat inside the entrance
-    for (const x of [x0 + 2.2, x0 + 5.6, x1 - 5.6, x1 - 2.2]) this.cuaSo(x, z0 + 0.005, 0);
+    for (const x of [-10.6, -4.6, 4.6, 10.6]) this.cuaSo(x, z0 + 0.005, 0); // ours: wider floor, windows clear of the pantry/game furniture
     this.cua(DOOR[0], z0);
     for (let i = 0; i < 4; i++) this.cuaSo(x0 + 0.005, z0 + (i + 0.5) * s / 4, Math.PI / 2);
-    this.cayCanh(nhom, x0 + 0.6, z0 + 0.6, 1.2); this.cayCanh(nhom, x1 - 0.6, z0 + 0.6, 1.2);
+    this.cayCanh(nhom, DOOR[0] - 1.4, z0 + 0.45, 1.1); this.cayCanh(nhom, DOOR[0] + 1.4, z0 + 0.45, 1.1);
     this.cayCanh(nhom, x0 + 0.6, z1 - 0.6); this.cayCanh(nhom, x1 - 0.6, z1 - 0.6);
+    const ctx = { nhom, soft: this.soft, own: <T extends { dispose(): void }>(m: T) => this.own(m), lights: this.denPhong, shades: this.chaoDen,
+      plant: (cha: THREE.Object3D, x: number, z: number, co?: number) => this.cayCanh(cha, x, z, co) };
+    buildPantry(ctx); buildGameRoom(ctx);
   }
   private choNgoi(cha: THREE.Object3D, x: number, z: number, mauPhong: string, i: number): Ban {
     const g = new THREE.Group(); g.position.set(x, 0, z); cha.add(g);
@@ -247,7 +252,7 @@ export class VanphongScene {
       id: a.id, ngoi, dung, ban: this.ban.get(`${a.desk.x},${a.desk.y}`) ?? null, desk: a.desk, nhan: new CSS2DObject(el), el,
       bongEl: el.querySelector('.bong-3d')!, bbEl: el.querySelector('.bb')!, tenEl: el.querySelector('.ten-3d b')!, phuEl: el.querySelector('.ten-3d small')!, choEl: el.querySelector('.viec-cho')!,
       tt: 'ranh', noi: false, met: false, pha: Math.random() * 20, cur: { than: 0, dau: 0, tT: 0.05, tP: 0.05, zT: 0, zP: 0 },
-      walker: newWalker(DOOR), seated: false, bb: '\u0000',
+      walker: newWalker(DOOR), seated: false, bb: '\u0000', noiIdle: false,
     };
     n.tenEl.textContent = a.name;
     n.nhan.center.set(0.5, 1);
@@ -259,6 +264,8 @@ export class VanphongScene {
   /** Feed the latest reducer state. Cheap: only touches DOM when a value changed. */
   update(s: OfficeState, now: number) {
     this.s = s;
+    for (const id of s.order) { const a = s.agents[id]; if (a && isFree(a)) this.freeSince[id] ??= now; else delete this.freeSince[id]; }
+    this.idle = idlePlans(s.agents, s.order, s.messages, now, this.freeSince);
     for (const id of s.order) {
       const a = s.agents[id]; if (!a) continue;
       const n = this.nguoi.get(id) ?? this.themNguoi(a);
@@ -267,7 +274,10 @@ export class VanphongScene {
       n.el.classList.add(`tt-${tt}`);
       if (n.el.dataset.state !== a.state) n.el.dataset.state = a.state;
       n.noi = a.state === 'talking'; n.met = a.state === 'error';
-      const b = bubbleFor(a, now);
+      const idle = this.idle[id], arrived = !!idle && n.walker.phase === 'waiting' && n.walker.goalKey === idle.key;
+      const b = vpBubble(a, idle, arrived, now); // arrived: small talk only (a done result stays in the panel)
+      n.noiIdle = arrived && b.show; n.idleKind = idle && arrived ? idle.kind : undefined;
+      n.el.classList.toggle('cai-nhau', n.idleKind === 'fight');
       const key = `${b.show}|${b.dots}|${b.text}`;
       if (key !== n.bb) {
         n.bb = key; n.el.classList.toggle('co-bong', b.show); n.bbEl.textContent = b.text;
@@ -278,6 +288,7 @@ export class VanphongScene {
       if (n.choEl.textContent !== cho) n.choEl.textContent = cho;
     }
     for (const [id, n] of this.nguoi) if (!s.agents[id]) { this.nhom.remove(n.ngoi.goc, n.dung.goc); n.el.remove(); this.nguoi.delete(id); } // session left
+    for (const id in this.freeSince) if (!s.agents[id]) delete this.freeSince[id]; // a swept session coming back with the same ids starts fresh
     const nAgents = s.order.length; this.roomLabel.textContent = nAgents ? `${nAgents} ${nAgents === 1 ? 'person' : 'people'}` : 'empty';
     for (const m of newFlights(s, this.lastMsg)) this.bayPhieu(m.from, m.to);
     if (s.messages.length) this.lastMsg = Math.max(this.lastMsg, ...s.messages.map((m) => m.ts));
@@ -328,6 +339,15 @@ export class VanphongScene {
     if (di) {
       n.pha += dt * 1.6 * 3.9; const s = Math.sin(n.pha * 1.0);
       chanX = 0.85 * s; tT = -0.9 * s; tP = 0.9 * s; than = 0.16; nhun = Math.abs(Math.cos(n.pha)) * 0.08;
+    } else if (n.idleKind === 'fight') { // ours: playful scuffle, alternating punches with a little hop
+      tT = -1.55 + 1.1 * Math.max(0, Math.sin(w * 9)); tP = -1.55 + 1.1 * Math.max(0, Math.sin(w * 9 + Math.PI));
+      than = 0.18; dauY = 0.15 * Math.sin(w * 7); nhun = Math.abs(Math.sin(w * 9)) * 0.07; noi = true;
+    } else if (n.idleKind === 'pool') { // ours: leaning over the table, cue arm stroking now and then
+      than = 0.42; dau = -0.25; tT = -1.25; tP = -1.25 + 0.3 * Math.max(0, Math.sin(w * 2.2)) * (Math.sin(w * 0.5) > 0 ? 1 : 0); noi = n.noiIdle;
+    } else if (n.idleKind === 'coffee') { // ours: sipping
+      tP = -1.9 + 0.35 * Math.max(0, Math.sin(w * 0.9)); tT = -0.2; dau = -0.08 * Math.max(0, Math.sin(w * 0.9)); noi = n.noiIdle;
+    } else if (n.idleKind === 'chat' && !n.noiIdle) { // ours: listening, arms down, nodding
+      dau = 0.08 * Math.max(0, Math.sin(w * 2.4)); dauY = 0.05 * Math.sin(w * 0.9); than = 0.012 * Math.sin(w * 2);
     } else { // standing at a colleague's desk: the reference's "le_tan" chatting pose
       tP = -0.7 + 0.35 * Math.sin(w * 3); tT = -0.25 + 0.2 * Math.sin(w * 2.3); dauY = 0.1 * Math.sin(w * 1.7); noi = true; than = 0.012 * Math.sin(w * 2);
     }
@@ -341,7 +361,8 @@ export class VanphongScene {
   }
   private capNhat(n: Nguoi, t: number, dt: number) {
     const s = this.s!; const a = s.agents[n.id]; if (!a) return;
-    n.walker = stepWalker(n.walker, vpGoal(a, s.agents, s.messages), dt, vpPlan);
+    n.walker = stepWalker(n.walker, vpGoal(a, s.agents, s.messages, this.idle[n.id]), dt, vpPlan);
+    if (n.walker.phase !== 'waiting') n.idleKind = undefined;
     if (n.el.dataset.phase !== n.walker.phase) n.el.dataset.phase = n.walker.phase;
     const seated = n.walker.phase === 'seated';
     if (seated !== n.seated) {
@@ -388,9 +409,11 @@ export class VanphongScene {
   private gocMacDinh() {
     const { x0, x1, z0, z1 } = BIEN;
     const dich = new THREE.Vector3((x0 + x1) / 2, 0.5, (z0 + z1) / 2 + 0.6);
-    const R = Math.max(x1 - x0, (z1 - z0) * 1.15);
-    const huong = new THREE.Vector3(0.36, 0.92, 1).normalize();
-    return { dich, may: dich.clone().addScaledVector(huong, R * 0.8 + 3) };
+    // ours: fit the whole (wide) floor in the current frame instead of the reference's fixed R * 0.8 + 3
+    const asp = (this.vung.clientWidth || 1200) / (this.vung.clientHeight || 800), tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const R = Math.max(((x1 - x0) / 2) / (tanV * asp) * 1.12, ((z1 - z0) / 2) / tanV * 0.95);
+    const huong = new THREE.Vector3(0.05, 1.05, 1).normalize();
+    return { dich, may: dich.clone().addScaledVector(huong, Math.min(R, this.dk.maxDistance)) };
   }
   private diChuyenGoc(denMay: THREE.Vector3, denDich: THREE.Vector3, lau = 0.6) {
     this.gocVe = { tuMay: this.camera.position.clone(), tuDich: this.dk.target.clone(), denMay, denDich, bat: this.dongHo.elapsedTime, lau };

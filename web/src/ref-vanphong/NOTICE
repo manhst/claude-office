@@ -6,7 +6,12 @@ Origin of the files in this folder (reference copy: /workspace/vo-ref/src/Vanpho
 - scene.ts       <- van_phong_3d.js (anhSan, cayCanh, cuaSo, dungNen, choNgoi, dungPhong, capNhatNguoi, bayPhieu,
                     datNgayDem, camera/zoom helpers). Copied with adaptations: driven by our reducer state, our walker
                     (web/src/walk.ts) instead of the help-desk route map, no server room / store-room door / reception / lobby.
+                    Ours: gocMacDinh's camera fit, the idle poses (coffee, billiards, chat, scuffle), freeSince tracking and the
+                    pantry/game-room (amenities.ts) wiring.
 - vanphong.css   <- style.css (:root palette, .nguoi-3d / .ten-3d / .bong-3d / .zzz-3d / .nhan-phong-3d / .nut-3d / .vp3d-*),
-                    scoped under .vp-ref. Copied verbatim except scoping and dropped selectors.
-- adapter.ts     <- new code (ours): maps our AgentUI/MessageUI to the reference's display states.
+                    scoped under .vp-ref. Copied verbatim except scoping and dropped selectors; the .cai-nhau (scuffle bubble) rule is ours.
+- adapter.ts     <- new code (ours): maps our AgentUI/MessageUI to the reference's display states; wider desk grid, pantry/game-room
+                    layout and the idle behaviour (coffee, billiards, chats, scuffles) of free agents.
+- amenities.ts   <- new code (ours): pantry (coffee machine, fridge, tables) and game room (billiard table, arcade, sofa), built with
+                    the reference's voxel helpers (khoi/vatLieu) so they match its look.
 The reference's vendored three.js (MIT, see its LICENSE) is NOT copied; we use our npm `three` (MIT).
