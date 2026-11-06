@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useReducer, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useReducer, useState } from 'react';
 import { reduce, initialState, type OfficeState } from './reducer';
 import { takeToken, connect } from './connection';
 import type { OfficeEvent } from './types';
 import { UsageBars } from './UsageBars';
-import { EventLog } from './EventLog';
+import { AgentsPanel } from './AgentsPanel';
 import { ResponseLog } from './ResponseLog';
 import { SessionPanel } from './SessionPanel';
+import { SplitGutter } from './Split';
+import { loadSplit } from './split';
 import { pickSelected } from './sessionView';
 import { IconDot } from './icons';
 import { SettingsButton, SettingsPanel } from './Settings';
@@ -15,6 +17,8 @@ export function App() {
   const [boot] = useState(() => takeToken());
   const [s, dispatch] = useReducer(reduce, undefined, () => initialState(boot.token ? 'connecting' : 'no-token'));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [split, setSplit] = useState(loadSplit);
+  const onSplit = useCallback((r: number) => setSplit(r), []);
   useEffect(() => {
     if (!boot.token) return;
     return connect(boot.wsUrl, boot.token, (e) => dispatch({ type: 'event', e: e as OfficeEvent }), (status, retries) => dispatch({ type: 'conn', status, retries }));
@@ -28,10 +32,11 @@ export function App() {
         <UsageBars u={s.usage} now={now} />
         {boot.token ? <SettingsButton onClick={() => setSettingsOpen(true)} /> : null}
       </header>
-      <main>
+      <main style={{ ['--map-frac' as string]: String(split) }}>
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
           : <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} /></Suspense>}
-        <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><ResponseLog s={s} now={now} /><EventLog s={s} /></div>
+        {s.conn !== 'no-token' ? <SplitGutter ratio={split} onChange={onSplit} /> : null}
+        <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><ResponseLog s={s} now={now} /><AgentsPanel s={s} selected={selected} /></div>
       </main>
       {settingsOpen && boot.token ? <SettingsPanel token={boot.token} onClose={() => setSettingsOpen(false)} /> : null}
     </div>

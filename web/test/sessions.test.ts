@@ -107,11 +107,16 @@ describe('collapse prefs', () => {
   it('defaults expanded; setCollapse persists', () => {
     expect(loadCollapse()).toEqual(DEFAULT_COLLAPSE);
     expect(DEFAULT_COLLAPSE.session).toBe(false);
-    expect(DEFAULT_COLLAPSE.events).toBe(false);
-    setCollapse('events', true);
-    expect(loadCollapse().events).toBe(true);
+    expect(DEFAULT_COLLAPSE.agents).toBe(false);
+    setCollapse('agents', true);
+    expect(loadCollapse().agents).toBe(true);
     expect(loadCollapse().session).toBe(false);
-    saveCollapse({ session: true, responses: true, events: true });
-    expect(loadCollapse()).toEqual({ session: true, responses: true, events: true });
+    saveCollapse({ session: true, responses: true, agents: true });
+    expect(loadCollapse()).toEqual({ session: true, responses: true, agents: true });
+  });
+  it('ignores a legacy events collapse key', () => {
+    localStorage.setItem('vp-collapse', JSON.stringify({ session: false, responses: false, events: true }));
+    expect(loadCollapse()).toEqual(DEFAULT_COLLAPSE);
+    expect(loadCollapse().agents).toBe(false);
   });
 });
