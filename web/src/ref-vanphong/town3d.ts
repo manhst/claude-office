@@ -7,7 +7,7 @@ import type { ItOpsStatus } from '../types';
 import { ATM, BBQ, BBQ_SEATS, BIA, BIA_SEATS, CAFE, GATE, GARDEN, GYM, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POD, POND, PRINT, PX, ROADS, ROMANCE_SPOTS, SMOKE, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
-import { agentPartnerId, forceDrama, forceLayoff, forceRomance, graspWorldFromCarrier, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
+import { agentPartnerId, forceBoss, forceDrama, forceLayoff, forceRomance, graspWorldFromCarrier, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
@@ -436,6 +436,7 @@ export class TownLayer {
         layoff: (mode: 'eat' | 'pond' | 'hunt' = 'hunt') => { this.world = forceLayoff(this.world, Date.now(), mode, Math.random); },
         layoffEat: () => { this.world = forceLayoff(this.world, Date.now(), 'eat', Math.random); },
         layoffPond: () => { this.world = forceLayoff(this.world, Date.now(), 'pond', Math.random); },
+        boss: () => { this.world = forceBoss(this.world, Date.now()); },
       };
     }; } catch { /* no storage */ }
     for (const e of this.world.ents) this.figs.set(e.id, this.fig(e));

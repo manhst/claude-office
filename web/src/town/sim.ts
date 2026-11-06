@@ -68,6 +68,25 @@ export function problemText(s: ItOpsStatus): string {
   const a = s.alerts[0]; const more = s.alerts.length > 1 ? ` (+${s.alerts.length - 1})` : '';
   return `${LINES.itopsReport[0]} ${a.name}${a.detail ? ` · ${a.detail}` : ''}${more}`;
 }
+/** Visiting sếp — spawned for a short walkthrough, not in initialWorld. */
+export const BOSS_ID = 'boss-walk';
+export const BOSS_NAME = 'Sếp';
+export const BOSS_LOOK = 'nam_02';
+const POND_ACTS: ReadonlySet<Act> = new Set(['fall', 'eaten', 'gone']);
+export function menuEnt(id: string): { name: string; look?: string } | undefined {
+  if (id === BOSS_ID) return { name: BOSS_NAME, look: BOSS_LOOK };
+  const e = initialWorld(0).ents.find((z) => z.id === id);
+  return e ? { name: e.name, look: e.look } : undefined;
+}
+function makeBoss(now: number, until: number): Ent {
+  return { id: BOSS_ID, kind: 'boss', name: BOSS_NAME, look: BOSS_LOOK, x: 400, y: 200, tx: 900, ty: 500, speed: 100, act: 'walk', next: 'idle', until };
+}
+/** Force the visiting sếp onto the map (tests / vp-debug). */
+export function forceBoss(w: World, now: number): World {
+  const until = now + 16_000, b = makeBoss(now, until);
+  const ents = w.ents.some((e) => e.kind === 'boss') ? w.ents.map((e) => e.kind === 'boss' ? b : e) : [...w.ents, b];
+  return { ...w, t: now, bossUntil: until, ents };
+}
 /** Starts the throw: any entity flies into the pond and gets eaten. */
 export function throwIntoPond(w: World, id: string, now: number): World {
   return { ...w, ents: w.ents.map((e) => (e.id === id && e.act !== 'eaten' && e.act !== 'gone' ? say({ ...e, tx: pondCenter().x, ty: pondCenter().y, act: 'fall', speed: 420, until: now + 4000, partner: undefined }, pick(LINES.thrown, Math.random), now, 2800) : e)) };
@@ -258,7 +277,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   let weatherUntil = w.weatherUntil;
   if (weather === 'clear' && r() < 0.008) { weather = 'rain'; weatherUntil = now + 20_000 + r() * 15_000; }
   if (weather === 'rain' && (weatherUntil ?? 0) <= now) { weather = 'clear'; weatherUntil = undefined; }
-  let bossUntil = w.bossUntil && w.bossUntil > now ? w.bossUntil : undefined;
+  let bossUntil = w.bossUntil;
   const dog0 = w.ents.find((z) => z.kind === 'dog');
   const layoff0 = w.ents.find((z) => z.kind === 'trex');
   // Chase: keep hunt / carry targets updated before movement.
@@ -282,9 +301,13 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
       e = d <= s ? { ...e, x: goal.x, y: goal.y } : { ...e, x: e.x + (dx / d) * s, y: e.y + (dy / d) * s };
     }
     if (e.act === 'fall' && arrived(e)) return say({ ...e, act: 'eaten', until: now + 2800 }, pick(LINES.eaten, r), now, 2800);
-    if (e.act === 'eaten' && now > e.until) return { ...e, act: 'gone', say: undefined, until: now + 15000, partner: undefined } as Ent;
+    if (e.act === 'eaten' && now > e.until) {
+      if (e.kind === 'boss') return { ...e, act: 'gone' as const, say: undefined, until: now, partner: undefined };
+      return { ...e, act: 'gone', say: undefined, until: now + 15000, partner: undefined } as Ent;
+    }
     if (e.act === 'gone') {
       if (now <= e.until) return e;
+      if (e.kind === 'boss') return e;
       if (e.kind === 'trex') {
         const p = pick(STREET, r);
         // Payday: appear sooner / hunt sooner (shorter idle before decide).
@@ -333,7 +356,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
       if (e.act === 'idle' && Math.hypot(e.x - ITOPS_SPOT.x, e.y - ITOPS_SPOT.y) > 2) return go(e, ITOPS_SPOT, 'idle', 100);
       return e;
     }
-    if (e.act !== 'walk' && e.act !== 'wobble' && e.act !== 'hunt' && e.act !== 'carry' && e.act !== 'carried' && now > e.until) return decide(e, { ...w, payday, weather }, now, r, prey);
+    if (e.act !== 'walk' && e.act !== 'wobble' && e.act !== 'hunt' && e.act !== 'carry' && e.act !== 'carried' && e.act !== 'fall' && e.act !== 'eaten' && now > e.until) return decide(e, { ...w, payday, weather }, now, r, prey);
     return e;
   });
 
@@ -434,25 +457,24 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   }
 
   // Boss walkthrough: rare temporary sếp NPC (not Architect, not a session agent).
-  if (!bossUntil && r() < 0.004) {
+  if (!bossUntil && !ents.some((e) => e.kind === 'boss') && r() < 0.004) {
     bossUntil = now + 16_000;
-    const start = { x: 400, y: 200 };
-    if (!ents.some((e) => e.kind === 'boss')) {
-      ents = [...ents, { id: 'boss-walk', kind: 'boss', name: 'Sếp', look: 'nam_02', x: start.x, y: start.y, tx: 900, ty: 500, speed: 100, act: 'walk', next: 'idle', until: bossUntil }];
-    }
+    ents = [...ents, makeBoss(now, bossUntil)];
     // Whispers from nearby NPCs / will be mirrored for office agents in the scene.
     ents = ents.map((e) => (e.kind === 'npc' && !e.say && e.act !== 'gone' && r() < 0.7 ? say(e, pick(LINES.bossWarn, r), now, 5500) : e));
   }
   if (bossUntil && now > bossUntil) {
-    ents = ents.filter((e) => e.kind !== 'boss');
-    bossUntil = undefined;
+    ents = ents.filter((e) => e.kind !== 'boss' || POND_ACTS.has(e.act));
+    if (!ents.some((e) => e.kind === 'boss')) bossUntil = undefined;
   } else if (bossUntil) {
     ents = ents.map((e) => {
-      if (e.kind !== 'boss') return e;
+      if (e.kind !== 'boss' || POND_ACTS.has(e.act)) return e;
       if (e.act === 'walk' && arrived(e)) return { ...e, act: 'walk' as const, tx: 500 + r() * 400, ty: 250 + r() * 300, until: bossUntil! };
       return e;
     });
   }
+  ents = ents.filter((e) => !(e.kind === 'boss' && e.act === 'gone'));
+  if (!ents.some((e) => e.kind === 'boss')) bossUntil = undefined;
 
   // Shipper visit at the gate (occasional).
   if (!ents.some((e) => e.kind === 'shipper') && r() < 0.006) {

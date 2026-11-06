@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { LINES } from '../src/town/dialogue';
-import { agentPartnerId, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, step, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
+import { agentPartnerId, BOSS_ID, BOSS_LOOK, BOSS_NAME, forceBoss, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, menuEnt, step, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
 import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld, PX } from '../src/town/map';
 import { BIEN } from '../src/ref-vanphong/adapter';
-import { loadLooks, setIdent, agentKey } from '../src/town/looks';
+import { loadLooks, setIdent, agentKey, setCurrentLooks, currentName, currentLook } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
 import { lookFor } from '../src/ref-vanphong/adapter';
-import { setCurrentLooks } from '../src/town/looks';
 const seq = (xs: number[]) => { let i = 0; return () => xs[i++ % xs.length]; };
 const run = (w: World, from: number, ms: number, r: () => number, it?: any, prey: AgentPrey[] = []) => { for (let t = from; t <= from + ms; t += 200) w = step(w, t, r, it, prey); return w; };
 const ent = (w: World, id: string) => w.ents.find((e) => e.id === id)!;
@@ -191,12 +190,58 @@ describe('side characters walk around the building', () => {
     expect(waypoint({ x: 1400, y: 300 }, { x: 1500, y: 600 })).toEqual({ x: 1500, y: 600 });
   });
 });
+describe('visiting Sếp', () => {
+  it('menuEnt includes the visiting boss even though initialWorld has no sếp', () => {
+    expect(initialWorld(0).ents.find((e) => e.kind === 'boss' || e.id === BOSS_ID)).toBeUndefined();
+    expect(menuEnt(BOSS_ID)).toEqual({ name: BOSS_NAME, look: BOSS_LOOK });
+    expect(menuEnt('npc-1')?.name).toBe('Tèo');
+    expect(menuEnt('no-such')).toBeUndefined();
+  });
+  it('visit ends on schedule without a pond throw; no leftover bossUntil', () => {
+    let w = forceBoss(initialWorld(0), 1000);
+    expect(ent(w, BOSS_ID).kind).toBe('boss');
+    expect(w.bossUntil).toBe(17_000);
+    w = run(w, 1000, 20_000, () => 0.5);
+    expect(w.ents.find((e) => e.kind === 'boss')).toBeUndefined();
+    expect(w.bossUntil).toBeUndefined();
+  });
+  it('throwing Sếp uses the pond fall, then leaves with no ghost, duplicate, or stuck visit', () => {
+    let w = forceBoss(initialWorld(0), 1000);
+    w = throwIntoPond(w, BOSS_ID, 1000);
+    expect(ent(w, BOSS_ID).act).toBe('fall');
+    expect(ent(w, BOSS_ID).tx).toBe(pondCenter().x);
+    w = step(w, 1200, () => 0.001); // would spawn a visit if the falling sếp were ignored
+    expect(w.ents.filter((e) => e.kind === 'boss')).toHaveLength(1);
+    expect(ent(w, BOSS_ID).act).toBe('fall');
+    w = run(w, 1200, 10_000, () => 0.5);
+    expect(w.ents.find((e) => e.kind === 'boss')).toBeUndefined();
+    expect(w.bossUntil).toBeUndefined();
+  });
+  it('an expired visit does not yank Sếp out of the pond animation or spawn a second sếp', () => {
+    let w = forceBoss(initialWorld(0), 1000);
+    w = throwIntoPond(w, BOSS_ID, 1000);
+    w = { ...w, bossUntil: 1000 };
+    w = step(w, 1400, () => 0.001);
+    expect(w.ents.filter((e) => e.kind === 'boss')).toHaveLength(1);
+    expect(['fall', 'eaten']).toContain(ent(w, BOSS_ID).act);
+    w = run(w, 1400, 10_000, () => 0.5);
+    expect(w.ents.filter((e) => e.kind === 'boss')).toHaveLength(0);
+    expect(w.bossUntil).toBeUndefined();
+  });
+});
 describe('names and avatars (Phúc presets)', () => {
   it('stores name + preset id, rejects junk', () => {
     const store = { getItem: () => JSON.stringify({ 'agent:coder': { name: ' Hùng ', look: 'nam_03' }, x: { look: '<svg onload=1>' }, y: 5 }) };
     expect(loadLooks(store)).toEqual({ 'agent:coder': { name: 'Hùng', look: 'nam_03' } });
     expect(setIdent({}, 'k', { name: '', look: 'bad' })).toEqual({});
     expect(agentKey({ name: 'coder' })).toBe('agent:coder');
+    const k = `npc:${BOSS_ID}`;
+    const saved = setIdent({}, k, { name: ' Sếp Lớn ', look: 'nam_07' });
+    expect(saved[k]).toEqual({ name: 'Sếp Lớn', look: 'nam_07' });
+    setCurrentLooks(saved);
+    expect(currentName(k)).toBe('Sếp Lớn');
+    expect(currentLook(k)).toBe('nam_07');
+    setCurrentLooks({});
   });
   it('renders 20 presets as cropped SVG; Vanphong 3D picks the chosen preset', () => {
     expect(PRESETS).toHaveLength(20);
