@@ -11,17 +11,17 @@ export type SettingsPatch = {
   prometheusQuery?: string | null;
   prometheusIntervalMs?: number | null;
 };
-function httpBase(store: Storage = sessionStorage, loc: Location = location): string {
+export function officeHttpBase(store: Storage = sessionStorage, loc: Location = location): string {
   const hostPort = store.getItem('office.ws') ?? (loc.port === '5173' || loc.port === '4173' ? '127.0.0.1:7777' : loc.host);
   return `http://${hostPort}`;
 }
 export async function fetchSettings(token: string): Promise<SettingsView> {
-  const r = await fetch(`${httpBase()}/settings`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, cache: 'no-store' });
+  const r = await fetch(`${officeHttpBase()}/settings`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, cache: 'no-store' });
   if (!r.ok) throw new Error(`settings ${r.status}`);
   return r.json();
 }
 export async function saveSettings(token: string, patch: SettingsPatch): Promise<SettingsView> {
-  const r = await fetch(`${httpBase()}/settings`, {
+  const r = await fetch(`${officeHttpBase()}/settings`, {
     method: 'PUT',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify(patch),

@@ -1,22 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP } from '../../mod/office/hooks/register.js';
+import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP, takeInboxToken, canPromptSubmit, fetchBody } from '../../mod/office/hooks/register.js';
 // Fake engine matching the API used by usage-esp: register(on, options); on(name, ($, e, next) => ...) returns { catch }.
 function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' }, files: Record<string, string> = {}) {
-  const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; let beat: (() => any) | undefined; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
-  let msgs: any[] = []; const agentMsgs: Record<string, any[]> = {}; let subStatus = 'running';
+  const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; const beats: Array<() => any> = []; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
+  let msgs: any[] = []; const agentMsgs: Record<string, any[]> = {}; let subStatus = 'running'; let inboxJob: any;
   const on = (n: string, fn: any) => { h[n] = fn; return { catch: () => {} }; };
-  const $ = {
+  const $: any = {
     env: { get: async (k: string) => env[k] },
     session: { id: async () => sid, repo: async () => ({ root: 'C:/Users/m/proj' }), usage: async () => ({ cost: { usd: 0.42 } }),
       messages: async (a?: any) => (a?.agentId ? (agentMsgs[a.agentId] ?? { deny: 'not yours' }) : msgs) },
     agent: { list: async () => [{ id: 'sub1', type: 'coder', description: 'step 1', status: subStatus }] },
-    http: { fetch: async (url: string, o: any) => { posts.push({ url, ...JSON.parse(o.body), ct: o.headers['content-type'] }); return { ok: true, text: async () => '' }; } },
+    http: { fetch: async (url: string, o: any = {}) => {
+      const method = (o.method ?? 'POST').toUpperCase();
+      if (method === 'GET') {
+        posts.push({ url, method, auth: o.headers?.authorization });
+        const job = inboxJob; inboxJob = null;
+        return { ok: true, status: job ? 200 : 204, text: job ? JSON.stringify(job) : '' };
+      }
+      posts.push({ url, ...JSON.parse(o.body), ct: o.headers?.['content-type'], ...(o.headers?.authorization ? { auth: o.headers.authorization } : {}) });
+      return { ok: true, status: 200, text: JSON.stringify({ inboxToken: 'tok_inbox_abcdefghijklmnopqrstuvwx' }) };
+    } },
     fs: { exists: async (p: string) => p in files, read: async (p: string) => files[p], list: async () => [] },
-    clock: { every: (_ms: number, fn: () => any) => { everyCalls++; beat = fn; }, after: () => {}, now: async () => 0, sleep: async () => {} },
+    clock: { every: (_ms: number, fn: () => any) => { everyCalls++; beats.push(fn); }, after: () => {}, now: async () => 0, sleep: async () => {} },
   };
   const next: any = (e: any) => e; next.origin = { plugin: 'engine' };
   const fire = (n: string, e: any = {}, nx = next) => h[n]($, e, nx);
-  return { on, posts, fire, beat: () => beat?.(), next, everyCalls: () => everyCalls, setSid: (s: string) => { sid = s; }, setSub: (s: string) => { subStatus = s; }, setMsgs: (m: any[], agentId?: string) => { if (agentId) agentMsgs[agentId] = m; else msgs = m; } };
+  return { on, posts, fire, beat: () => { for (const fn of beats) fn(); }, next, everyCalls: () => everyCalls, $ ,
+    setSid: (s: string) => { sid = s; }, setSub: (s: string) => { subStatus = s; }, setMsgs: (m: any[], agentId?: string) => { if (agentId) agentMsgs[agentId] = m; else msgs = m; },
+    setInboxJob: (j: any) => { inboxJob = j; } };
 }
 const flush = () => new Promise((r) => setTimeout(r, 20));
 import { readFileSync } from 'node:fs';
@@ -177,5 +188,44 @@ describe('office mod (usage-esp API)', () => {
     await f.fire('turn.start', { text: 'go', agentId: 'sub1' }); await f.fire('turn.complete', { agentId: 'sub1', answer: 'ok', reason: 'answer' }); await flush();
     const t = f.posts.filter((p) => p.type === 'turn').map((p) => p.turn); expect(t.map((x) => x.phase)).toEqual(['start', 'end']);
     expect(t[0].id).toMatch(/^local-/); expect(t[1].id).toBe(t[0].id); expect(t[1]).toMatchObject({ agentId: 'sub1', agentType: 'coder', answer: 'ok' });
+  });
+});
+describe('same-session prompt submit', () => {
+  it('takeInboxToken / fetchBody / canPromptSubmit', async () => {
+    expect(takeInboxToken('{"inboxToken":"tok_inbox_abcdefghijklmnopqrstuvwx"}')).toBe('tok_inbox_abcdefghijklmnopqrstuvwx');
+    expect(takeInboxToken('{"inboxToken":"short"}')).toBeUndefined();
+    expect(takeInboxToken('not json')).toBeUndefined();
+    expect(await fetchBody({ text: '{"ok":true}' })).toBe('{"ok":true}');
+    expect(await fetchBody({ text: async () => 'hi' })).toBe('hi');
+    expect(canPromptSubmit({})).toBe(false);
+    expect(canPromptSubmit({ prompt: { submit: async () => ({}) } })).toBe(true);
+  });
+  it('polls inbox and calls $.prompt.submit({text, asUser:true}); Esc drop is rejected not a finished turn; no duplicate claim', async () => {
+    const f = fakeEngine();
+    const calls: any[] = [];
+    f.$.prompt = { submit: async (a: any) => { calls.push(a); return { drop: 'session is stopped' }; } };
+    f.$.session.model = async () => 'claude-opus';
+    register(f.on, {});
+    await f.fire('session.start', { cwd: 'C:/Users/m/proj' }); await flush();
+    expect(f.posts[0]).toMatchObject({ type: 'start', canSubmit: true, model: 'claude-opus' });
+    expect(f.everyCalls()).toBe(2);
+    f.setInboxJob({ id: 'job1', text: 'from office UI' });
+    await f.beat(); await flush();
+    expect(calls).toEqual([{ text: 'from office UI', asUser: true }]);
+    const ack = f.posts.filter((p) => p.url?.includes('/inbox/ack'));
+    expect(ack).toHaveLength(1);
+    expect(ack[0]).toMatchObject({ id: 'job1', state: 'rejected', reason: 'session is stopped' });
+    expect(ack[0].type).toBeUndefined(); // ack is not a turn event
+    await f.beat(); await flush(); // job already claimed in fake; no second submit
+    expect(calls).toHaveLength(1);
+  });
+  it('does not register inbox poll without $.prompt.submit', async () => {
+    const f = fakeEngine(); register(f.on, {});
+    await f.fire('session.start', { cwd: '/p' }); await flush();
+    expect(f.posts[0].canSubmit).toBe(false);
+    expect(f.everyCalls()).toBe(1);
+    f.setInboxJob({ id: 'job1', text: 'nope' });
+    await f.beat(); await flush();
+    expect(f.posts.filter((p) => p.method === 'GET')).toHaveLength(0);
   });
 });

@@ -1,12 +1,19 @@
-import type { AgentState, ItOpsStatus, OfficeEvent, SessionView, TurnView, UsageReading } from './types';
+import type { AgentState, ItOpsStatus, OfficeEvent, PromptAck, SessionView, TurnView, UsageReading } from './types';
 export type ConnStatus = 'no-token' | 'connecting' | 'open' | 'reconnecting';
 export interface ToolChip { callId: string; name: string; summary: string; ok?: boolean; ts: number }
 export interface AgentUI { id: string; role: string; name: string; state: AgentState; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string; text?: string; textTs?: number; tool?: ToolChip; result?: string; costUsd?: number; error?: string }
 export interface MessageUI { from: string; to: string; text: string; kind: 'ask' | 'reply'; ts: number }
-export interface OfficeState { conn: ConnStatus; retries: number; agents: Record<string, AgentUI>; order: string[]; messages: MessageUI[]; log: OfficeEvent[]; sessions: SessionView[]; notices: { text: string; ts: number }[]; itops?: ItOpsStatus; usage?: UsageReading | null; turns: TurnView[] }
+export interface OfficeState { conn: ConnStatus; retries: number; agents: Record<string, AgentUI>; order: string[]; messages: MessageUI[]; log: OfficeEvent[]; sessions: SessionView[]; notices: { text: string; ts: number }[]; itops?: ItOpsStatus; usage?: UsageReading | null; turns: TurnView[]; prompts: Record<string, PromptAck> }
 export type Action = { type: 'event'; e: OfficeEvent } | { type: 'conn'; status: ConnStatus; retries?: number };
 export const MAX_LOG = 200, MAX_MSG = 30, BUBBLE_MAX = 140, MAX_TURNS = 40;
-export const initialState = (conn: ConnStatus = 'connecting'): OfficeState => ({ conn, retries: 0, agents: {}, order: [], messages: [], log: [], sessions: [], notices: [], turns: [] });
+export const initialState = (conn: ConnStatus = 'connecting'): OfficeState => ({ conn, retries: 0, agents: {}, order: [], messages: [], log: [], sessions: [], notices: [], turns: [], prompts: {} });
+const isAck = (e: any): e is PromptAck => !!e && e.t === 'prompt.status' && typeof e.sid === 'string' && typeof e.nonce === 'string' && typeof e.state === 'string';
+const mergeAcks = (cur: Record<string, PromptAck>, list?: PromptAck[]) => {
+  if (!list?.length) return cur;
+  const next = { ...cur };
+  for (const a of list) if (isAck(a) && (!next[a.sid] || next[a.sid].ts <= a.ts)) next[a.sid] = a;
+  return next;
+};
 export const truncate = (s: string, n = BUBBLE_MAX) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
 const push = <T,>(arr: T[], x: T, max: number) => (arr.length >= max ? [...arr.slice(arr.length - max + 1), x] : [...arr, x]);
 /** Upsert key of a turn: sid + turnId + agentRunId (main loop and each subagent run of one turn are separate entries). */
@@ -27,14 +34,15 @@ export function reduce(s: OfficeState, act: Action): OfficeState {
   if (act.type === 'conn') return { ...s, conn: act.status, retries: act.retries ?? (act.status === 'open' ? 0 : s.retries) };
   const e = act.e;
   if (!e || typeof e !== 'object' || typeof (e as any).t !== 'string') return s;
-  const logged = e.t === 'office.snapshot' || e.t === 'sessions.update' || e.t === 'itops.status' || e.t === 'usage.update' || e.t === 'session.turn' ? s : { ...s, log: push(s.log, e, MAX_LOG) };
+  const logged = e.t === 'office.snapshot' || e.t === 'sessions.update' || e.t === 'itops.status' || e.t === 'usage.update' || e.t === 'session.turn' || e.t === 'prompt.status' ? s : { ...s, log: push(s.log, e, MAX_LOG) };
   switch (e.t) {
     case 'office.snapshot': {
       const agents: Record<string, AgentUI> = {};
       for (const v of e.agents) agents[v.id] = { ...s.agents[v.id], tools: s.agents[v.id]?.tools ?? [], id: v.id, role: v.role, name: v.name, state: v.state, desk: v.desk };
       for (const ss of e.sessions ?? []) for (const id of ss.agentIds) if (agents[id]) agents[id].sessionId = ss.sid;
       return { ...s, agents, order: e.agents.map((v) => v.id), sessions: e.sessions ?? s.sessions, itops: e.itops ?? s.itops, usage: e.usage ?? s.usage,
-        turns: (Array.isArray(e.turns) ? e.turns : []).filter(isTurn).reduce<TurnView[]>((a, t) => upsertTurn(a, t), []) };
+        turns: (Array.isArray(e.turns) ? e.turns : []).filter(isTurn).reduce<TurnView[]>((a, t) => upsertTurn(a, t), []),
+        prompts: mergeAcks(s.prompts, e.prompts) };
     }
     case 'agent.spawned': {
       const prev = logged.agents[e.id];
@@ -43,6 +51,7 @@ export function reduce(s: OfficeState, act: Action): OfficeState {
     }
     case 'sessions.update': return { ...s, sessions: e.sessions };
     case 'session.turn': return isTurn(e.turn) ? { ...s, turns: upsertTurn(s.turns, e.turn) } : s;
+    case 'prompt.status': return isAck(e) ? { ...s, prompts: { ...s.prompts, [e.sid]: (!s.prompts[e.sid] || s.prompts[e.sid].ts <= e.ts) ? e : s.prompts[e.sid] } } : s;
     case 'itops.status': return { ...s, itops: e.status };
     case 'usage.update': return !s.usage || e.usage.ts >= s.usage.ts ? { ...s, usage: e.usage } : s;
     case 'agent.left': {

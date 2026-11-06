@@ -157,6 +157,8 @@ describe('session tracking', () => {
   });
   it('sanitizes payloads: bad type/sid rejected, strings capped and secrets redacted', () => {
     expect(parseModEvent({ type: 'start' })).toBeNull(); expect(parseModEvent({ type: 'x', sid: 'a' })).toBeNull(); expect(parseModEvent(null)).toBeNull();
+    expect(parseModEvent({ type: 'start', sid: 's1', canSubmit: true, model: 'opus\n x' })).toMatchObject({ canSubmit: true, model: 'opus x' });
+    expect(parseModEvent({ type: 'start', sid: 's1', canSubmit: 'yes' })!.canSubmit).toBeUndefined();
     const e = parseModEvent({ type: 'tool', sid: 'a/../b', tool: { name: 'Bash', detail: 'export GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz ' + 'x'.repeat(500) } })!;
     expect(e.sid).toBe('ab'); expect(e.tool!.detail).not.toContain('ghp_'); expect(e.tool!.detail!.length).toBeLessThan(140);
   });

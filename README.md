@@ -6,6 +6,7 @@ to a local server, and the server shows the agents defined for that project.
 
 ```
 Claude Code session ──(office mod, POST /event, loopback)──> orchestrator :7777 ──(WebSocket + run token)──> browser UI
+browser UI ──(POST /prompt, Bearer run token)──> orchestrator ──(GET /inbox, per-session inboxToken)──> office mod ── $.prompt.submit({text, asUser:true})
 ```
 
 ## Quick start (Windows)
@@ -16,7 +17,7 @@ Claude Code session ──(office mod, POST /event, loopback)──> orchestrato
    2. clears the screen;
    3. installs the `office` mod into Claude Code (`node scripts/install-mod.mjs`, see below);
    4. on first run, runs `npm install` and builds the web UI, then starts the server and opens the browser with the per-run token (`http://127.0.0.1:7777/#token=…`).
-3. Reopen any Claude Code sessions that were already open, so they load the mod.
+3. Reopen any Claude Code sessions that were already open, so they load the mod. Prompt submit needs a Claude Code build that exposes `$.prompt.submit` (see the mods API); reload/restart the session after updating the office plugin.
 4. Open Claude Code sessions in any project. They appear in the **Sessions** panel within a few seconds and
    their agents take desks. Close a session and it leaves (immediately on SessionEnd, otherwise after ~60 s with no heartbeat).
 
@@ -73,6 +74,8 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 **Agents (left sidebar).** Collapsible list of the selected session's desk agents and current subagents (status + task from the live payload; `unavailable` when no task). Pref in localStorage `vp-collapse.agents`. The map/info split is draggable (default 80:20, localStorage `vp-split`).
 
 **Responses (left sidebar).** Collapsible list of agent answers from the event log (`agent.text`, `agent.done` result, non-empty `tool.result`, `agent.error`) — newest first; no agent profile markdown. Pref in localStorage `vp-collapse.responses`. Screenshot: `docs/screens/session-responses.png` (`cd web && npm run build && node scripts/screens-session-responses.mjs`).
+
+**Prompt composer (under Responses).** Textarea + Send scoped to the selected live session. Send is an explicit click (or Ctrl/Cmd+Enter) only — never on session switch, reconnect, or restart. Same-session delivery uses the documented `$.prompt.submit({ text, asUser: true })` when the office mod reports `canSubmit`. There is **no** live model/mode dropdown (no documented mod setter); the current model is shown read-only if `$.session.model()` returned a string. Demo / older Claude Code / missing `$.prompt.submit`: Send stays disabled with a labeled explanation (change model and type after Esc in Claude Code). Queued prompts are in-memory only (TTL ~45 s queued / ~3 min claimed), one per session, claimed at most once; a `delivered` ack means handed to Claude Code, **not** a finished turn. Pending permission prompts stay in Claude Code. After app restart, unsent drafts and queued jobs are gone. Screenshot: `docs/screens/session-composer.png` (`cd web && npm run build && node scripts/screens-composer.mjs`).
 
 
 
@@ -165,6 +168,8 @@ and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they nev
 | `export const register: Register = (on, options)`; `options.endpoint` from `plugin.json` userConfig | entry point, endpoint |
 | `on('session.start')`: `e.cwd`, `$.env.get('CLAUDE_CODE_ENTRYPOINT' / 'USERPROFILE' / 'HOME' / 'CLAUDE_CONFIG_DIR')`, `$.session.id()`, `$.session.repo()` → `root` | session info, quiet check, transcript path |
 | `$.clock.every(12000, fn)` | heartbeat |
+| `typeof $.prompt.submit === 'function'` then `$.prompt.submit({ text, asUser: true })` | same-session composer (documented; waits until idle; `{drop}` after Esc until the user types in Claude Code). Polls `GET /inbox` every 2 s only when this exists. |
+| `$.session.model()` | read-only model label when it returns a string or `{id|name|model}`; no live setter is used |
 | `on('turn.start')`: `e.agentId` (undefined = main turn), `e.text`, `e.turnId` | thinking, prompt (first sentence; `classic.UserPromptSubmit` is skipped for user-tier plugins), `turn` start |
 | `on('tool.call')`: `e.tool` + tool args on `e`, `e.agentId`, `next.origin.plugin === 'engine'` | current tool (model's own calls only) |
 | `on('classic.PermissionRequest')`: `e.tool_name`, `e.tool_input` | waiting for permission |
@@ -175,7 +180,7 @@ and `tool.call` handlers also have `.catch(($, e, next) => next(e))` so they nev
 | `$.agent.list()` → `{id?, name?, type?, description?, status}` (busy = running|pending|waiting); full list on heartbeat / tool / turn when `agentId` set; main `turn.complete` stays `tool` while busy remain | subagents / pendingDone |
 | `$.session.usage()` → `cost.usd`, `rateLimits`, `context` | cost; usage on start/heartbeat |
 | `on('session.measure')`: `e.rateLimits[{kind, percentUsed, resetsAt}]`, `e.context.percent`, `e.cost.usd` | usage bars |
-| `$.http.fetch(url, {method: 'POST', headers, body})` | posting events |
+| `$.http.fetch(url, {method: 'POST'|'GET', headers, body?})` | posting events; `GET /inbox` + `POST /inbox/ack` with the session inbox token |
 | `$.fs.exists(path)`, `$.fs.read(path)` | title from the transcript (`custom-title` > `ai-title`) when no `session_title` was given |
 
 `classic.UserPromptSubmit` is skipped for this user-tier plugin; the prompt comes from `turn.start`'s `e.text`, and `e.prompt` there is used only when it is a string.
@@ -192,6 +197,8 @@ The browser token is per run, so the mod cannot know it. Instead `/event` accept
 Payloads are validated, capped at 64 KB and redacted. Any local process could still post fake sessions; it can only make the
 office display them, and the server only reads `.claude/agents/*.md` / `CLAUDE.md` under the reported path, showing them to the
 token-protected UI. The UI WebSocket keeps the per-run token (URL fragment, Origin check), unchanged.
+
+**Prompt reverse channel (not `/event`).** `/event` must not inject commands. On a successful live-session ingest the JSON body `{inboxToken}` is returned **only** to that loopback poster (never on the WebSocket, never in logs). The UI sends `POST /prompt` with the **run** Bearer token, loopback peer, loopback Origin, JSON `{sid,text,nonce}` — 200 `{ok,id,nonce,state:'queued'}` means queued, not a completed turn. The mod polls `GET /inbox?sid=` with the **inbox** Bearer token (same anti-browser rules as `/event`; the run token is rejected with 403). Claim is atomic (one queued job per sid); `POST /inbox/ack` reports `delivered` / `rejected` / `unsupported`. Status events `{t:'prompt.status', sid, nonce, state, reason?}` carry **no prompt text**. Bound TTL, idempotent nonce, no disk persist.
 
 ### Claude usage in the header
 
@@ -230,5 +237,5 @@ Older `phase*` / `refui*` screenshots show earlier designs (orchestrator spawnin
 ## Known issues
 
 - IT Ops' Prometheus client sends no auth header (only credentials embedded in the URL), and has not been tried against a real Prometheus yet.
-- `orchestrator/test/mod.test.ts` (incl. the usage payload tests) only loads when `mod/office/.claude-plugin/types/tsconfig.json` exists (it comes with the engine types, not in this repo).
+- `mod/office/.claude-plugin/types/tsconfig.json` is a tiny stub so vitest can load `register.ts` without the engine's real types package. Replace it with the official types when you have them.
 - Headless screenshots use software WebGL (SwiftShader), so shadows are off in them.

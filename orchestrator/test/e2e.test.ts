@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { request } from 'node:http';
 import WebSocket from 'ws';
 import { start, parseArgs } from '../src/cli.js';
-import { originOk, tokenOk, eventRequestRejection } from '../src/server.js';
+import { originOk, tokenOk, eventRequestRejection, inboxGetRejection, promptRequestRejection } from '../src/server.js';
 import { simulate } from '../src/simulate.js';
 import { turnBody } from '../../mod/office/hooks/register.js';
 describe('security helpers', () => {
@@ -25,6 +25,16 @@ describe('security helpers', () => {
     expect(r('127.0.0.1', { ...json, 'sec-fetch-site': 'none', 'sec-fetch-mode': 'cors' })).toBe(0);
     expect(r('127.0.0.1', { 'content-type': 'text/plain' })).toBe(415);
     expect(r('127.0.0.1', {})).toBe(415);
+  });
+  it('inbox GET rejects browser-like and non-loopback; /prompt requires loopback + originOk + JSON', () => {
+    const g = (remoteAddress: string, headers: Record<string, string> = {}) => inboxGetRejection({ socket: { remoteAddress }, headers } as any);
+    expect(g('127.0.0.1')).toBe(0); expect(g('192.168.1.5')).toBe(403);
+    expect(g('127.0.0.1', { origin: 'http://127.0.0.1:7777' })).toBe(403);
+    const p = (remoteAddress: string, headers: Record<string, string>) => promptRequestRejection({ socket: { remoteAddress }, headers, method: 'POST' } as any);
+    expect(p('127.0.0.1', { 'content-type': 'application/json' })).toBe(0);
+    expect(p('127.0.0.1', { 'content-type': 'application/json', origin: 'http://127.0.0.1:5173' })).toBe(0);
+    expect(p('127.0.0.1', { 'content-type': 'application/json', origin: 'https://evil.example' })).toBe(403);
+    expect(p('10.0.0.2', { 'content-type': 'application/json' })).toBe(403);
   });
 });
 const post = (port: number, body: string, headers: Record<string, string> = { 'content-type': 'application/json' }, method = 'POST') => new Promise<number>((res, rej) => {
@@ -112,6 +122,60 @@ describe('event body decoding and turn log', () => {
       expect(await post(r.port, turnBody('utf8-1', { id: 'u1', phase: 'end', reason: 'answer', answer: 'xong' }))).toBe(204);
       const logged = readFileSync(r.logPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.t === 'session.turn');
       expect(logged.map((e) => e.turn.status)).toEqual(['running', 'answer']); expect(logged[1].turn.steps).toEqual([{ kind: 'text', text: 'step 3' }]);
+    } finally { await r.close(); }
+  }, 15000);
+});
+const httpJson = (port: number, path: string, opts: { method?: string; headers?: Record<string, string>; body?: string } = {}) => new Promise<{ status: number; body: string }>((res, rej) => {
+  const q = request({ host: '127.0.0.1', port, path, method: opts.method ?? 'GET', headers: opts.headers ?? {} }, (r) => { let b = ''; r.setEncoding('utf8'); r.on('data', (c) => b += c); r.on('end', () => res({ status: r.statusCode!, body: b })); });
+  q.on('error', rej); q.end(opts.body);
+});
+describe('prompt reverse channel', () => {
+  it('issues inboxToken on /event, never on WS/logs; /prompt needs run token; /inbox needs inbox token; claim once', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
+    try {
+      const got: any[] = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${r.port}/ws?token=${r.token}`, { origin: 'http://localhost:5173' });
+      ws.on('message', (m) => got.push(JSON.parse(String(m))));
+      await new Promise((res) => ws.once('open', res));
+      const sid = 'live-prompt-1';
+      const startRes = await httpJson(r.port, '/event', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'start', sid, cwd: dir, canSubmit: true }) });
+      expect(startRes.status).toBe(200);
+      const inboxToken = JSON.parse(startRes.body).inboxToken;
+      expect(inboxToken).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+      await new Promise((res) => setTimeout(res, 50));
+      expect(JSON.stringify(got)).not.toContain(inboxToken);
+      expect(JSON.stringify(got)).not.toContain('inboxToken');
+      expect(readFileSync(r.logPath, 'utf8')).not.toContain(inboxToken);
+      expect(readFileSync(r.logPath, 'utf8')).not.toContain(r.token);
+      const secret = 'do not leak this prompt text ever';
+      expect((await httpJson(r.port, '/prompt', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer nope' }, body: JSON.stringify({ sid, text: secret, nonce: 'nonce-aaaa-bbbb-cccc-01' }) })).status).toBe(401);
+      expect((await httpJson(r.port, '/prompt', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example', authorization: `Bearer ${r.token}` }, body: JSON.stringify({ sid, text: secret, nonce: 'nonce-aaaa-bbbb-cccc-01' }) })).status).toBe(403);
+      const queued = await httpJson(r.port, '/prompt', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${r.token}` }, body: JSON.stringify({ sid, text: secret, nonce: 'nonce-aaaa-bbbb-cccc-01' }) });
+      expect(queued.status).toBe(200);
+      expect(JSON.parse(queued.body)).toMatchObject({ ok: true, state: 'queued' });
+      expect(queued.body).not.toContain(secret);
+      const busy = await httpJson(r.port, '/prompt', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${r.token}` }, body: JSON.stringify({ sid, text: 'other', nonce: 'nonce-aaaa-bbbb-cccc-02' }) });
+      expect(busy.status).toBe(409); expect(JSON.parse(busy.body).error).toBe('queued');
+      expect((await httpJson(r.port, `/inbox?sid=${sid}`)).status).toBe(401);
+      expect((await httpJson(r.port, `/inbox?sid=${sid}`, { headers: { authorization: `Bearer ${r.token}` } })).status).toBe(403);
+      expect((await httpJson(r.port, `/inbox?sid=${sid}`, { headers: { authorization: `Bearer ${inboxToken}`, origin: 'http://127.0.0.1:7777' } })).status).toBe(403);
+      const claim = await httpJson(r.port, `/inbox?sid=${sid}`, { headers: { authorization: `Bearer ${inboxToken}` } });
+      expect(claim.status).toBe(200); expect(JSON.parse(claim.body)).toMatchObject({ text: secret });
+      const again = await httpJson(r.port, `/inbox?sid=${sid}`, { headers: { authorization: `Bearer ${inboxToken}` } });
+      expect(again.status).toBe(204); // no duplicate after poll
+      const ack = await httpJson(r.port, '/inbox/ack', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${inboxToken}` }, body: JSON.stringify({ sid, id: JSON.parse(claim.body).id, state: 'delivered' }) });
+      expect(ack.status).toBe(204);
+      await new Promise((res) => setTimeout(res, 50));
+      const st = got.filter((e) => e.t === 'prompt.status');
+      expect(st.map((e) => e.state)).toEqual(expect.arrayContaining(['queued', 'claimed', 'delivered']));
+      expect(JSON.stringify(st)).not.toContain(secret);
+      expect(st.every((e) => e.t !== 'session.turn')).toBe(true);
+      expect((await httpJson(r.port, '/prompt', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${r.token}` }, body: JSON.stringify({ sid: 'nope', text: 'x', nonce: 'nonce-aaaa-bbbb-cccc-03' }) })).status).toBe(404);
+      await httpJson(r.port, '/event', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'start', sid: 's-off', cwd: dir, canSubmit: false }) });
+      const un = await httpJson(r.port, '/prompt', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${r.token}` }, body: JSON.stringify({ sid: 's-off', text: 'x', nonce: 'nonce-aaaa-bbbb-cccc-04' }) });
+      expect(un.status).toBe(409); expect(JSON.parse(un.body).error).toBe('unsupported');
+      ws.close();
     } finally { await r.close(); }
   }, 15000);
 });

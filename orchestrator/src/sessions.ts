@@ -8,7 +8,7 @@ export interface ModEvent {
   type: 'start' | 'heartbeat' | 'state' | 'tool' | 'subagents' | 'prompt' | 'end' | 'turn';
   sid: string; project?: string; cwd?: string; root?: string; title?: string; transcript?: string;
   state?: SessionState; tool?: { name?: string; detail?: string } | null; subagents?: SubagentInfo[]; prompt?: string; costUsd?: number;
-  turn?: ModTurn;
+  turn?: ModTurn; model?: string; canSubmit?: boolean;
 }
 /** A `turn` event's turn: phase start (also live progress) or end of a main-loop turn or a subagent run (agentId). */
 export interface ModTurn { id: string; phase: 'start' | 'end'; agentId?: string; agentType?: string; prompt?: string; steps?: TurnStep[]; answer?: string; reason?: Exclude<TurnStatus, 'running'>; durationMs?: number }
@@ -54,6 +54,8 @@ export function parseModEvent(p: any): ModEvent | null {
     id: str(s.id ?? s.agentId, 64), name: str(s.name, 60), type: str(s.type ?? s.agentType, 60),
     description: str(s.description, 120), status: str(s.status, 20) ?? 'running' }));
   if (typeof p.costUsd === 'number' && Number.isFinite(p.costUsd)) e.costUsd = p.costUsd;
+  if (typeof p.canSubmit === 'boolean') e.canSubmit = p.canSubmit;
+  const model = str(p.model, 80); if (model) e.model = model;
   if (p.type === 'turn') { const t = parseTurn(p.turn); if (!t) return null; e.turn = t; }
   return e;
 }
@@ -91,6 +93,7 @@ export class SessionTracker {
     if (e.project) s.project = e.project; if (e.title) s.title = e.title; if (e.transcript) s.transcript = e.transcript;
     if (e.prompt) s.prompt = e.prompt; if (e.costUsd != null) s.costUsd = e.costUsd;
     if (e.subagents) s.subagents = e.subagents;
+    if (typeof e.canSubmit === 'boolean') s.canSubmit = e.canSubmit; if (e.model) s.model = e.model;
     if (e.tool === null) s.tool = undefined; else if (e.tool) s.tool = { name: e.tool.name!, detail: e.tool.detail, ts };
     if (e.state) { s.state = e.state; if (e.state !== 'tool' && e.state !== 'waiting-permission') s.tool = undefined; }
     s.lastSeen = ts;
@@ -130,7 +133,7 @@ export class SessionTracker {
     const root = e.root || e.cwd || '';
     const { source, profiles } = (this.o.load ?? loadProfiles)(root, this.o.userAgentsDir);
     const s: SessionView = { sid: e.sid, project: e.project || basename(root) || e.sid, cwd: e.cwd || root, state: 'idle', subagents: [],
-      startedAt: ts, lastSeen: ts, source, profiles, agentIds: [] };
+      startedAt: ts, lastSeen: ts, source, profiles, agentIds: [], canSubmit: e.canSubmit, model: e.model };
     this.sessions.set(e.sid, s);
     const total = this.o.desks ?? 6, cols = this.o.cols ?? 3;
     for (const p of profiles.slice(0, this.o.perSession ?? 6)) {

@@ -69,6 +69,7 @@ describe('sessionDumpRows', () => {
     expect(by.profiles.value).toMatch(/1 loaded/);
     expect(by.profiles.value).not.toMatch(/secret/);
     expect(by.agentIds.value).toMatch(/desk-a/);
+    expect(sessionDumpRows({ ...x, model: 'opus', canSubmit: true }, now).map((r) => r.key)).toEqual(expect.arrayContaining(['model', 'canSubmit']));
     // empty fields omitted
     const empty = sessionDumpRows(sess('e', [], { title: undefined, transcript: undefined, prompt: undefined, costUsd: undefined, tool: undefined, subagents: [], profiles: [], agentIds: [], startedAt: 0, lastSeen: 0 }), now);
     const keys = empty.map((r) => r.key);
