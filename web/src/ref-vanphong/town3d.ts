@@ -7,7 +7,7 @@ import type { ItOpsStatus } from '../types';
 import { ATM, BBQ, BBQ_SEATS, BIA, BIA_SEATS, CAFE, GATE, GARDEN, GYM, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POD, POND, PRINT, PX, ROADS, ROMANCE_SPOTS, SMOKE, TOWN, TRADA, pondCenter, toWorld, type Box } from '../town/map';
 import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
 import { TrafficLayer } from './vehicles3d';
-import { forceDrama, forceLayoff, forceRomance, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
+import { agentPartnerId, forceDrama, forceLayoff, forceRomance, graspWorldFromCarrier, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
 import { MAU_SAN as PRESETS } from './nhanVat';
@@ -452,6 +452,16 @@ export class TownLayer {
   /** Free office agents (plan px) Layoff may hunt. */
   setAgentPrey(list: AgentPrey[]) { this.agentPrey = list; }
   consumeLayoffEvent(): LayoffEvent | undefined { const e = this.pendingLayoff; this.pendingLayoff = undefined; return e; }
+  /** Rendered grasp pose while Layoff is carrying an office agent. Scene attaches the walker here. */
+  carryPose(): { agentId: string; x: number; y: number; z: number; heading: number } | undefined {
+    const e = this.world.ents.find((z) => z.kind === 'trex');
+    const aid = agentPartnerId(e?.partner);
+    if (!e || e.act !== 'carry' || !aid) return undefined;
+    const f = this.figs.get('layoff');
+    const [sx, sz] = toWorld(e);
+    const g = graspWorldFromCarrier(f?.x ?? sx, f?.z ?? sz);
+    return { agentId: aid, ...g, heading: f?.heading ?? 0 };
+  }
   /** Sếp đột nhập active — office agents sit up / whisper. */
   get bossActive(): boolean { return !!(this.world.bossUntil && this.world.bossUntil > Date.now()); }
   isRaining(): boolean { return this.world.weather === 'rain'; }
@@ -541,30 +551,31 @@ export class TownLayer {
       const prev = f.e.act; f.e = e; this.relook(f);
       if (e.act === 'eaten') eating = true;
       if (e.act === 'chomp' && e.kind === 'trex') { /* jaw anim via pose */ }
-      if (e.act === 'carried') { /* held by Layoff */ }
       if (e.act === 'fall' && prev !== 'fall') f.fallFrom = [f.x, f.z];
       const hidden = e.act === 'eaten' || e.act === 'gone'; f.g.visible = !hidden; f.el.style.display = hidden ? 'none' : '';
       if (hidden) continue;
-      const [tx, tz] = toWorld(e), dx = tx - f.x, dz = tz - f.z, kk = Math.min(1, dt * 6);
-      if (Math.abs(dx) + Math.abs(dz) > 6 && e.act !== 'fall') { f.x = tx; f.z = tz; } else { f.x += dx * kk; f.z += dz * kk; } // respawn: jump
-      const moving = Math.hypot(dx, dz) > 0.05;
-      if (moving) f.heading = Math.atan2(dx, dz);
-      else if (e.act === 'fight') { const o = this.world.ents.find((z) => z.kind === (e.kind === 'cat' ? 'dog' : 'cat')); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); } }
-      else if (e.kind === 'itops' && e.act === 'report') f.heading = Math.PI * 0.15;
-      f.g.rotation.y = THREE.MathUtils.lerp(f.g.rotation.y, f.heading, Math.min(1, dt * 8));
-      let y = 0;
-      if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
-      if (e.act === 'knocked') { f.g.rotation.x = THREE.MathUtils.lerp(f.g.rotation.x, -Math.PI / 2, 1); y = 0.15; }
-      if (e.act === 'carried') { y = 1.1; f.g.rotation.x = 0.4; }
-      if (e.act === 'massage') { f.g.rotation.x = -Math.PI / 2; y = 0.72; f.heading = 0; }
-      if (e.act === 'bbq') { /* sit-ish: slight lean */ }
-      if (e.act === 'romance' && e.partner) {
-        const o = this.world.ents.find((z) => z.id === e.partner); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); }
-        if (nowMs > this.heartCd) { this.hearts.burst(f.x, f.z, nowMs); this.heartCd = nowMs + 900; }
+      if (e.act === 'carried') {
+        // Independent lerp fights the carry; snap onto Layoff after this loop.
+        this.pose(f, t, dt, false);
+      } else {
+        const [tx, tz] = toWorld(e), dx = tx - f.x, dz = tz - f.z, kk = Math.min(1, dt * 6);
+        if (Math.abs(dx) + Math.abs(dz) > 6 && e.act !== 'fall') { f.x = tx; f.z = tz; } else { f.x += dx * kk; f.z += dz * kk; } // respawn: jump
+        const moving = Math.hypot(dx, dz) > 0.05;
+        if (moving) f.heading = Math.atan2(dx, dz);
+        else if (e.act === 'fight') { const o = this.world.ents.find((z) => z.kind === (e.kind === 'cat' ? 'dog' : 'cat')); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); } }
+        else if (e.kind === 'itops' && e.act === 'report') f.heading = Math.PI * 0.15;
+        f.g.rotation.y = THREE.MathUtils.lerp(f.g.rotation.y, f.heading, Math.min(1, dt * 8));
+        let y = 0;
+        if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
+        if (e.act === 'knocked') { f.g.rotation.x = THREE.MathUtils.lerp(f.g.rotation.x, -Math.PI / 2, 1); y = 0.15; }
+        if (e.act === 'massage') { f.g.rotation.x = -Math.PI / 2; y = 0.72; f.heading = 0; }
+        if (e.act === 'romance' && e.partner) {
+          const o = this.world.ents.find((z) => z.id === e.partner); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); }
+          if (nowMs > this.heartCd) { this.hearts.burst(f.x, f.z, nowMs); this.heartCd = nowMs + 900; }
+        }
+        f.g.position.set(f.x, y, f.z);
+        this.pose(f, t, dt, moving);
       }
-      f.g.position.set(f.x, y, f.z);
-      this.pose(f, t, dt, moving);
-      // label + bubble
       const name = currentName(`npc:${e.id}`) ?? e.name; if (f.ten.textContent !== name) f.ten.textContent = name;
       const phu = ROLE[e.kind] ?? ACT_LABEL[e.act] ?? '';
       if (f.phu.textContent !== phu) f.phu.textContent = phu;
@@ -572,6 +583,17 @@ export class TownLayer {
       const key = `${e.say ?? ''}|${alert}`;
       if (key !== f.bubble) { f.bubble = key; f.bb.textContent = e.say ?? ''; f.el.classList.toggle('co-bong', !!e.say); f.el.classList.toggle('bao-dong', alert); }
       if (f.el.dataset.act !== e.act) f.el.dataset.act = e.act;
+    }
+    const Lf = this.figs.get('layoff');
+    if (Lf && Lf.e.act === 'carry') {
+      const g = graspWorldFromCarrier(Lf.x, Lf.z);
+      for (const e of this.world.ents) {
+        if (e.act !== 'carried') continue;
+        const f = this.figs.get(e.id); if (!f || !f.g.visible) continue;
+        f.x = g.x; f.z = g.z; f.heading = Lf.heading;
+        f.g.position.set(g.x, g.y, g.z);
+        f.g.rotation.set(0.4, Lf.g.rotation.y, 0);
+      }
     }
     this.animatePond(t, dt, eating);
   }

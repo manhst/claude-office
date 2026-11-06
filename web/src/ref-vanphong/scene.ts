@@ -17,7 +17,8 @@ import { HeartFX } from './hearts';
 import { buildGameRoom, buildPantry } from './amenities';
 import { VP_LABELS_EVENT, applyLabelVisibility, isLabelOn } from '../vpLabels';
 import { CANH, TownLayer } from './town3d';
-import { fromWorld } from '../town/map';
+import { fromWorld, toWorld } from '../town/map';
+import { GRASP_LIFT, graspWorldFromCarrier, walkerHeldByLayoff } from '../town/sim';
 import { agentKey, currentLook, currentName } from '../town/looks';
 
 export interface MenuTarget { kind: 'agent' | 'ent'; id: string; x: number; y: number }
@@ -49,6 +50,8 @@ interface Nguoi {
   idleKind?: IdlePlan['kind']; noiIdle: boolean;
   /** ours: chosen preset id ('' = role default), and until when the agent is gone (thrown to the crocodiles) */
   lookId: string; goneUntil?: number;
+  /** ours: Layoff is carrying this office agent; walker must not run. */
+  held?: boolean;
 }
 interface Nem { m: THREE.Group; tu: THREE.Vector3; den: THREE.Vector3; bat: number }
 interface Bay { m: THREE.Mesh; tu: THREE.Vector3; den: THREE.Vector3; bat: number; lau: number }
@@ -497,8 +500,26 @@ export class VanphongScene {
     if (n.goneUntil) { // ours: eaten by the crocodiles; walks back in from the door afterwards
       const gone = Date.now() < n.goneUntil; n.ngoi.goc.visible = false; n.dung.goc.visible = false; n.el.style.display = gone ? 'none' : '';
       if (gone) { this.capNhatBan(n.ban, null, t, dt); return; }
-      n.goneUntil = undefined; n.walker = newWalker(DOOR); n.seated = false; n.dung.goc.visible = true; n.dung.goc.add(n.nhan); n.nhan.position.set(0, 2.05, 0);
+      n.goneUntil = undefined; n.held = false; n.walker = newWalker(DOOR); n.seated = false; n.dung.goc.visible = true; n.dung.goc.add(n.nhan); n.nhan.position.set(0, 2.05, 0);
     }
+    const hold = this.town.carryPose();
+    if ((hold && hold.agentId === n.id) || walkerHeldByLayoff(n.id, this.town.ent('layoff'))) {
+      const pose = hold ?? (() => {
+        const L = this.town.ent('layoff')!, [lx, lz] = toWorld(L);
+        return { agentId: n.id, ...graspWorldFromCarrier(lx, lz), heading: 0 };
+      })();
+      n.held = true; n.idleKind = undefined; n.noiIdle = false;
+      if (n.seated) { n.seated = false; n.dung.goc.add(n.nhan); n.nhan.position.set(0, 2.05, 0); }
+      n.ngoi.goc.visible = false; n.dung.goc.visible = true;
+      n.dung.goc.position.set(pose.x, pose.y, pose.z);
+      n.dung.goc.rotation.set(0.4, pose.heading, 0);
+      n.walker = { pos: [pose.x, 0, pose.z], heading: pose.heading, path: [], seg: 0, goalKey: '', phase: 'waiting' };
+      if (n.el.dataset.phase !== 'carried') n.el.dataset.phase = 'carried';
+      this.tuTheDung(n, t, dt, false);
+      this.capNhatBan(n.ban, null, t, dt);
+      return;
+    }
+    if (n.held) { n.held = false; n.dung.goc.rotation.x = 0; }
     const goal = vpGoal(a, s.agents, s.messages, this.idle[n.id]);
     n.walker = stepWalker(n.walker, goal, dt, vpPlan, walkerSpeedFor(goal, a.state));
     if (n.walker.phase !== 'waiting') n.idleKind = undefined;
@@ -595,7 +616,7 @@ export class VanphongScene {
     if (this.s) {
       for (const id of this.s.order) {
         const a = this.s.agents[id], n = this.nguoi.get(id);
-        if (!a || !n || n.goneUntil || !isFree(a)) continue;
+        if (!a || !n || n.goneUntil || n.held || !isFree(a) || walkerHeldByLayoff(id, this.town.ent('layoff'))) continue;
         const g = (n.seated ? n.ngoi : n.dung).goc;
         const wp = new THREE.Vector3(); g.getWorldPosition(wp);
         const pt = fromWorld(wp.x, wp.z);
@@ -609,9 +630,12 @@ export class VanphongScene {
       const n = this.nguoi.get(ev.agentId), a = this.s?.agents[ev.agentId];
       if (n && a && !n.goneUntil) {
         if (ev.type === 'pond') {
-          const tu = new THREE.Vector3(); (n.seated ? n.ngoi : n.dung).goc.getWorldPosition(tu);
+          const tu = new THREE.Vector3();
+          if (n.held) n.dung.goc.getWorldPosition(tu);
+          else if (ev.from) { const [x, z] = toWorld(ev.from); tu.set(x, GRASP_LIFT, z); }
+          else (n.seated ? n.ngoi : n.dung).goc.getWorldPosition(tu);
           const fig = dungNguoi(lookFor(a), false).goc; fig.position.copy(tu); this.nhom.add(fig);
-          this.nem.push({ m: fig, tu, den: this.town.pondAt, bat: this.dongHo.elapsedTime });
+          this.nem.push({ m: fig, tu: tu.clone(), den: this.town.pondAt, bat: this.dongHo.elapsedTime });
         } else {
           this.town.eat(preyNow, 1800); // brief chomp cue
         }

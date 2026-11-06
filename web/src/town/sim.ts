@@ -2,7 +2,7 @@
 // and Layoff the T-Rex (occasional headcount "optimization"). Pure step function, rnd injected.
 import type { ItOpsStatus } from '../types';
 import { LINES, PAIRS } from './dialogue';
-import { ATM_SPOTS, BBQ_SEATS, BIA_SEATS, CAFE_SEATS, GATE_SPOTS, GYM_SPOTS, ITOPS_SPOT, MASSAGE_BEDS, POD_SPOTS, POND_EDGE, PRINT_SPOTS, ROMANCE_SPOTS, SHIPPER_SPOTS, SMOKE_SPOTS, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
+import { ATM_SPOTS, BBQ_SEATS, BIA_SEATS, CAFE_SEATS, GATE_SPOTS, GYM_SPOTS, ITOPS_SPOT, MASSAGE_BEDS, POD_SPOTS, POND_EDGE, PRINT_SPOTS, PX, ROMANCE_SPOTS, SHIPPER_SPOTS, SMOKE_SPOTS, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
 import { townRunSpeed } from '../vpRunSpeed';
 export type Kind = 'itops' | 'npc' | 'dog' | 'cat' | 'trex' | 'boss' | 'shipper';
 export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'drama' | 'bia' | 'wobble' | 'shipper' | 'hunt' | 'chomp' | 'carry' | 'carried';
@@ -14,8 +14,24 @@ export interface Ent {
 }
 /** Free office agents Layoff may hunt (plan px). Scene feeds these each tick. */
 export interface AgentPrey { id: string; x: number; y: number }
-/** Scene consumes this to hide/throw a Claude-session agent. */
-export type LayoffEvent = { type: 'eat' | 'pond'; agentId: string }
+/** Scene consumes this to hide/throw a Claude-session agent. Pond includes the grasp/release point in plan px. */
+export type LayoffEvent = { type: 'eat' | 'pond'; agentId: string; from?: Pt }
+/** Held slightly beside Layoff (plan px) and lifted in world units so the victim reads as in-grasp. */
+export const GRASP_PLAN_DX = 18;
+export const GRASP_LIFT = 1.1;
+export function agentPartnerId(partner?: string): string | undefined {
+  return partner?.startsWith('agent:') ? partner.slice(6) : undefined;
+}
+export function graspPlan(carrier: Pt): Pt {
+  return { x: carrier.x - GRASP_PLAN_DX, y: carrier.y };
+}
+export function graspWorldFromCarrier(wx: number, wz: number): { x: number; y: number; z: number } {
+  return { x: wx - GRASP_PLAN_DX / PX, y: GRASP_LIFT, z: wz };
+}
+/** True while Layoff is carrying this office agent to the pond — scene must skip the autonomous walker. */
+export function walkerHeldByLayoff(agentId: string, layoff?: Pick<Ent, 'act' | 'partner'> | null): boolean {
+  return !!layoff && layoff.act === 'carry' && agentPartnerId(layoff.partner) === agentId;
+}
 export interface World { ents: Ent[]; reportedKey?: string; t: number; layoffEvent?: LayoffEvent; weather?: 'clear' | 'rain'; weatherUntil?: number; bossUntil?: number; payday?: boolean }
 export const pick = <T,>(a: readonly T[], r: () => number): T => a[Math.floor(r() * a.length) % a.length];
 const jitter = (p: Pt, r: () => number, d = 14): Pt => ({ x: p.x + (r() - 0.5) * d, y: p.y + (r() - 0.5) * d });
@@ -88,9 +104,6 @@ export function forceDrama(w: World, now: number, kind: 'smoke' | 'gym' | 'atm' 
 export function isUselessNpc(e: Ent): boolean {
   return e.kind === 'npc' && USELESS_ACTS.has(e.act);
 }
-function agentPartnerId(partner?: string): string | undefined {
-  return partner?.startsWith('agent:') ? partner.slice(6) : undefined;
-}
 /** Force Layoff to hunt a useless NPC (or first NPC) and resolve eat-on-spot or pond drop. For screenshots / vp-debug. */
 export function forceLayoff(w: World, now: number, outcome: 'eat' | 'pond' | 'hunt', r: () => number = Math.random): World {
   const layoff0 = w.ents.find((e) => e.kind === 'trex');
@@ -134,8 +147,9 @@ function resolveLayoffCatch(w: World, now: number, r: () => number, forced?: 'ea
   const victim = w.ents.find((e) => e.id === layoff.partner);
   if (!victim || victim.act === 'eaten' || victim.act === 'gone' || victim.act === 'fall') return w;
   if (pond) {
+    const held = graspPlan(layoff);
     const L = say({ ...layoff, act: 'carry', tx: pondCenter().x, ty: pondCenter().y, until: now + 12_000, partner: victim.id, speed: 160 }, pick(LINES.layoffThrow, r), now, 5000);
-    const V = say({ ...victim, act: 'carried', tx: layoff.x, ty: layoff.y, partner: layoff.id, until: now + 12_000, speed: 160 }, pick(LINES.victimPanic, r), now, 4500);
+    const V = say({ ...victim, act: 'carried', x: held.x, y: held.y, tx: held.x, ty: held.y, partner: layoff.id, until: now + 12_000, speed: 160 }, pick(LINES.victimPanic, r), now, 4500);
     return { ...w, ents: w.ents.map((e) => (e.id === L.id ? L : e.id === V.id ? V : e)), t: now };
   }
   const L = say({ ...layoff, act: 'chomp', tx: victim.x, ty: victim.y, until: now + 3200, partner: victim.id }, pick(LINES.layoffEat, r), now, 3500);
@@ -330,12 +344,13 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     if (aid) {
       if (near(carrier, pondCenter(), 36)) {
         ents = ents.map((e) => (e.id === carrier.id ? { ...carrier, act: 'idle' as const, partner: undefined, until: now + 25_000 + r() * 20_000, say: undefined } : e));
-        layoffEvent = { type: 'pond', agentId: aid };
+        layoffEvent = { type: 'pond', agentId: aid, from: graspPlan(carrier) };
       }
     } else if (carrier.partner) {
+      const held = graspPlan(carrier);
       ents = ents.map((e) => {
         if (e.id === carrier.partner && e.act === 'carried') {
-          return { ...e, x: carrier.x - 18, y: carrier.y, tx: carrier.x - 18, ty: carrier.y };
+          return { ...e, x: held.x, y: held.y, tx: held.x, ty: held.y };
         }
         return e;
       });
