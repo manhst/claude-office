@@ -10,7 +10,7 @@ import { TrafficLayer } from './vehicles3d';
 import { agentPartnerId, forceBoss, forceDrama, forceLayoff, forceRomance, graspWorldFromCarrier, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
-import { canPov, EYE_PUSH, type Eye } from '../povCam';
+import { canPov, eyePush, type Eye } from '../povCam';
 import { MAU_SAN as PRESETS } from './nhanVat';
 import { HeartFX } from './hearts';
 import { VP_LABELS_EVENT, applyLabelVisibility, isLabelOn, loadLabels, monitorLabelVisible, type LabelKey } from '../vpLabels';
@@ -358,7 +358,7 @@ function printKiosk(ctx: TownCtx) {
 }
 
 // ---------- side characters ----------
-interface Pet { goc: THREE.Group; dau: THREE.Group; duoi: THREE.Group; chan: THREE.Group[] }
+interface Pet { goc: THREE.Group; dau: THREE.Group; duoi: THREE.Group; chan: THREE.Group[]; mat: THREE.Object3D[] }
 function petMesh(meo: boolean): Pet {
   const goc = new THREE.Group(), long = meo ? '#9aa3ad' : '#c58b4e', dam = meo ? '#6b737d' : '#8a5a3b', s = meo ? 0.8 : 1;
   const than = new THREE.Group(); than.scale.setScalar(s); goc.add(than);
@@ -368,12 +368,13 @@ function petMesh(meo: boolean): Pet {
   const dau = new THREE.Group(); dau.position.set(0, 0.62, 0.42); than.add(dau);
   khoi(dau, 0.34, 0.3, 0.3, long, 0, 0, 0);
   khoi(dau, meo ? 0.16 : 0.2, meo ? 0.1 : 0.14, meo ? 0.08 : 0.2, meo ? '#c4cad3' : '#e7c9a0', 0, -0.06, 0.18); khoi(dau, 0.07, 0.05, 0.04, '#1d1a22', 0, -0.02, meo ? 0.22 : 0.29, false);
-  for (const b of [-1, 1]) { khoi(dau, 0.05, 0.06, 0.02, '#1d1a22', b * 0.08, 0.05, 0.155, false); khoi(dau, meo ? 0.08 : 0.08, meo ? 0.12 : 0.18, 0.06, dam, b * 0.12, meo ? 0.2 : 0.08, -0.04, false).rotation.z = b * (meo ? 0.15 : -0.3); }
+  const mat: THREE.Object3D[] = [];
+  for (const b of [-1, 1]) { mat.push(khoi(dau, 0.05, 0.06, 0.02, '#1d1a22', b * 0.08, 0.05, 0.155, false)); khoi(dau, meo ? 0.08 : 0.08, meo ? 0.12 : 0.18, 0.06, dam, b * 0.12, meo ? 0.2 : 0.08, -0.04, false).rotation.z = b * (meo ? 0.15 : -0.3); }
   const duoi = new THREE.Group(); duoi.position.set(0, 0.52, -0.36); than.add(duoi);
   khoi(duoi, 0.07, meo ? 0.5 : 0.08, meo ? 0.07 : 0.34, dam, 0, meo ? 0.25 : 0.04, meo ? -0.02 : -0.17);
-  return { goc, dau, duoi, chan };
+  return { goc, dau, duoi, chan, mat };
 }
-type Trex = { goc: THREE.Group; dau: THREE.Group; duoi: THREE.Group; chan: THREE.Group[]; tay: THREE.Group[] };
+type Trex = { goc: THREE.Group; dau: THREE.Group; duoi: THREE.Group; chan: THREE.Group[]; tay: THREE.Group[]; mat: THREE.Object3D[] };
 function trexMesh(): Trex {
   const goc = new THREE.Group(), da = '#5a8f3c', dam = '#3f6a28', bung = '#c5d98a';
   const than = new THREE.Group(); goc.add(than);
@@ -382,8 +383,9 @@ function trexMesh(): Trex {
   const dau = new THREE.Group(); dau.position.set(0, 1.25, 0.55); than.add(dau);
   khoi(dau, 0.48, 0.38, 0.55, da, 0, 0, 0); // head
   khoi(dau, 0.42, 0.16, 0.4, '#2a3d1f', 0, -0.12, 0.12, false); // jaw
+  const mat: THREE.Object3D[] = [];
   for (const b of [-1, 1]) {
-    khoi(dau, 0.06, 0.06, 0.04, '#1d1a22', b * 0.12, 0.08, 0.26, false); // eyes
+    mat.push(khoi(dau, 0.06, 0.06, 0.04, '#1d1a22', b * 0.12, 0.08, 0.26, false)); // eyes
     khoi(dau, 0.05, 0.1, 0.04, '#e8eecf', b * 0.1, -0.08, 0.28, false); // teeth hint
   }
   const tay = [-1, 1].map((s) => {
@@ -397,7 +399,18 @@ function trexMesh(): Trex {
   const duoi = new THREE.Group(); duoi.position.set(0, 0.85, -0.55); than.add(duoi);
   khoi(duoi, 0.22, 0.22, 0.7, da, 0, 0, -0.3); khoi(duoi, 0.12, 0.12, 0.35, dam, 0, 0.02, -0.7);
   goc.scale.setScalar(1.15);
-  return { goc, dau, duoi, chan, tay };
+  return { goc, dau, duoi, chan, tay, mat };
+}
+/** Midpoint of the two eye voxels, facing the head's local +Z, then pushed past the snout. */
+export function liveEye(dau: THREE.Object3D, mat: THREE.Object3D[], push: number): Eye | undefined {
+  if (mat.length < 2) return;
+  dau.updateWorldMatrix(true, true);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion();
+  mat[0].getWorldPosition(a); mat[1].getWorldPosition(b); dau.getWorldQuaternion(q);
+  const p = a.add(b).multiplyScalar(0.5), fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  if (!Number.isFinite(p.x + p.y + p.z) || fwd.lengthSq() < 1e-8) return;
+  fwd.normalize(); p.addScaledVector(fwd, push);
+  return { x: p.x, y: p.y, z: p.z, fx: fwd.x, fy: fwd.y, fz: fwd.z };
 }
 interface Fig { e: Ent; g: THREE.Group; hinh?: Hinh; pet?: Pet; trex?: Trex; el: HTMLDivElement; bb: HTMLSpanElement; ten: HTMLElement; phu: HTMLElement; nhan: CSS2DObject;
   lookId: string; pha: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
@@ -476,21 +489,18 @@ export class TownLayer {
     const e = this.ent(id);
     return !!e && canPov('ent', e.kind) && e.act !== 'eaten' && e.act !== 'gone';
   }
-  /** Live eye pose from the rendered voxel head (seated/massage/carry included via world matrices). */
   hideFig(id: string, an: boolean) {
     const f = this.figs.get(id); if (!f) return;
     const gone = f.e.act === 'eaten' || f.e.act === 'gone';
     f.g.visible = !an && !gone; f.el.style.visibility = an || gone ? 'hidden' : '';
   }
+  /** Live eye pose from that model's own eyes (human / pet / T-Rex), not a shared human offset. */
   eyeOf(id: string): Eye | undefined {
-    const h = this.figs.get(id)?.hinh; if (!h) return;
-    h.dau.updateWorldMatrix(true, true);
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion();
-    h.mat[0].getWorldPosition(a); h.mat[1].getWorldPosition(b); h.dau.getWorldQuaternion(q);
-    const p = a.add(b).multiplyScalar(0.5), fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-    if (!Number.isFinite(p.x + p.y + p.z) || fwd.lengthSq() < 1e-8) return;
-    fwd.normalize(); p.addScaledVector(fwd, EYE_PUSH);
-    return { x: p.x, y: p.y, z: p.z, fx: fwd.x, fy: fwd.y, fz: fwd.z };
+    const f = this.figs.get(id); if (!f) return;
+    const push = eyePush(f.e.kind);
+    if (f.hinh) return liveEye(f.hinh.dau, f.hinh.mat, push);
+    if (f.pet) return liveEye(f.pet.dau, f.pet.mat, push);
+    if (f.trex) return liveEye(f.trex.dau, f.trex.mat, push);
   }
   setItops(s?: ItOpsStatus) {
     this.itops = s;
