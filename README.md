@@ -68,9 +68,11 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 | Run speed / Tốc độ chạy | Settings → localStorage `vp-run-speed` | Slider (default 2.5 m/s, min 0.1, max ≈5.07 = old sprint). Idle amenity trips & town NPC runs use half that; walk unchanged at 1.6 m/s. Active agent returning to desk always uses max. |
 | Structure labels | Settings → **Nhãn công trình** | localStorage `vp-labels`. Defaults: ON for Crossian / Xuka / Xém Nướng / trà đá / hồ cá sấu; OFF for other amenities & rooms; Monitor = chỉ khi lỗi/cảnh báo. |
 
-**Session dump (left sidebar).** Selecting a session shows a CLI-like field list (sid, cwd, transcript, tool, prompt, cost, started/lastSeen, source, all subagents — not agent profile markdown bodies). Session dump and Events are collapsible (localStorage `vp-collapse`). Screenshot: `docs/screens/session-dump.png` (`cd web && npm run build && node scripts/screens-session-dump.mjs`).
+**Session dump (left sidebar).** Selecting a session shows a CLI-like field list (sid, cwd, transcript, tool, prompt, cost, started/lastSeen, source, all subagents — not agent profile markdown bodies). Session dump and Agents are collapsible (localStorage `vp-collapse`). Screenshot: `docs/screens/session-dump.png` (`cd web && npm run build && node scripts/screens-session-dump.mjs`).
 
-**Responses (left sidebar).** Collapsible list of agent answers from the event log (`agent.text`, `agent.done` result, non-empty `tool.result`, `agent.error`) — newest first, same style as Events; no agent profile markdown. Pref in localStorage `vp-collapse.responses`. Screenshot: `docs/screens/session-responses.png` (`cd web && npm run build && node scripts/screens-session-responses.mjs`).
+**Agents (left sidebar).** Collapsible list of the selected session's desk agents and current subagents (status + task from the live payload; `unavailable` when no task). Pref in localStorage `vp-collapse.agents`. The map/info split is draggable (default 80:20, localStorage `vp-split`).
+
+**Responses (left sidebar).** Collapsible list of agent answers from the event log (`agent.text`, `agent.done` result, non-empty `tool.result`, `agent.error`) — newest first; no agent profile markdown. Pref in localStorage `vp-collapse.responses`. Screenshot: `docs/screens/session-responses.png` (`cd web && npm run build && node scripts/screens-session-responses.mjs`).
 
 
 

@@ -1,4 +1,4 @@
-// Screenshot: left sidebar session CLI dump + Events, both expanded with collapse toggles (1280).
+// Screenshot: left sidebar session CLI dump + Agents, both expanded with collapse toggles (1280).
 import { spawn } from 'node:child_process';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -28,7 +28,7 @@ try {
   await pg.waitForSelector('[data-testid=session-dump]', { timeout: 30000 });
   await pg.waitForSelector('[data-testid=dump-sid]', { timeout: 10000 });
   await pg.waitForSelector('[data-testid=session-collapse][aria-expanded=true]');
-  await pg.waitForSelector('[data-testid=events-collapse][aria-expanded=true]');
+  await pg.waitForSelector('[data-testid=agents-collapse][aria-expanded=true]');
   // Prefer a session that has cwd/transcript (all demos do); click shop-api if present for richer dump
   const shop = pg.locator('[data-testid=session-demo-shop-0001]');
   if (await shop.count()) await shop.click();
@@ -39,7 +39,7 @@ try {
   }
   // Collapse controls present
   if (!(await pg.locator('[data-testid=session-collapse]').count())) errors.push('no session-collapse');
-  if (!(await pg.locator('[data-testid=events-collapse]').count())) errors.push('no events-collapse');
+  if (!(await pg.locator('[data-testid=agents-collapse]').count())) errors.push('no agents-collapse');
   await pg.screenshot({ path: out });
   await ctx.close();
   console.log('shot', out, 'errors', JSON.stringify(errors));

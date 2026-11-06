@@ -103,6 +103,6 @@ describe('collapse prefs include responses', () => {
     expect(loadCollapse().responses).toBe(false);
     setCollapse('responses', true);
     expect(loadCollapse().responses).toBe(true);
-    expect(loadCollapse().events).toBe(false);
+    expect(loadCollapse().agents).toBe(false);
   });
 });
