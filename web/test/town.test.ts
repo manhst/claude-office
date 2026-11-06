@@ -1,15 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { LINES } from '../src/town/dialogue';
-import { forceLayoff, initialWorld, step, throwIntoPond, problemKey, problemText, type World } from '../src/town/sim';
-import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld } from '../src/town/map';
+import { agentPartnerId, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, step, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
+import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld, PX } from '../src/town/map';
 import { BIEN } from '../src/ref-vanphong/adapter';
 import { loadLooks, setIdent, agentKey } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
 import { lookFor } from '../src/ref-vanphong/adapter';
 import { setCurrentLooks } from '../src/town/looks';
 const seq = (xs: number[]) => { let i = 0; return () => xs[i++ % xs.length]; };
-const run = (w: World, from: number, ms: number, r: () => number, it?: any) => { for (let t = from; t <= from + ms; t += 200) w = step(w, t, r, it); return w; };
+const run = (w: World, from: number, ms: number, r: () => number, it?: any, prey: AgentPrey[] = []) => { for (let t = from; t <= from + ms; t += 200) w = step(w, t, r, it, prey); return w; };
 const ent = (w: World, id: string) => w.ents.find((e) => e.id === id)!;
+const goneNpcs = (w: World): World => ({ ...w, ents: w.ents.map((e) => e.kind === 'npc' ? { ...e, act: 'gone' as const, until: 1e12 } : e) });
+const huntAgent = (w: World, prey: AgentPrey, until = 500): World => ({
+  ...w, ents: w.ents.map((e) => e.id === 'layoff'
+    ? { ...e, act: 'hunt' as const, partner: `agent:${prey.id}`, x: prey.x + 8, y: prey.y, tx: prey.x, ty: prey.y, until, speed: 180 }
+    : e),
+});
 describe('town sim', () => {
   it('has the cast: IT Ops indoors, NPCs, dog Chos An, cat Meow, Layoff — no Architect', () => {
     const w = initialWorld(0);
@@ -83,28 +89,96 @@ describe('Layoff the T-Rex', () => {
     expect(LINES.layoffThrow).toContain(ent(w, 'layoff').say);
     const carried = w.ents.find((e) => e.act === 'carried')!;
     expect(carried).toBeTruthy();
-    // Walk to pond
-    w = run(w, 1000, 20000, () => 0.5);
+    w = run(w, 1000, 6000, () => 0.5);
     const v = ent(w, carried.id);
-    expect(['fall', 'eaten', 'gone', 'idle', 'walk']).toContain(v.act);
-    // Eventually hits pond eat flow
-    const hitPond = ['fall', 'eaten', 'gone'].includes(v.act) || inPond(v);
-    expect(hitPond || ent(w, 'layoff').act === 'idle').toBe(true);
+    expect(['fall', 'eaten', 'gone']).toContain(v.act);
+    expect(['fall', 'eaten', 'gone'].includes(v.act) || inPond(v)).toBe(true);
   });
-  it('hunting an agent prey emits layoffEvent for the scene bridge', () => {
+  it('NPC pond carry: victim stays in grasp during a long transit, then falls from the pond-side release, not the capture spot', () => {
+    const capture = { x: 1470, y: 330 };
     let w = initialWorld(0);
-    w = { ...w, ents: w.ents.map((e) => e.id === 'layoff' ? { ...e, act: 'idle' as const, x: 400, y: 400, until: 0 } : e) };
-    const prey = [{ id: 'agent-1', x: 420, y: 400 }];
-    w = step(w, 500, () => 0.01, undefined, prey); // decide → hunt agent (no NPCs useless if still busy... make NPCs working)
-    // Force: set layoff hunting agent directly via force path on empty npc useless — use step with only agent prey
-    w = { ...w, ents: w.ents.map((e) => {
-      if (e.id === 'layoff') return { ...e, act: 'hunt' as const, partner: 'agent:agent-1', x: 420, y: 400, tx: 420, ty: 400, until: 0 };
-      if (e.kind === 'npc') return { ...e, act: 'gone' as const, until: 1e12 }; // no NPC competition
+    w = { ...w, ents: w.ents.map((e) => e.kind === 'npc' ? { ...e, act: 'idle' as const, until: 0 } : e) };
+    w = forceLayoff(w, 1000, 'pond', () => 0.2);
+    const vid = w.ents.find((e) => e.act === 'carried')!.id;
+    w = { ...w, t: 1000, ents: w.ents.map((e) => {
+      if (e.id === 'layoff') return { ...e, x: capture.x + 20, y: capture.y, tx: pondCenter().x, ty: pondCenter().y, act: 'carry' as const, partner: vid, speed: 160, until: 20_000 };
+      if (e.id === vid) return { ...e, x: capture.x, y: capture.y, act: 'carried' as const, partner: 'layoff', until: 20_000 };
       return e;
     }) };
-    w = step(w, 800, () => 0.9, undefined, prey); // near prey → resolve (r>=0.5 → pond or eat)
+    w = run(w, 1000, 1600, () => 0.5);
+    const L = ent(w, 'layoff'), V = ent(w, vid);
+    expect(L.act).toBe('carry');
+    expect(V.act).toBe('carried');
+    expect(w.layoffEvent).toBeUndefined();
+    const held = graspPlan(L);
+    expect(Math.hypot(V.x - held.x, V.y - held.y)).toBeLessThan(3);
+    expect(Math.hypot(V.x - capture.x, V.y - capture.y)).toBeGreaterThan(80);
+    expect(Math.hypot(L.x - capture.x, L.y - capture.y)).toBeGreaterThan(80);
+    w = run(w, 2600, 20_000, () => 0.5);
+    const v2 = ent(w, vid);
+    expect(['fall', 'eaten', 'gone']).toContain(v2.act);
+    expect(Math.hypot(v2.x - capture.x, v2.y - capture.y)).toBeGreaterThan(400);
+    if (v2.act === 'fall') expect(Math.hypot(v2.x - pondCenter().x, v2.y - pondCenter().y)).toBeLessThan(90);
+    expect(ent(w, 'layoff').act).toBe('idle');
+  });
+  it('carried NPC does not resume wandering even after until expires', () => {
+    let w = initialWorld(0);
+    w = { ...w, ents: w.ents.map((e) => e.kind === 'npc' ? { ...e, act: 'idle' as const, until: 0 } : e) };
+    w = forceLayoff(w, 1000, 'pond', () => 0.2);
+    const vid = w.ents.find((e) => e.act === 'carried')!.id;
+    w = { ...w, ents: w.ents.map((e) => e.id === vid || e.id === 'layoff' ? { ...e, until: 0 } : e) };
+    w = step(w, 1200, () => 0.5);
+    expect(ent(w, vid).act).toBe('carried');
+    expect(ent(w, 'layoff').act).toBe('carry');
+  });
+  it('hunting an agent prey emits eat immediately (no carry)', () => {
+    const prey = [{ id: 'agent-1', x: 420, y: 400 }];
+    let w = goneNpcs(huntAgent({ ...initialWorld(0), t: 0 }, prey[0], 0));
+    w = step(w, 200, () => 0.9, undefined, prey);
+    expect(w.layoffEvent).toEqual({ type: 'eat', agentId: 'agent-1' });
+    expect(ent(w, 'layoff').act).toBe('idle');
+    expect(walkerHeldByLayoff('agent-1', ent(w, 'layoff'))).toBe(false);
+  });
+  it('agent pond: capture has no event, transit keeps carry + walkerHeld, release throws from grasp near the pond', () => {
+    const prey = [{ id: 'agent-1', x: 1470, y: 330 }];
+    let w = goneNpcs(huntAgent({ ...initialWorld(0), t: 0 }, prey[0], 0));
+    w = step(w, 200, () => 0.2, undefined, prey);
+    expect(ent(w, 'layoff').act).toBe('carry');
+    expect(ent(w, 'layoff').partner).toBe('agent:agent-1');
+    expect(w.layoffEvent).toBeUndefined();
+    expect(walkerHeldByLayoff('agent-1', ent(w, 'layoff'))).toBe(true);
+    expect(walkerHeldByLayoff('agent-2', ent(w, 'layoff'))).toBe(false);
+    const start = { x: ent(w, 'layoff').x, y: ent(w, 'layoff').y };
+    w = run(w, 200, 1600, () => 0.5, undefined, prey);
+    expect(ent(w, 'layoff').act).toBe('carry');
+    expect(w.layoffEvent).toBeUndefined();
+    expect(walkerHeldByLayoff('agent-1', ent(w, 'layoff'))).toBe(true);
+    expect(Math.hypot(ent(w, 'layoff').x - start.x, ent(w, 'layoff').y - start.y)).toBeGreaterThan(80);
+    w = run(w, 1800, 20_000, () => 0.5, undefined, prey);
+    expect(w.layoffEvent?.type).toBe('pond');
     expect(w.layoffEvent?.agentId).toBe('agent-1');
-    expect(['eat', 'pond']).toContain(w.layoffEvent!.type);
+    expect(w.layoffEvent?.from).toEqual(graspPlan(ent(w, 'layoff')));
+    expect(Math.hypot(w.layoffEvent!.from!.x - pondCenter().x, w.layoffEvent!.from!.y - pondCenter().y)).toBeLessThan(50);
+    expect(ent(w, 'layoff').act).toBe('idle');
+    expect(ent(w, 'layoff').partner).toBeUndefined();
+    expect(walkerHeldByLayoff('agent-1', ent(w, 'layoff'))).toBe(false);
+  });
+  it('grasp helpers: plan offset, world lift, agent partner id', () => {
+    expect(agentPartnerId('agent:coder')).toBe('coder');
+    expect(agentPartnerId('npc-1')).toBeUndefined();
+    expect(graspPlan({ x: 100, y: 40 })).toEqual({ x: 100 - GRASP_PLAN_DX, y: 40 });
+    const g = graspWorldFromCarrier(10, 5);
+    expect(g.x).toBeCloseTo(10 - GRASP_PLAN_DX / PX);
+    expect(g.y).toBe(GRASP_LIFT);
+    expect(g.z).toBe(5);
+  });
+  it('manual throwIntoPond still launches from the current position (not the pond-side carry release)', () => {
+    let w = initialWorld(0);
+    w = { ...w, ents: w.ents.map((e) => e.id === 'npc-1' ? { ...e, x: 1470, y: 330, act: 'idle' as const } : e) };
+    w = throwIntoPond(w, 'npc-1', 0);
+    expect(ent(w, 'npc-1').act).toBe('fall');
+    expect(ent(w, 'npc-1').x).toBe(1470);
+    expect(ent(w, 'npc-1').tx).toBe(pondCenter().x);
   });
 });
 describe('side characters walk around the building', () => {
