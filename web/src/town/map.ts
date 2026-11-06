@@ -40,8 +40,8 @@ export const SMOKE_SPOTS: Pt[] = [{ x: 70, y: 655 }, { x: 115, y: 670 }, { x: 15
 /** Outdoor gym / table tennis in the south yard. */
 export const GYM: Box = { x: 480, y: 860, w: 340, h: 110 };
 export const GYM_SPOTS: Pt[] = [{ x: 520, y: 910 }, { x: 600, y: 900 }, { x: 680, y: 910 }, { x: 760, y: 900 }];
-/** ATM + snack machine east of the office, south of trà đá. */
-export const ATM: Box = { x: 1400, y: 690, w: 150, h: 100 };
+/** ATM + snack machine east of the office, south of trà đá. Pad stays on the sidewalk (south edge flush with the front street at y=760); do not overlap the roadway. */
+export const ATM: Box = { x: 1400, y: 690, w: 150, h: 70 };
 export const ATM_SPOTS: Pt[] = [{ x: 1430, y: 740 }, { x: 1480, y: 755 }, { x: 1520, y: 740 }];
 /** Parking / security gate at the SW approach (left avenue → front street). */
 export const GATE: Box = { x: 40, y: 690, w: 150, h: 70 };
