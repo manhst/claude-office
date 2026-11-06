@@ -10,6 +10,7 @@ import { TrafficLayer } from './vehicles3d';
 import { agentPartnerId, forceBoss, forceDrama, forceLayoff, forceRomance, graspWorldFromCarrier, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
 import { currentLook, currentName } from '../town/looks';
 import { dungNguoi, khoi, vatLieu, vatLieuSang, type Hinh, type NgoaiHinh } from './characters';
+import { canPov, EYE_PUSH, type Eye } from '../povCam';
 import { MAU_SAN as PRESETS } from './nhanVat';
 import { HeartFX } from './hearts';
 import { VP_LABELS_EVENT, applyLabelVisibility, isLabelOn, loadLabels, monitorLabelVisible, type LabelKey } from '../vpLabels';
@@ -471,6 +472,26 @@ export class TownLayer {
   get road() { return this.traffic; }
   set road(t: Traffic) { this.traffic = t; }
   ent(id: string) { return this.world.ents.find((e) => e.id === id); }
+  hasPovEnt(id: string) {
+    const e = this.ent(id);
+    return !!e && canPov('ent', e.kind) && e.act !== 'eaten' && e.act !== 'gone';
+  }
+  /** Live eye pose from the rendered voxel head (seated/massage/carry included via world matrices). */
+  hideFig(id: string, an: boolean) {
+    const f = this.figs.get(id); if (!f) return;
+    const gone = f.e.act === 'eaten' || f.e.act === 'gone';
+    f.g.visible = !an && !gone; f.el.style.visibility = an || gone ? 'hidden' : '';
+  }
+  eyeOf(id: string): Eye | undefined {
+    const h = this.figs.get(id)?.hinh; if (!h) return;
+    h.dau.updateWorldMatrix(true, true);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion();
+    h.mat[0].getWorldPosition(a); h.mat[1].getWorldPosition(b); h.dau.getWorldQuaternion(q);
+    const p = a.add(b).multiplyScalar(0.5), fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    if (!Number.isFinite(p.x + p.y + p.z) || fwd.lengthSq() < 1e-8) return;
+    fwd.normalize(); p.addScaledVector(fwd, EYE_PUSH);
+    return { x: p.x, y: p.y, z: p.z, fx: fwd.x, fy: fwd.y, fz: fwd.z };
+  }
   setItops(s?: ItOpsStatus) {
     this.itops = s;
     const un = !s || s.mode === 'unconfigured', st = un ? 'idle' : s!.state;

@@ -20,6 +20,10 @@ import { CANH, TownLayer } from './town3d';
 import { fromWorld, toWorld } from '../town/map';
 import { GRASP_LIFT, graspWorldFromCarrier, walkerHeldByLayoff } from '../town/sim';
 import { agentKey, currentLook, currentName } from '../town/looks';
+import {
+  cameraFromEye, clampLook, EYE_PUSH, enterPovView, exitPovView, isFiniteSnap, lookDelta,
+  OVERVIEW_FOV, OVERVIEW_NEAR, POV_FOV, POV_NEAR, subjectGone, type CamSnap, type Eye, type PovView,
+} from '../povCam';
 
 export interface MenuTarget { kind: 'agent' | 'ent'; id: string; x: number; y: number }
 export const THROW_FLY = 0.9, RESPAWN_MS = 20_000;
@@ -33,7 +37,10 @@ const SVG = {
   gan: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
   xa: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v2H5z"/></svg>',
   goc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.7 9h2.1A5 5 0 1 0 12 7v3L7.5 6 12 2z"/></svg>',
+  thoat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V4h11v16H9v-3M4 12h12M8 8l-4 4 4 4"/></svg><span>Thoát</span>',
 };
+const GOI_Y = 'Drag to rotate · scroll to zoom · right-drag to pan · click a name: đặt tên, avatar, nhìn từ nhân vật, ném cho cá sấu';
+const GOI_Y_POV = 'Drag to look around · Esc or Thoát restores the previous view';
 /** Software rasterisers (SwiftShader/llvmpipe) can't afford shadows + MSAA. */
 function softwareGL() {
   try { const c = document.createElement('canvas').getContext('webgl2'); const e = c?.getExtension('WEBGL_debug_renderer_info');
@@ -66,6 +73,7 @@ export class VanphongScene {
   private s: OfficeState | null = null; private idle: Record<string, IdlePlan> = {}; private freeSince: Record<string, number> = {}; private lastMsg = 0; private dem = false; private gocVe: null | { tuMay: THREE.Vector3; tuDich: THREE.Vector3; denMay: THREE.Vector3; denDich: THREE.Vector3; bat: number; lau: number } = null;
   private town!: TownLayer; private hearts!: HeartFX; private heartCd = 0; private nem: Nem[] = []; private xaTu = 26;
   private ro: ResizeObserver; private vung: HTMLDivElement; private nutDem: HTMLButtonElement; private soft = softwareGL();
+  private povView: PovView = { pov: null, saved: null }; private keoNhin = false; private goiY!: HTMLParagraphElement;
 
   constructor(private khung: HTMLElement, private store?: Pick<Storage, 'getItem' | 'setItem'>, private onMenu?: (m: MenuTarget) => void) {
     setShadows(!this.soft);
@@ -77,10 +85,12 @@ export class VanphongScene {
         <button type="button" class="nut-3d" data-3d="gan" title="Zoom in" aria-label="Zoom in">${SVG.gan}</button>
         <button type="button" class="nut-3d" data-3d="xa" title="Zoom out" aria-label="Zoom out">${SVG.xa}</button>
         <button type="button" class="nut-3d" data-3d="goc" title="Reset view" aria-label="Reset view">${SVG.goc}</button>
+        <button type="button" class="nut-3d" data-3d="thoat-pov" data-testid="vp-pov-exit" title="Thoát nhìn từ nhân vật" aria-label="Thoát nhìn từ nhân vật">${SVG.thoat}</button>
       </div>
-      <p class="vp3d-goi-y">Drag to rotate · scroll to zoom · right-drag to pan · click a name: đặt tên, avatar, ném cho cá sấu</p>`;
+      <p class="vp3d-goi-y">${GOI_Y}</p>`;
     this.vung = khung.querySelector('.vp3d-canh')!;
     this.nutDem = khung.querySelector('[data-3d="ngay-dem"]')!;
+    this.goiY = khung.querySelector('.vp3d-goi-y')!;
     const r = this.renderer;
     r.setPixelRatio(this.soft ? 0.85 : Math.min(window.devicePixelRatio || 1, 2));
     r.shadowMap.enabled = !this.soft; r.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -93,8 +103,8 @@ export class VanphongScene {
     this.canh.add(this.nang, this.nang.target);
     this.dk = new OrbitControls(this.camera, r.domElement);
     Object.assign(this.dk, { enableDamping: true, dampingFactor: 0.08, screenSpacePanning: false, minDistance: 3.5, maxDistance: 95, minPolarAngle: 0.15, maxPolarAngle: 1.32, rotateSpeed: 0.7 });
-    this.dk.addEventListener('change', () => this.giuTrongBien());
-    this.dk.addEventListener('start', () => { this.gocVe = null; });
+    this.dk.addEventListener('change', () => { if (!this.povView.pov) this.giuTrongBien(); });
+    this.dk.addEventListener('start', () => { if (!this.povView.pov) this.gocVe = null; });
     this.canh.add(this.nhom);
     this.dung();
     const g = this.gocMacDinh(); this.camera.position.copy(g.may); this.dk.target.copy(g.dich); this.dk.update();
@@ -103,8 +113,22 @@ export class VanphongScene {
     this.datNgayDem(saved ? saved === '1' : gio < 6 || gio >= 18);
     this.ro = new ResizeObserver(() => this.doiCo()); this.ro.observe(this.vung); this.doiCo();
     khung.addEventListener('click', this.onClick); khung.addEventListener('contextmenu', this.onMenuEv);
+    r.domElement.addEventListener('pointerdown', this.onPtrDown);
+    r.domElement.addEventListener('wheel', this.onWheel, { capture: true, passive: false });
+    window.addEventListener('pointermove', this.onPtrMove);
+    window.addEventListener('pointerup', this.onPtrUp);
+    window.addEventListener('pointercancel', this.onPtrUp);
     r.setAnimationLoop(() => this.veKhung());
+    this.ghiCam();
+    try {
+      if (this.store?.getItem('vp-debug') === '1') {
+        (window as unknown as { __vpPov?: { enter: (k: MenuTarget['kind'], id: string) => boolean; exit: () => boolean; snap: () => CamSnap; subject: () => PovView['pov'] } }).__vpPov = {
+          enter: (kind, id) => this.enterPov(kind, id), exit: () => this.exitPov(), snap: () => this.camSnap(), subject: () => this.povView.pov,
+        };
+      }
+    } catch { /* private mode */ }
   }
+  private onWheel = (e: WheelEvent) => { if (this.povView.pov) { e.preventDefault(); e.stopImmediatePropagation(); } };
 
   /** ours: click / right-click on a name tag or bubble opens the town menu (name & avatar, throw to the crocodiles). */
   private onMenuEv = (e: MouseEvent) => {
@@ -117,10 +141,124 @@ export class VanphongScene {
     const nut = (e.target as HTMLElement).closest<HTMLElement>('[data-3d]'); if (!nut) return;
     const hd = nut.dataset['3d'];
     if (hd === 'ngay-dem') { this.datNgayDem(!this.dem); try { this.store?.setItem('office.vp.night', this.dem ? '1' : '0'); } catch { /* private mode */ } }
+    else if (hd === 'thoat-pov') this.exitPov();
+    else if (this.povView.pov) return;
     else if (hd === 'gan') this.phong(0.7);
     else if (hd === 'xa') this.phong(1.4);
     else if (hd === 'goc') { const g = this.gocMacDinh(); this.diChuyenGoc(g.may, g.dich); }
   };
+  private onPtrDown = (e: PointerEvent) => {
+    if (!this.povView.pov || e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('.nut-3d, .ten-3d, .bong-3d, [data-3d]')) return;
+    this.keoNhin = true; this.khung.classList.add('is-keo');
+  };
+  private onPtrMove = (e: PointerEvent) => {
+    const p = this.povView.pov; if (!this.keoNhin || !p) return;
+    const d = lookDelta(e.movementX, e.movementY); p.look = clampLook(p.look, d.dyaw, d.dpitch);
+  };
+  private onPtrUp = () => { this.keoNhin = false; this.khung.classList.remove('is-keo'); };
+
+  isPov() { return !!this.povView.pov; }
+  canEnterPov(kind: MenuTarget['kind'], id: string) {
+    if (kind === 'agent') {
+      const n = this.nguoi.get(id);
+      return !!n && !!this.s?.agents[id] && !(n.goneUntil && Date.now() < n.goneUntil);
+    }
+    return this.town.hasPovEnt(id);
+  }
+  enterPov(kind: MenuTarget['kind'], id: string) {
+    if (!this.canEnterPov(kind, id)) return false;
+    const prev = this.povView.pov;
+    if (prev) this.hienChuThe(prev.kind, prev.id);
+    this.povView = enterPovView(this.povView, { kind, id }, this.camSnap());
+    this.dk.enabled = false; this.gocVe = null;
+    this.camera.fov = POV_FOV; this.camera.near = POV_NEAR; this.camera.updateProjectionMatrix();
+    this.datPovUi(true);
+    if (!this.apPov()) { this.exitPov(); return false; }
+    return true;
+  }
+  exitPov() {
+    const { view, restore } = exitPovView(this.povView);
+    const was = this.povView.pov;
+    this.keoNhin = false; this.khung.classList.remove('is-keo');
+    if (was) this.hienChuThe(was.kind, was.id);
+    this.povView = view; this.gocVe = null;
+    this.datPovUi(false);
+    if (restore && isFiniteSnap(restore)) this.ganCam(restore); else this.ganCam(this.camSnap());
+    this.dk.update(); this.dk.enabled = true;
+    return !!restore;
+  }
+  private camSnap(): CamSnap {
+    const p = this.camera.position, t = this.dk.target;
+    return { px: p.x, py: p.y, pz: p.z, tx: t.x, ty: t.y, tz: t.z, fov: this.camera.fov, near: this.camera.near };
+  }
+  private ganCam(s: CamSnap) {
+    this.camera.up.set(0, 1, 0);
+    this.camera.position.set(s.px, s.py, s.pz); this.dk.target.set(s.tx, s.ty, s.tz);
+    this.camera.fov = Number.isFinite(s.fov) ? s.fov : OVERVIEW_FOV;
+    this.camera.near = Number.isFinite(s.near) ? s.near : OVERVIEW_NEAR;
+    this.camera.updateProjectionMatrix();
+    this.ghiCam();
+  }
+  private ghiCam() {
+    const s = this.camSnap();
+    this.khung.dataset.cam = [s.px, s.py, s.pz, s.tx, s.ty, s.tz, s.fov].map((n) => n.toFixed(3)).join(',');
+  }
+  private datPovUi(on: boolean) {
+    this.khung.classList.toggle('is-pov', on);
+    this.khung.dataset.pov = on && this.povView.pov ? `${this.povView.pov.kind}:${this.povView.pov.id}` : '';
+    this.goiY.textContent = on ? GOI_Y_POV : GOI_Y;
+    this.dk.enableRotate = this.dk.enablePan = this.dk.enableZoom = !on;
+  }
+  private matNguoi(h: Hinh): Eye | undefined {
+    h.dau.updateWorldMatrix(true, true);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion();
+    h.mat[0].getWorldPosition(a); h.mat[1].getWorldPosition(b); h.dau.getWorldQuaternion(q);
+    const p = a.add(b).multiplyScalar(0.5), fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    if (!Number.isFinite(p.x + p.y + p.z) || fwd.lengthSq() < 1e-8) return;
+    fwd.normalize(); p.addScaledVector(fwd, EYE_PUSH);
+    return { x: p.x, y: p.y, z: p.z, fx: fwd.x, fy: fwd.y, fz: fwd.z };
+  }
+  private docMat(): Eye | undefined {
+    const p = this.povView.pov; if (!p) return;
+    if (p.kind === 'agent') {
+      const n = this.nguoi.get(p.id);
+      if (subjectGone('agent', { agentPresent: !!n && !!this.s?.agents[p.id], gone: !!(n?.goneUntil && Date.now() < n.goneUntil) })) return;
+      return n ? this.matNguoi(n.seated ? n.ngoi : n.dung) : undefined;
+    }
+    const e = this.town.ent(p.id);
+    if (subjectGone('ent', { entPresent: !!e, entKind: e?.kind, entAct: e?.act })) return;
+    return this.town.eyeOf(p.id);
+  }
+  private anChuThe(kind: MenuTarget['kind'], id: string) {
+    if (kind === 'agent') {
+      const n = this.nguoi.get(id); if (!n) return;
+      n.ngoi.goc.visible = false; n.dung.goc.visible = false; n.el.style.visibility = 'hidden';
+      return;
+    }
+    this.town.hideFig(id, true);
+  }
+  private hienChuThe(kind: MenuTarget['kind'], id: string) {
+    if (kind === 'agent') {
+      const n = this.nguoi.get(id); if (!n) return;
+      n.ngoi.goc.visible = n.seated; n.dung.goc.visible = !n.seated; n.el.style.visibility = '';
+      return;
+    }
+    this.town.hideFig(id, false);
+  }
+  private apPov() {
+    const p = this.povView.pov; if (!p) return false;
+    const eye = this.docMat(), aim = eye && cameraFromEye(eye, p.look);
+    if (!aim || !Number.isFinite(aim.px + aim.py + aim.pz + aim.tx + aim.ty + aim.tz)) return false;
+    this.anChuThe(p.kind, p.id);
+    const dy = aim.ty - aim.py;
+    this.camera.up.set(0, Math.abs(dy) > 0.95 ? 0 : 1, Math.abs(dy) > 0.95 ? (dy > 0 ? -1 : 1) : 0);
+    this.camera.position.set(aim.px, aim.py, aim.pz);
+    this.camera.lookAt(aim.tx, aim.ty, aim.tz);
+    this.dk.target.set(aim.tx, aim.ty, aim.tz);
+    this.ghiCam();
+    return true;
+  }
 
   private doiCo() {
     const w = this.vung.clientWidth, h = this.vung.clientHeight; if (!w || !h) return;
@@ -350,6 +488,7 @@ export class VanphongScene {
   }
   /** ours: throw an agent (or a side character) to the crocodiles. The agent flies in an arc, gets eaten, and walks back in 20 s later. */
   throwIt(m: Pick<MenuTarget, 'kind' | 'id'>) {
+    if (this.povView.pov && this.povView.pov.kind === m.kind && this.povView.pov.id === m.id) this.exitPov();
     if (m.kind === 'ent') { this.town.throwEnt(m.id); return; }
     const n = this.nguoi.get(m.id), a = this.s?.agents[m.id]; if (!n || !a || n.goneUntil) return;
     const tu = new THREE.Vector3(); (n.seated ? n.ngoi : n.dung).goc.getWorldPosition(tu);
@@ -411,7 +550,10 @@ export class VanphongScene {
       const phu = subtitleFor(a); if (n.phuEl.textContent !== phu) n.phuEl.textContent = phu;
       if (n.choEl.textContent) n.choEl.textContent = ''; // keep labels to name + short status
     }
-    for (const [id, n] of this.nguoi) if (!s.agents[id]) { this.nhom.remove(n.ngoi.goc, n.dung.goc); n.el.remove(); this.nguoi.delete(id); } // session left
+    for (const [id, n] of this.nguoi) if (!s.agents[id]) {
+      if (this.povView.pov?.kind === 'agent' && this.povView.pov.id === id) this.exitPov();
+      this.nhom.remove(n.ngoi.goc, n.dung.goc); n.el.remove(); this.nguoi.delete(id);
+    } // session left
     for (const id in this.freeSince) if (!s.agents[id]) delete this.freeSince[id]; // a swept session coming back with the same ids starts fresh
     const nAgents = s.order.length; this.roomLabel.textContent = nAgents ? `${nAgents} ${nAgents === 1 ? 'person' : 'people'}` : 'empty';
     for (const m of newFlights(s, this.lastMsg)) this.bayPhieu(m.from, m.to);
@@ -607,7 +749,8 @@ export class VanphongScene {
 
   private veKhung() {
     const dt = Math.min(0.1, this.dongHo.getDelta()), t = this.dongHo.elapsedTime;
-    this.capNhatGoc(t); this.dk.update();
+    if (this.povView.pov) this.gocVe = null; else this.capNhatGoc(t);
+    if (!this.povView.pov) this.dk.update();
     if (this.s) for (const n of this.nguoi.values()) this.capNhat(n, t, dt);
     this.capNhatBay(t); this.capNhatNem(t);
     // Layoff may hunt free (idle/done) office agents who are out of the building / wandering.
@@ -625,6 +768,7 @@ export class VanphongScene {
     }
     this.town.setAgentPrey(prey);
     this.town.tick(t, dt, preyNow);
+    if (this.povView.pov && !this.apPov()) this.exitPov();
     const ev = this.town.consumeLayoffEvent();
     if (ev) {
       const n = this.nguoi.get(ev.agentId), a = this.s?.agents[ev.agentId];
@@ -640,10 +784,12 @@ export class VanphongScene {
           this.town.eat(preyNow, 1800); // brief chomp cue
         }
         n.goneUntil = preyNow + RESPAWN_MS;
+        if (this.povView.pov?.kind === 'agent' && this.povView.pov.id === ev.agentId) this.exitPov();
       }
     }
     this.nhanR.domElement.classList.toggle('xa', this.camera.position.distanceTo(this.dk.target) > this.xaTu);
     this.renderer.render(this.canh, this.camera); this.nhanR.render(this.canh, this.camera);
+    this.ghiCam();
     if (t - this.lastLayout > 0.12) { this.lastLayout = t; this.tachNhan(); }
   }
   private lastLayout = -1; private lech = new Map<HTMLElement, number>();
@@ -671,7 +817,12 @@ export class VanphongScene {
   dispose() {
     try { window.removeEventListener(VP_LABELS_EVENT, this.onLabelsChanged); } catch { /* */ }
     this.renderer.setAnimationLoop(null);
-    this.ro.disconnect(); this.khung.removeEventListener('click', this.onClick); this.khung.removeEventListener('contextmenu', this.onMenuEv); this.dk.dispose(); this.town.dispose();
+    this.ro.disconnect(); this.khung.removeEventListener('click', this.onClick); this.khung.removeEventListener('contextmenu', this.onMenuEv);
+    this.renderer.domElement.removeEventListener('pointerdown', this.onPtrDown);
+    this.renderer.domElement.removeEventListener('wheel', this.onWheel, true);
+    window.removeEventListener('pointermove', this.onPtrMove); window.removeEventListener('pointerup', this.onPtrUp); window.removeEventListener('pointercancel', this.onPtrUp);
+    try { delete (window as unknown as { __vpPov?: unknown }).__vpPov; } catch { /* */ }
+    this.dk.dispose(); this.town.dispose();
     for (const b of this.bay) this.canh.remove(b.m);
     this.canh.traverse((o) => { if (o instanceof CSS2DObject) o.element.remove(); });
     for (const r of this.rieng) r.dispose();
