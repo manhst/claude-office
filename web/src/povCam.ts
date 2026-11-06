@@ -6,7 +6,8 @@ export const OVERVIEW_NEAR = 0.1;
 export const PITCH_LIM = 1.15;
 export const EYE_PUSH = 0.18;
 export const LOOK_SENS = 0.0045;
-export const POV_KINDS = new Set(['npc', 'boss', 'itops', 'shipper']);
+/** Every town character that has a clickable menu — humans, pets, and Layoff. */
+export const POV_KINDS = new Set(['npc', 'boss', 'itops', 'shipper', 'dog', 'cat', 'trex']);
 
 export type PovKind = 'agent' | 'ent';
 export type Look = { yaw: number; pitch: number };
@@ -19,6 +20,13 @@ export type PovView = { pov: Pov | null; saved: CamSnap | null };
 export const finiteN = (...xs: number[]) => xs.every((n) => Number.isFinite(n));
 export function canPov(kind: PovKind, entKind?: string): boolean {
   return kind === 'agent' || (!!entKind && POV_KINDS.has(entKind));
+}
+/** World-space push past that model's snout/muzzle (not the human face offset). */
+export function eyePush(kind?: string): number {
+  if (kind === 'cat') return 0.14;
+  if (kind === 'dog') return 0.22;
+  if (kind === 'trex') return 0.34;
+  return EYE_PUSH;
 }
 export function subjectGone(kind: PovKind, o: { agentPresent?: boolean; gone?: boolean; entPresent?: boolean; entAct?: string; entKind?: string }): boolean {
   if (kind === 'agent') return !o.agentPresent || !!o.gone;

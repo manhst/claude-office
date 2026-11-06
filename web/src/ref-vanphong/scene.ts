@@ -16,7 +16,7 @@ import { BIEN, DOOR, ROOM, ROOM_COLOR, idlePlans, isFree, lookFor, newFlights, s
 import { HeartFX } from './hearts';
 import { buildGameRoom, buildPantry } from './amenities';
 import { VP_LABELS_EVENT, applyLabelVisibility, isLabelOn } from '../vpLabels';
-import { CANH, TownLayer } from './town3d';
+import { CANH, liveEye, TownLayer } from './town3d';
 import { fromWorld, toWorld } from '../town/map';
 import { GRASP_LIFT, graspWorldFromCarrier, walkerHeldByLayoff } from '../town/sim';
 import { agentKey, currentLook, currentName } from '../town/looks';
@@ -210,15 +210,7 @@ export class VanphongScene {
     this.goiY.textContent = on ? GOI_Y_POV : GOI_Y;
     this.dk.enableRotate = this.dk.enablePan = this.dk.enableZoom = !on;
   }
-  private matNguoi(h: Hinh): Eye | undefined {
-    h.dau.updateWorldMatrix(true, true);
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion();
-    h.mat[0].getWorldPosition(a); h.mat[1].getWorldPosition(b); h.dau.getWorldQuaternion(q);
-    const p = a.add(b).multiplyScalar(0.5), fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-    if (!Number.isFinite(p.x + p.y + p.z) || fwd.lengthSq() < 1e-8) return;
-    fwd.normalize(); p.addScaledVector(fwd, EYE_PUSH);
-    return { x: p.x, y: p.y, z: p.z, fx: fwd.x, fy: fwd.y, fz: fwd.z };
-  }
+  private matNguoi(h: Hinh): Eye | undefined { return liveEye(h.dau, h.mat, EYE_PUSH); }
   private docMat(): Eye | undefined {
     const p = this.povView.pov; if (!p) return;
     if (p.kind === 'agent') {
