@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LINES } from '../src/town/dialogue';
 import { agentPartnerId, BOSS_ID, BOSS_LOOK, BOSS_NAME, forceBoss, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, menuEnt, step, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
-import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, crossesBuilding, waypoint, toWorld, fromWorld, PX } from '../src/town/map';
+import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, ATM, ATM_SPOTS, GATE, PRINT, ROADS, crossesBuilding, waypoint, toWorld, fromWorld, PX, type Box } from '../src/town/map';
 import { BIEN } from '../src/ref-vanphong/adapter';
 import { loadLooks, setIdent, agentKey, setCurrentLooks, currentName, currentLook } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
@@ -249,5 +249,20 @@ describe('names and avatars (Phúc presets)', () => {
     setCurrentLooks({ 'agent:coder': { look: 'nu_10' } });
     expect(lookFor({ role: 'coder', id: 'x', name: 'coder' }).toc).toBe('#d6455d');
     setCurrentLooks({});
+  });
+});
+
+const aabb = (a: Box, b: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+describe('ATM · snack pad vs road', () => {
+  it('concrete pad stays on the sidewalk (no overlap with any road lane)', () => {
+    expect(ATM.y + ATM.h).toBeLessThanOrEqual(ROADS[1].y); // south edge at/before front street
+    for (const r of ROADS) expect(aabb(ATM, r), `ATM vs road ${r.x},${r.y}`).toBe(false);
+    expect(ATM.h).toBe(GATE.h); // same sidewalk strip as the SW gate pad
+    expect(ATM.w).toBeGreaterThanOrEqual(120);
+    for (const p of ATM_SPOTS) {
+      expect(p.x).toBeGreaterThan(ATM.x); expect(p.x).toBeLessThan(ATM.x + ATM.w);
+      expect(p.y).toBeGreaterThan(ATM.y); expect(p.y).toBeLessThan(ATM.y + ATM.h);
+    }
+    expect(PRINT.y + PRINT.h).toBeLessThan(BUILDING.y + 40); // indoor printer untouched
   });
 });
