@@ -4,11 +4,10 @@ import type { OfficeState } from '../reducer';
 import { VanphongScene, type MenuTarget } from './scene';
 import { agentKey, loadLooks, saveLooks, setCurrentLooks, setIdent, type Looks } from '../town/looks';
 import { Editor, TownMenu, type Menu } from '../town/Editor';
-import { initialWorld } from '../town/sim';
+import { menuEnt } from '../town/sim';
 import './vanphong.css';
 
 const store = typeof localStorage === 'undefined' ? undefined : localStorage;
-const CAST = Object.fromEntries(initialWorld(0).ents.map((e) => [e.id, e]));
 export default function VanphongView({ s, now }: { s: OfficeState; now: number }) {
   const host = useRef<HTMLDivElement>(null), scene = useRef<VanphongScene | null>(null);
   const [looks, setLooks] = useState<Looks>(() => { const l = loadLooks(store); setCurrentLooks(l); return l; });
@@ -20,7 +19,7 @@ export default function VanphongView({ s, now }: { s: OfficeState; now: number }
     const open = (m: MenuTarget) => {
       const l = looksRef.current;
       if (m.kind === 'agent') { const a = sRef.current.agents[m.id]; if (!a) return; const k = agentKey(a); setMenu({ ...m, key: k, label: l[k]?.name ?? a.name, look: l[k]?.look }); return; }
-      const e = CAST[m.id]; if (!e) return; const k = `npc:${m.id}`; setMenu({ ...m, key: k, label: l[k]?.name ?? e.name, look: l[k]?.look ?? e.look });
+      const e = menuEnt(m.id); if (!e) return; const k = `npc:${m.id}`; setMenu({ ...m, key: k, label: l[k]?.name ?? e.name, look: l[k]?.look ?? e.look });
     };
     const sc = new VanphongScene(host.current!, store, open); scene.current = sc; return () => { sc.dispose(); scene.current = null; };
   }, []);
