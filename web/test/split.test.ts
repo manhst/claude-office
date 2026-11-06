@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DEFAULT_SPLIT, MIN_MAP_PX, MIN_SIDE_PX, VP_SPLIT_KEY, clampSplit, loadSplit, saveSplit, splitFromPointer } from '../src/split';
+import { DEFAULT_SPLIT, MIN_MAP_PX, MIN_SIDE_PX, VP_SPLIT_KEY, clampSplit, loadSplit, saveSplit, splitFromPointer } from '../src/splitPrefs';
 
 describe('clampSplit', () => {
   it('keeps the default 80:20 when there is room', () => {

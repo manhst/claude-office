@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { clampSplit, saveSplit, splitFromPointer } from './split';
+import { clampSplit, saveSplit, splitFromPointer } from './splitPrefs';
 
 /** Accessible column splitter between the map and the information sidebar. */
 export function SplitGutter({ ratio, onChange }: { ratio: number; onChange: (r: number) => void }) {
