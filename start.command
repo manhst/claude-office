@@ -16,7 +16,7 @@ rm -f orchestrator/.run/ui-url.txt
       URL=$(head -n1 orchestrator/.run/ui-url.txt)
       # WSL: open the Windows browser (localhost forwarding reaches 127.0.0.1); wait for wslrelay to pick up the new listener.
       if grep -qi microsoft /proc/version 2>/dev/null; then sleep 2
-        if command -v wslview >/dev/null; then wslview "$URL"; else (cd /mnt/c && cmd.exe /c start "" "$URL" >/dev/null 2>&1); fi
+        if command -v wslview >/dev/null; then wslview "$URL"; else (cd /mnt/c 2>/dev/null; cmd.exe /c start "" "$URL" >/dev/null 2>&1); fi
       elif command -v open >/dev/null; then open "$URL"; else xdg-open "$URL" >/dev/null 2>&1; fi
       exit 0
     fi; sleep 1
