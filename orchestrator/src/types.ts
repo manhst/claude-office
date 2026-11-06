@@ -15,7 +15,14 @@ export interface SessionView {
   startedAt: number; lastSeen: number; source: ProfileSource; profiles: AgentProfile[];
   /** office agent ids (desks) that belong to this session, same order as profiles (may be shorter when desks run out) */
   agentIds: string[];
+  /** Current Claude Code model string from `$.session.model()` when the mod could read one. */
+  model?: string;
+  /** True when this session's office mod reported `typeof $.prompt.submit === 'function'`. */
+  canSubmit?: boolean;
 }
+/** Composer ack: queued for the live session, not a finished turn. Never carries prompt text. */
+export type PromptAckState = 'queued' | 'claimed' | 'delivered' | 'rejected' | 'expired' | 'unsupported' | 'session-ended' | 'dropped';
+export interface PromptAck { t: 'prompt.status'; sid: string; nonce: string; state: PromptAckState; reason?: string; ts: number }
 
 /** IT Ops monitor (Prometheus HTTP API). mode demo = labelled fake alerts, only with --demo and no endpoint. */
 export interface ItOpsAlert { name: string; detail?: string; value?: string }
@@ -54,5 +61,6 @@ export type OfficeEvent = Base & (
   | { t: 'usage.update'; usage: UsageReading }
   /** a turn started, gained steps or ended; upsert by sid+turnId+agentRunId; each event is the full merged view */
   | { t: 'session.turn'; turn: TurnView }
-  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus; usage?: UsageReading | null; turns?: TurnView[] }
+  | PromptAck
+  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus; usage?: UsageReading | null; turns?: TurnView[]; prompts?: PromptAck[] }
 );

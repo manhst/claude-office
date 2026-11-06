@@ -3,7 +3,9 @@
 import type { Register } from 'claude-code';
 type Any = any;
 const HEARTBEAT_MS = 12_000;
+const INBOX_MS = 2_000;
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:7777/event';
+const INBOX_TOK = /^[A-Za-z0-9_-]{16,128}$/;
 
 
 const base = (p: unknown) => (typeof p === 'string' ? p.split(/[\\/]/).filter(Boolean).pop() : undefined);
@@ -81,8 +83,9 @@ export function turnBody(sid: string, turn: Any, max = TURN_CAP.body): string {
 // The engine checks this module statically: `$` is never stored, destructured, spread, returned or put in objects.
 // It is only a handler parameter, the first parameter/argument of module-level helpers, and spelled `$.noun.verb(...)`.
 type State = {
-  endpoint: string; loopback: boolean; quiet: boolean; ended: boolean; sid: string; cwd: string; root: string; transcript: string;
+  endpoint: string; inbox: string; ack: string; loopback: boolean; quiet: boolean; ended: boolean; sid: string; cwd: string; root: string; transcript: string;
   title?: string; sessionTitle?: string; state: string; tool: { name: string; detail?: string } | null; prompt?: string; queue: Promise<void>;
+  inboxToken?: string; canSubmit: boolean; model?: string; submitting: boolean;
   /** Main turn answered but $.agent.list() still has busy subagents — keep posting working until clear (esp pendingDone). */
   pendingDone: boolean;
   /** Running main-loop turn id ('' when none) and when its last progress post went out. */
@@ -131,16 +134,46 @@ async function readTitle($: Any, st: State) {
   if (st.sessionTitle) { st.title = st.sessionTitle; return; } // classic events give it directly
   try { if (st.transcript && (await $.fs.exists(st.transcript))) st.title = titleFromJsonl(await $.fs.read(st.transcript)) ?? st.title; } catch { /* no transcript yet */ }
 }
+/** Official `$.http.fetch` resolves `{ status, ok, headers, text }` with `text` a string; some stand-ins still use `text()`. */
+export async function fetchBody(r: Any): Promise<string> {
+  if (!r) return '';
+  if (typeof r.text === 'string') return r.text;
+  if (typeof r.text === 'function') { try { const t = await r.text(); return typeof t === 'string' ? t : ''; } catch { return ''; } }
+  return '';
+}
+/** Inbox token from a /event JSON body. Never logs it. */
+export function takeInboxToken(text: unknown): string | undefined {
+  if (typeof text !== 'string' || !text.trim()) return;
+  try { const t = JSON.parse(text)?.inboxToken; return typeof t === 'string' && INBOX_TOK.test(t) ? t : undefined; } catch { return; }
+}
+export function canPromptSubmit($: Any): boolean {
+  try { return typeof $.prompt.submit === 'function'; } catch { return false; }
+}
+async function readModel($: Any): Promise<string | undefined> {
+  try {
+    const m = await $.session.model();
+    if (typeof m === 'string' && m.trim()) return m.trim().slice(0, 80);
+    if (m && typeof m === 'object') for (const k of ['id', 'name', 'model']) { const v = m[k]; if (typeof v === 'string' && v.trim()) return v.trim().slice(0, 80); }
+  } catch { /* getter missing or unknown shape — no live setter is documented */ }
+}
+function officePaths(endpoint: string) {
+  try { const u = new URL(endpoint); const origin = `${u.protocol}//${u.host}`; return { inbox: `${origin}/inbox`, ack: `${origin}/inbox/ack` }; }
+  catch { return { inbox: '', ack: '' }; }
+}
 async function post($: Any, st: State, type: string, body: Any) {
   body.subagents = await subagents($);
   try { body.costUsd = (await $.session.usage())?.cost?.usd; } catch { /* no usage */ }
   if (type === 'start' || type === 'heartbeat') Object.assign(body, { project: base(st.root) ?? base(st.cwd), cwd: st.cwd, root: st.root, title: st.title, transcript: st.transcript });
-  try { await $.http.fetch(st.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch { /* office not running */ }
+  try {
+    const r = await $.http.fetch(st.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const tok = takeInboxToken(await fetchBody(r)); if (tok) st.inboxToken = tok;
+  } catch { /* office not running */ }
 }
 /** Posts go out one at a time, in event order; the body is snapshotted now. */
 function send($: Any, st: State, type: string): Promise<void> {
   if (st.quiet || !st.loopback || !st.sid || (st.ended && type !== 'end')) return st.queue;
-  const body: Any = { type, sid: st.sid, state: st.state, tool: st.tool, prompt: st.prompt };
+  const body: Any = { type, sid: st.sid, state: st.state, tool: st.tool, prompt: st.prompt, canSubmit: st.canSubmit };
+  if (st.model) body.model = st.model;
   st.queue = st.queue.then(() => post($, st, type, body)).catch(() => {});
   return st.queue;
 }
@@ -181,9 +214,39 @@ async function subEnd($: Any, st: State, e: Any, end: Any) {
 }
 async function readUsage($: Any, st: State) { try { await sendUsage($, st, await $.session.usage(), Date.now()); } catch { /* no usage */ } }
 function setState($: Any, st: State, s: string, t: State['tool'], type = t ? 'tool' : 'state') { st.state = s; st.tool = t; void send($, st, type); }
-async function heartbeat($: Any, st: State) { await follow($, st); await readTitle($, st); await send($, st, 'heartbeat'); await readUsage($, st); }
+async function heartbeat($: Any, st: State) {
+  await follow($, st); await readTitle($, st);
+  st.canSubmit = canPromptSubmit($); st.model = await readModel($);
+  await send($, st, 'heartbeat'); await readUsage($, st);
+}
+async function submitPrompt($: Any, text: string): Promise<{ state: string; reason?: string }> {
+  if (!canPromptSubmit($)) return { state: 'unsupported', reason: '$.prompt.submit is not a function' };
+  try {
+    const r = await $.prompt.submit({ text, asUser: true });
+    if (r && typeof r === 'object' && r.drop) return { state: 'rejected', reason: String(r.drop).slice(0, 240) };
+    return { state: 'delivered' }; // handed to the live prompt; not a finished turn
+  } catch (e) { return { state: 'rejected', reason: String((e as Error)?.message ?? e).slice(0, 240) || 'submit-failed' }; }
+}
+async function ackInbox($: Any, st: State, id: string, state: string, reason?: string) {
+  if (!st.inboxToken || !st.ack) return;
+  try {
+    await $.http.fetch(st.ack, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${st.inboxToken}` }, body: JSON.stringify({ sid: st.sid, id, state, reason }) });
+  } catch { /* office not running */ }
+}
+/** Claim at most one queued prompt for this sid and hand it to the live session. Never auto-retries after Esc/drop. */
+async function pullInbox($: Any, st: State) {
+  if (st.quiet || !st.loopback || !st.sid || st.ended || st.submitting || !st.canSubmit || !st.inboxToken || !st.inbox) return;
+  let r: Any;
+  try { r = await $.http.fetch(`${st.inbox}?sid=${encodeURIComponent(st.sid)}`, { method: 'GET', headers: { authorization: `Bearer ${st.inboxToken}` } }); }
+  catch { return; }
+  let job: Any; try { job = JSON.parse(await fetchBody(r) || 'null'); } catch { return; }
+  if (!job?.id || typeof job.text !== 'string' || !job.text.trim()) return;
+  st.submitting = true;
+  try { const out = await submitPrompt($, job.text); await ackInbox($, st, String(job.id).slice(0, 64), out.state, out.reason); }
+  finally { st.submitting = false; }
+}
 /** Per-session fields. The module lives as long as the process, which can move to another session (/resume, /clear) after session.end. */
-function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined, pendingDone: false, turnId: '', progressAt: 0, msgBase: -1 }); st.subTurns.clear(); }
+function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined, pendingDone: false, turnId: '', progressAt: 0, msgBase: -1, inboxToken: undefined, canSubmit: false, model: undefined, submitting: false }); st.subTurns.clear(); }
 /** If the engine now reports another session id, start reporting that session. */
 async function follow($: Any, st: State) {
   if (st.quiet || !st.sid) return;
@@ -197,6 +260,7 @@ async function start($: Any, st: State, e: Any) {
   if (sid !== st.sid) reset(st, sid); else st.ended = false;
   st.cwd = String(e?.cwd ?? '');
   try { st.root = (await $.session.repo())?.root ?? st.cwd; } catch { st.root = st.cwd; }
+  st.canSubmit = canPromptSubmit($); st.model = await readModel($);
   await begin($, st);
 }
 async function begin($: Any, st: State) {
@@ -212,15 +276,18 @@ function classicInfo(st: State, e: Any) {
 
 export const register: Register = (on: Any, options: Any) => {
   const endpoint = String(options?.endpoint || DEFAULT_ENDPOINT);
+  const paths = officePaths(endpoint);
   const st: State = {
-    endpoint, loopback: /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//.test(endpoint), // by design: never post off this PC
+    endpoint, inbox: paths.inbox, ack: paths.ack, loopback: /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//.test(endpoint), // by design: never post off this PC
     quiet: false, ended: false, sid: '', cwd: '', root: '', transcript: '', state: 'idle', tool: null, queue: Promise.resolve(), pendingDone: false, turnId: '', progressAt: 0, msgBase: -1, localN: 0, subTurns: new Map(),
+    canSubmit: false, submitting: false,
   };
-  let beating = false;
+  let beating = false, polling = false;
   on('session.start', async ($: Any, e: Any, next: Any) => {
     try {
       await start($, st, e);
       if (!st.quiet && !beating) { beating = true; $.clock.every(HEARTBEAT_MS, () => void heartbeat($, st)); }
+      if (!st.quiet && st.loopback && st.canSubmit && !polling) { polling = true; $.clock.every(INBOX_MS, () => void pullInbox($, st)); }
     } catch { /* never break the session */ }
     return next(e);
   });

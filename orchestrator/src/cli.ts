@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { SessionTracker } from './sessions.js';
 import { OfficeServer, newToken } from './server.js';
+import { PromptInbox } from './inbox.js';
 import { JsonlLog, turnLogGate } from './log.js';
 import { simulate } from './simulate.js';
 import { UsageStore } from './usage.js';
@@ -33,11 +34,29 @@ export async function start(o: StartOpts) {
   const tracker = new SessionTracker({ userAgentsDir: o.userAgentsDir });
   const token = newToken();
   let server!: OfficeServer;
+  const inbox = new PromptInbox({ onStatus: (a) => server?.broadcast(a) });
   const itops = new ItOpsMonitor(resolveItopsConfig(process.env, o.demo, o.prometheus, file), (status) => server?.broadcast({ t: 'itops.status', status, ts: Date.now() }));
   const usage = new UsageStore(); usage.onChange = (u) => server?.broadcast({ t: 'usage.update', usage: u, ts: Date.now() });
   const view = () => toView(file, itops.config, itops.status, o.demo);
-  server = new OfficeServer(token, () => ({ ...tracker.snapshot(), itops: itops.status, usage: usage.latest }) as any, {
-    onEvent: (p) => ((p as any)?.type === 'usage' ? usage.accept(p) : tracker.ingest(p)),
+  const liveSid = (raw: unknown) => {
+    const sid = typeof (raw as any)?.sid === 'string' ? String((raw as any).sid).replace(/[^\w-]/g, '').slice(0, 64) : '';
+    return sid && tracker.list().some((s) => s.sid === sid) ? sid : '';
+  };
+  server = new OfficeServer(token, () => ({ ...tracker.snapshot(), prompts: inbox.view(), itops: itops.status, usage: usage.latest }) as any, {
+    onEvent: (p) => {
+      if ((p as any)?.type === 'usage') return usage.accept(p);
+      const ok = tracker.ingest(p); if (!ok) return false;
+      const sid = liveSid(p);
+      if (!sid) { const gone = typeof (p as any)?.sid === 'string' ? String((p as any).sid).replace(/[^\w-]/g, '').slice(0, 64) : ''; if (gone) inbox.drop(gone); return true; }
+      return { ok: true as const, inboxToken: inbox.ensureToken(sid) };
+    },
+    onPrompt: (p) => {
+      const sid = typeof p.sid === 'string' ? p.sid.replace(/[^\w-]/g, '').slice(0, 64) : '';
+      const s = tracker.list().find((x) => x.sid === sid);
+      return inbox.enqueue(sid, p.text, p.nonce, { exists: !!s, canSubmit: !!s?.canSubmit });
+    },
+    onInboxClaim: (sid, tok) => inbox.claim(sid, tok),
+    onInboxAck: (sid, tok, id, state, reason) => inbox.ack(sid, tok, id, state as any, reason),
     staticDir: existsSync(o.webDir) ? o.webDir : undefined,
     getSettings: () => view(),
     setSettings: (raw) => {
@@ -54,7 +73,7 @@ export async function start(o: StartOpts) {
   const log = new JsonlLog(join(o.logDir, `run-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`));
   const logTurn = turnLogGate();
   tracker.on((e) => { if (e.t !== 'sessions.update' && logTurn(e)) log.write(e); server.broadcast(e); });
-  const sweep = setInterval(() => tracker.sweep(), 5000); sweep.unref();
+  const sweep = setInterval(() => { tracker.sweep(); inbox.expire(); inbox.retain(new Set(tracker.list().map((s) => s.sid))); }, 5000); sweep.unref();
   const port = await server.listen(o.port);
   itops.start();
   console.error(`[office] IT Ops: ${itops.status.mode}${itops.status.endpoint ? ` ${itops.status.endpoint}` : ''}`);
@@ -65,7 +84,7 @@ export async function start(o: StartOpts) {
   console.error(`[office] settings: ${settingsPath}`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
   const close = async () => { clearInterval(sweep); itops.stop(); await server.close(); };
-  return { port, token, tracker, server, usage, itops, settingsPath, close, logPath: log.path };
+  return { port, token, tracker, server, inbox, usage, itops, settingsPath, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

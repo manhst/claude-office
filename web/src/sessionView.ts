@@ -72,6 +72,8 @@ export function sessionDumpRows(x: SessionView, now: number): DumpRow[] {
   if (present(x.startedAt) && x.startedAt > 0) push('startedAt', 'started', fmtTs(x.startedAt, now), { mono: true });
   if (present(x.lastSeen) && x.lastSeen > 0) push('lastSeen', 'lastSeen', fmtTs(x.lastSeen, now), { mono: true });
   push('source', 'source', SOURCE_LABEL[x.source] ?? x.source);
+  push('model', 'model', x.model, { mono: true });
+  if (typeof x.canSubmit === 'boolean') push('canSubmit', 'canSubmit', x.canSubmit ? 'yes ($.prompt.submit)' : 'no');
 
   if (x.subagents.length) {
     const lines = x.subagents.flatMap((a, i) => formatSubagent(a, i));
