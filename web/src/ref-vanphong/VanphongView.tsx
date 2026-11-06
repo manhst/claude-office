@@ -18,16 +18,27 @@ export default function VanphongView({ s, now }: { s: OfficeState; now: number }
   useEffect(() => {
     const open = (m: MenuTarget) => {
       const l = looksRef.current;
-      if (m.kind === 'agent') { const a = sRef.current.agents[m.id]; if (!a) return; const k = agentKey(a); setMenu({ ...m, key: k, label: l[k]?.name ?? a.name, look: l[k]?.look }); return; }
-      const e = menuEnt(m.id); if (!e) return; const k = `npc:${m.id}`; setMenu({ ...m, key: k, label: l[k]?.name ?? e.name, look: l[k]?.look ?? e.look });
+      const x = Math.min(Math.max(8, m.x), Math.max(8, window.innerWidth - 200));
+      const y = Math.min(Math.max(8, m.y), Math.max(8, window.innerHeight - 160));
+      if (m.kind === 'agent') { const a = sRef.current.agents[m.id]; if (!a) return; const k = agentKey(a); setMenu({ ...m, x, y, key: k, label: l[k]?.name ?? a.name, look: l[k]?.look }); return; }
+      const e = menuEnt(m.id); if (!e) return; const k = `npc:${m.id}`; setMenu({ ...m, x, y, key: k, label: l[k]?.name ?? e.name, look: l[k]?.look ?? e.look });
     };
     const sc = new VanphongScene(host.current!, store, open); scene.current = sc; return () => { sc.dispose(); scene.current = null; };
   }, []);
   useEffect(() => { scene.current?.update(s, now); }, [s, now, looks]);
   useEffect(() => { if (!menu) return; const c = () => setMenu(undefined); document.addEventListener('click', c); return () => document.removeEventListener('click', c); }, [menu]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || editing) return;
+      if (!scene.current?.isPov()) return;
+      e.preventDefault(); scene.current.exitPov();
+    };
+    document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k);
+  }, [editing]);
+  const look = menu && scene.current?.canEnterPov(menu.kind, menu.id);
   return (<>
     <section className="stage3d stage-vp" data-testid="office-vanphong"><div className="vp3d-stage" ref={host} /></section>
-    {menu && <TownMenu m={menu} onEdit={() => { setEditing(menu); setMenu(undefined); }} onThrow={() => { scene.current?.throwIt(menu); setMenu(undefined); }} />}
+    {menu && <TownMenu m={menu} onEdit={() => { setEditing(menu); setMenu(undefined); }} onThrow={() => { scene.current?.throwIt(menu); setMenu(undefined); }} onLook={look ? () => { scene.current?.enterPov(menu.kind, menu.id); setMenu(undefined); } : undefined} />}
     {editing && <Editor m={editing} cur={looks[editing.key]} onClose={() => setEditing(undefined)} onSave={(name, look) => { setLooks((l) => setIdent(l, editing.key, { name, look })); setEditing(undefined); }} />}
   </>);
 }

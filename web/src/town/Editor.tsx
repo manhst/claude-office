@@ -1,12 +1,13 @@
 // Town menu + name/avatar editor (same flow as Phúc's VanphongAI settings: name field, "Chọn hình" with Nữ/Nam tabs and the 20 presets).
 import { useEffect, useState } from 'react';
 import { Chibi, PRESETS } from './Avatar';
-import { IconCroc, IconCross, IconEdit } from '../icons';
+import { IconCroc, IconCross, IconEdit, IconEye } from '../icons';
 export interface Menu { key: string; label: string; x: number; y: number; look?: string; kind: 'agent' | 'ent'; id: string }
-export function TownMenu({ m, onEdit, onThrow }: { m: Menu; onEdit: () => void; onThrow: () => void }) {
+export function TownMenu({ m, onEdit, onThrow, onLook }: { m: Menu; onEdit: () => void; onThrow: () => void; onLook?: () => void }) {
   return <div className="ctx" style={{ left: m.x, top: m.y }} onClick={(ev) => ev.stopPropagation()} data-testid="ctx-menu">
     <b>{m.label}</b>
     <button onClick={onEdit} data-testid="ctx-edit"><IconEdit />Đặt tên &amp; avatar</button>
+    {onLook ? <button onClick={onLook} data-testid="ctx-look"><IconEye />Nhìn từ nhân vật</button> : null}
     <button onClick={onThrow} className="danger" data-testid="ctx-throw"><IconCroc />Ném cho cá sấu</button>
   </div>;
 }
