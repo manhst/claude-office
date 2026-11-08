@@ -146,8 +146,14 @@ export function takeInboxToken(text: unknown): string | undefined {
   if (typeof text !== 'string' || !text.trim()) return;
   try { const t = JSON.parse(text)?.inboxToken; return typeof t === 'string' && INBOX_TOK.test(t) ? t : undefined; } catch { return; }
 }
-export function canPromptSubmit($: Any): boolean {
-  try { return typeof $.prompt.submit === 'function'; } catch { return false; }
+/**
+ * `$.prompt.submit` is part of the engine API on every build that loads this module: the loader
+ * refuses a module that reads `$.noun.event` as a value (e.g. `typeof $.prompt.submit`), so it
+ * cannot be feature-detected. A build without it makes the call itself fail, which
+ * `submitPrompt` reports as `rejected`.
+ */
+export function canPromptSubmit(_$?: Any): boolean {
+  return true;
 }
 async function readModel($: Any): Promise<string | undefined> {
   try {
@@ -220,7 +226,6 @@ async function heartbeat($: Any, st: State) {
   await send($, st, 'heartbeat'); await readUsage($, st);
 }
 async function submitPrompt($: Any, text: string): Promise<{ state: string; reason?: string }> {
-  if (!canPromptSubmit($)) return { state: 'unsupported', reason: '$.prompt.submit is not a function' };
   try {
     const r = await $.prompt.submit({ text, asUser: true });
     if (r && typeof r === 'object' && r.drop) return { state: 'rejected', reason: String(r.drop).slice(0, 240) };

@@ -83,7 +83,7 @@ describe('office mod (usage-esp API)', () => {
   it('heartbeat sends session info; classic session_title wins over transcript', async () => {
     const f = fakeEngine(); register(f.on, {});
     await f.fire('session.start', { cwd: '/p' }); await f.fire('classic.SessionStart', { session_title: 'Named', transcript_path: '/t.jsonl' });
-    await f.fire('session.start', { cwd: '/p' }); expect(f.everyCalls()).toBe(1); // heartbeat registered once
+    await f.fire('session.start', { cwd: '/p' }); expect(f.everyCalls()).toBe(2); // heartbeat + inbox poll, each registered once
     await f.beat(); await flush();
     expect(f.posts.at(-1)).toMatchObject({ type: 'heartbeat', title: 'Named', transcript: '/t.jsonl', url: 'http://127.0.0.1:7777/event' });
   });
@@ -197,7 +197,7 @@ describe('same-session prompt submit', () => {
     expect(takeInboxToken('not json')).toBeUndefined();
     expect(await fetchBody({ text: '{"ok":true}' })).toBe('{"ok":true}');
     expect(await fetchBody({ text: async () => 'hi' })).toBe('hi');
-    expect(canPromptSubmit({})).toBe(false);
+    expect(canPromptSubmit({})).toBe(true); // cannot be feature-detected: the loader refuses `typeof $.prompt.submit`
     expect(canPromptSubmit({ prompt: { submit: async () => ({}) } })).toBe(true);
   });
   it('polls inbox and calls $.prompt.submit({text, asUser:true}); Esc drop is rejected not a finished turn; no duplicate claim', async () => {
@@ -219,13 +219,15 @@ describe('same-session prompt submit', () => {
     await f.beat(); await flush(); // job already claimed in fake; no second submit
     expect(calls).toHaveLength(1);
   });
-  it('does not register inbox poll without $.prompt.submit', async () => {
+  it('an engine without $.prompt.submit acks the job as rejected instead of throwing', async () => {
     const f = fakeEngine(); register(f.on, {});
     await f.fire('session.start', { cwd: '/p' }); await flush();
-    expect(f.posts[0].canSubmit).toBe(false);
-    expect(f.everyCalls()).toBe(1);
+    expect(f.posts[0].canSubmit).toBe(true);
+    expect(f.everyCalls()).toBe(2);
     f.setInboxJob({ id: 'job1', text: 'nope' });
     await f.beat(); await flush();
-    expect(f.posts.filter((p) => p.method === 'GET')).toHaveLength(0);
+    const ack = f.posts.filter((p) => p.url?.includes('/inbox/ack'));
+    expect(ack).toHaveLength(1);
+    expect(ack[0]).toMatchObject({ id: 'job1', state: 'rejected' });
   });
 });
