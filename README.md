@@ -25,6 +25,8 @@ Demo without Claude: `start.cmd demo` (macOS/Linux: `./start.command demo`, or `
 runs 3 simulated sessions, one per agent-profile source below. For a server without the simulator you can also run
 `npx tsx src/simulate.ts http://127.0.0.1:7777/event` from `orchestrator/` against a running office.
 
+**macOS app.** `scripts/make-mac-app.sh` builds `/Applications/Văn phòng ảo.app` (or `~/Applications`). It runs `scripts/office-app.sh` from this checkout: the same steps as `start.command`, but the server runs detached (output in `orchestrator/logs/server-console.log`), so no Terminal has to stay open. If the office server already answers on :7777 it only opens the UI; if the app started it and `orchestrator/src`, `mod/office` or `web/src` changed since, it rebuilds and restarts first. Errors (port taken by another program, build failure, Node not found) show in an alert. Rerun `make-mac-app.sh` only if the repo moves. Stop the server with `lsof -tiTCP:7777 -sTCP:LISTEN | xargs kill`.
+
 ### How the mod gets installed
 
 `scripts/install-mod.mjs` (Node, no dependencies; it works the same way as esp-claude's `install.ps1`) edits `${CLAUDE_CONFIG_DIR or ~/.claude}/settings.json`:
@@ -76,6 +78,8 @@ Gear icon in the header opens **Cài đặt**. Useful knobs already in the produ
 **Responses (left sidebar).** Collapsible list of agent answers from the event log (`agent.text`, `agent.done` result, non-empty `tool.result`, `agent.error`) — newest first; no agent profile markdown. Pref in localStorage `vp-collapse.responses`. Screenshot: `docs/screens/session-responses.png` (`cd web && npm run build && node scripts/screens-session-responses.mjs`).
 
 **Prompt composer (under Responses).** Textarea + Send scoped to the selected live session. Send is an explicit click (or Ctrl/Cmd+Enter) only — never on session switch, reconnect, or restart. Same-session delivery uses the documented `$.prompt.submit({ text, asUser: true })` when the office mod reports `canSubmit`. **Model** and **Effort** pickers (default *theo session*) apply to the sent prompt's own turn only: the mod matches that turn by its text and rewrites each main-loop `turn.step` request (`next({ ...e, model, effort })`); subagents, prompts typed in Claude Code and later turns keep the session's own model/effort. The pick is remembered per browser (localStorage `vp-prompt-pick`). The session's current model is shown read-only if `$.session.model()` returned a string. Demo / older Claude Code / missing `$.prompt.submit`: Send stays disabled with a labeled explanation (change model and type after Esc in Claude Code). Queued prompts are in-memory only (TTL ~45 s queued / ~3 min claimed), one per session, claimed at most once; a `delivered` ack means handed to Claude Code, **not** a finished turn. Pending permission prompts stay in Claude Code. After app restart, unsent drafts and queued jobs are gone. Screenshot: `docs/screens/session-composer.png` (`cd web && npm run build && node scripts/screens-composer.mjs`).
+
+**Lịch sử (History tab).** The header switches between **Văn phòng** and **Lịch sử**; the office view stays mounted and paused while hidden. History lists every Claude Code transcript on this machine (`${CLAUDE_CONFIG_DIR or ~/.claude}/projects/<dir>/<sid>.jsonl`: CLI, VS Code and Desktop sessions; claude.ai web sessions and other machines are not there) with its project (`cwd`), branch, times, prompt count and cost. Search is case- and diacritic-insensitive (`lich su` matches `Lịch sử`), all words must match, `"quoted phrase"` is one term; it covers titles, prompts, assistant text, project path, branch and sid. Filter by project; automated sessions (entrypoint `sdk-*`, e.g. `/esp-sync` pings) are hidden unless **Show automated** is on. A session opens as a transcript (prompts, assistant text, one-line tool summaries; never thinking, tool results or `!` command output; secrets redacted) with **Copy resume command** (`cd '<project>' && claude --resume <sid>`). **☆/★** bookmarks a session, with an optional note (≤200 chars); **★ Bookmarked (N)** shows only bookmarked ones. Bookmarks live in `orchestrator/.run/history-bookmarks.json` (mode 600; memory only in `--demo`, which shows the fixtures in `orchestrator/fixtures/demo/history`). The index is built in the background at start (~1 s for ~1500 transcripts) and refreshed on use.
 
 
 
@@ -198,6 +202,8 @@ Payloads are validated, capped at 64 KB and redacted. Any local process could st
 office display them, and the server only reads `.claude/agents/*.md` / `CLAUDE.md` under the reported path, showing them to the
 token-protected UI. The UI WebSocket keeps the per-run token (URL fragment, Origin check), unchanged.
 
+**History endpoints.** `GET /history`, `GET /history/session` and `POST /history/bookmark` serve the user's past transcripts, so they need a loopback peer, a loopback `Origin` (or none) and `Authorization: Bearer <run token>` (header only, no `?token=`); the POST also needs `Content-Type: application/json`. No CORS headers are sent. `sid` is only a lookup key in the index, never part of a path.
+
 **Prompt reverse channel (not `/event`).** `/event` must not inject commands. On a successful live-session ingest the JSON body `{inboxToken}` is returned **only** to that loopback poster (never on the WebSocket, never in logs). The UI sends `POST /prompt` with the **run** Bearer token, loopback peer, loopback Origin, JSON `{sid,text,nonce}` — 200 `{ok,id,nonce,state:'queued'}` means queued, not a completed turn. The mod polls `GET /inbox?sid=` with the **inbox** Bearer token (same anti-browser rules as `/event`; the run token is rejected with 403). Claim is atomic (one queued job per sid); `POST /inbox/ack` reports `delivered` / `rejected` / `unsupported`. Status events `{t:'prompt.status', sid, nonce, state, reason?}` carry **no prompt text**. Bound TTL, idempotent nonce, no disk persist.
 
 ### Claude usage in the header
@@ -218,7 +224,7 @@ there is a 5h or 7d reading. The server keeps the newest reading (account-wide, 
 cd orchestrator && npm install && npm test && npm run typecheck
 cd web && npm install && npm test && npm run typecheck && npm run build
 ```
-Server: `tsx src/cli.ts start [--demo] [--port 7777] [--print-token] [--user-agents <dir>]`.
+Server: `tsx src/cli.ts start [--demo] [--port 7777] [--print-token] [--user-agents <dir>] [--history-dir <dir>]` (env `OFFICE_HISTORY_DIR`, default `${CLAUDE_CONFIG_DIR or ~/.claude}/projects`; `OFFICE_HISTORY_BOOKMARKS` for the bookmarks file; `OFFICE_RUN_DIR` for `.run/`, which the tests point at a temp dir).
 UI dev server: `cd web && npm run dev` then open `http://127.0.0.1:5173/#token=…` (the token from `orchestrator/.run/ui-url.txt`).
 
 Tests cover session tracking (start/heartbeat/end/60 s timeout/desk allocation), profile priority A > B > C, frontmatter parsing,
