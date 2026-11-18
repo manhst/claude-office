@@ -39,6 +39,17 @@ describe('PromptInbox', () => {
     expect(box.enqueue('s1', 'x', 'nonce-aaaa-bbbb-cccc-01', { exists: true, canSubmit: false })).toMatchObject({ error: 'unsupported', status: 409 });
     expect(box.enqueue('s1', '  ', 'nonce-aaaa-bbbb-cccc-01', live)).toMatchObject({ error: 'empty', status: 400 });
     expect(box.enqueue('s1', 'x', 'bad', live)).toMatchObject({ error: 'bad-nonce', status: 400 });
+    expect(box.enqueue('s1', 'x', 'nonce-aaaa-bbbb-cccc-01', live, { model: 'opus; rm -rf' })).toMatchObject({ error: 'bad-model', status: 400 });
+    expect(box.enqueue('s1', 'x', 'nonce-aaaa-bbbb-cccc-01', live, { effort: 'ultra' })).toMatchObject({ error: 'bad-effort', status: 400 });
+  });
+  it('carries an optional model and effort to the claim', () => {
+    const box = new PromptInbox(); const tok = box.ensureToken('s1');
+    expect(box.enqueue('s1', 'hi', 'nonce-aaaa-bbbb-cccc-01', live, { model: 'claude-sonnet-5-5[1m]', effort: 'low' })).toMatchObject({ ok: true });
+    expect(box.claim('s1', tok)).toEqual(expect.objectContaining({ ok: true, text: 'hi', model: 'claude-sonnet-5-5[1m]', effort: 'low' }));
+    const box2 = new PromptInbox(); const tok2 = box2.ensureToken('s1');
+    box2.enqueue('s1', 'hi', 'nonce-aaaa-bbbb-cccc-02', live, { model: '', effort: '' }); // '' = keep the session's
+    const c = box2.claim('s1', tok2) as any;
+    expect(c.model).toBeUndefined(); expect(c.effort).toBeUndefined();
   });
   it('expires queued then claimed; drop marks session-ended', () => {
     let now = 1_000;

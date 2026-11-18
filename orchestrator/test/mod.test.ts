@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP, takeInboxToken, canPromptSubmit, fetchBody } from '../../mod/office/hooks/register.js';
+import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP, takeInboxToken, canPromptSubmit, fetchBody, jobPick, applyOverride } from '../../mod/office/hooks/register.js';
 // Fake engine matching the API used by usage-esp: register(on, options); on(name, ($, e, next) => ...) returns { catch }.
 function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' }, files: Record<string, string> = {}) {
   const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; const beats: Array<() => any> = []; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
@@ -229,5 +229,38 @@ describe('same-session prompt submit', () => {
     const ack = f.posts.filter((p) => p.url?.includes('/inbox/ack'));
     expect(ack).toHaveLength(1);
     expect(ack[0]).toMatchObject({ id: 'job1', state: 'rejected' });
+  });
+  it('jobPick keeps a valid model/effort and drops anything else', () => {
+    expect(jobPick({ model: 'opus', effort: 'high' })).toEqual({ model: 'opus', effort: 'high' });
+    expect(jobPick({ model: 'claude-sonnet-5-5[1m]' })).toEqual({ model: 'claude-sonnet-5-5[1m]' });
+    expect(jobPick({ model: 'opus; rm -rf /', effort: 'ultra' })).toEqual({});
+    expect(jobPick({})).toEqual({});
+  });
+  it('applyOverride only touches the main loop steps of the picked turn', () => {
+    const st = { override: { turnId: 't1', model: 'haiku', effort: 'low' } };
+    expect(applyOverride(st, { turnId: 't1', model: 'opus', index: 0 })).toEqual({ turnId: 't1', model: 'haiku', effort: 'low', index: 0 });
+    expect(applyOverride(st, { turnId: 't2', model: 'opus' })).toEqual({ turnId: 't2', model: 'opus' });
+    expect(applyOverride(st, { turnId: 't1', model: 'opus', agentId: 'sub1' })).toEqual({ turnId: 't1', model: 'opus', agentId: 'sub1' });
+    expect(applyOverride({}, { turnId: 't1', model: 'opus' })).toEqual({ turnId: 't1', model: 'opus' });
+    expect(applyOverride({ override: { turnId: 't1', effort: 'max' } }, { turnId: 't1', model: 'opus' })).toEqual({ turnId: 't1', model: 'opus', effort: 'max' });
+  });
+  it('an office prompt with model/effort runs its own turn with them, then the session goes back to its own', async () => {
+    const f = fakeEngine();
+    f.$.prompt = { submit: async () => ({}) };
+    register(f.on, {});
+    await f.fire('session.start', { cwd: '/p' }); await flush();
+    f.setInboxJob({ id: 'job1', text: 'Review this diff', model: 'haiku', effort: 'low' });
+    await f.beat(); await flush();
+    const step = async (e: any) => { const seen: any[] = []; const nx: any = async function* (x: any) { seen.push(x); return { ok: true }; };
+      const g = f.fire('turn.step', e, nx); let r = await g.next(); while (!r.done) r = await g.next(); return seen[0]; };
+    await f.fire('turn.start', { turnId: 'typed', text: 'something the person typed' });
+    expect(await step({ turnId: 'typed', index: 0, model: 'opus' })).toMatchObject({ model: 'opus' });
+    await f.fire('turn.complete', { turnId: 'typed', answer: 'a' }); await flush();
+    await f.fire('turn.start', { turnId: 'office', text: 'Review this diff' });
+    expect(await step({ turnId: 'office', index: 0, model: 'opus', effort: 'xhigh' })).toMatchObject({ model: 'haiku', effort: 'low' });
+    expect(await step({ turnId: 'office', index: 1, model: 'opus', agentId: 'sub1' })).toMatchObject({ model: 'opus' });
+    await f.fire('turn.complete', { turnId: 'office', answer: 'b' }); await flush();
+    await f.fire('turn.start', { turnId: 'later', text: 'Review this diff' });
+    expect(await step({ turnId: 'later', index: 0, model: 'opus' })).toMatchObject({ model: 'opus' });
   });
 });

@@ -53,7 +53,7 @@ export async function start(o: StartOpts) {
     onPrompt: (p) => {
       const sid = typeof p.sid === 'string' ? p.sid.replace(/[^\w-]/g, '').slice(0, 64) : '';
       const s = tracker.list().find((x) => x.sid === sid);
-      return inbox.enqueue(sid, p.text, p.nonce, { exists: !!s, canSubmit: !!s?.canSubmit });
+      return inbox.enqueue(sid, p.text, p.nonce, { exists: !!s, canSubmit: !!s?.canSubmit }, { model: p.model, effort: p.effort });
     },
     onInboxClaim: (sid, tok) => inbox.claim(sid, tok),
     onInboxAck: (sid, tok, id, state, reason) => inbox.ack(sid, tok, id, state as any, reason),

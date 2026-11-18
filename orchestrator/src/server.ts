@@ -44,14 +44,14 @@ export function promptRequestRejection(req: Pick<IncomingMessage, 'headers' | 'm
 }
 export type EventResult = boolean | { ok: true; inboxToken?: string };
 export type PromptResult = { ok: true; id: string; nonce: string; state: string } | { ok: false; error: string; status: number };
-export type InboxClaim = { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string };
+export type InboxClaim = { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string; model?: string; effort?: string };
 export class OfficeServer {
   private http: Server; private wss: WebSocketServer;
   port = 0;
   constructor(private token: string, private snapshot: () => OfficeEvent, private opts: {
     onEvent?: (p: unknown) => EventResult; staticDir?: string;
     getSettings?: () => unknown; setSettings?: (patch: unknown) => { ok: true; view: unknown } | { ok: false; error: string };
-    onPrompt?: (p: { sid: string; text: unknown; nonce: unknown }) => PromptResult;
+    onPrompt?: (p: { sid: string; text: unknown; nonce: unknown; model?: unknown; effort?: unknown }) => PromptResult;
     onInboxClaim?: (sid: string, token: string | undefined) => InboxClaim;
     onInboxAck?: (sid: string, token: string | undefined, id: string, state: string, reason?: string) => 'unauthorized' | boolean;
   } = {}) {
@@ -109,7 +109,7 @@ export class OfficeServer {
       if (!this.opts.onPrompt) { res.writeHead(501, { ...sec, 'content-type': 'application/json' }).end('{"error":"unavailable"}'); return; }
       const raw = await this.readBody(req, res, sec, 16 * 1024); if (raw == null) return;
       let payload: any; try { payload = raw ? JSON.parse(raw) : {}; } catch { res.writeHead(400, { ...sec, 'content-type': 'application/json' }).end('{"error":"bad json"}'); return; }
-      const r = this.opts.onPrompt({ sid: payload?.sid, text: payload?.text, nonce: payload?.nonce });
+      const r = this.opts.onPrompt({ sid: payload?.sid, text: payload?.text, nonce: payload?.nonce, model: payload?.model, effort: payload?.effort });
       if (!r.ok) { res.writeHead(r.status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ error: r.error })); return; }
       res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, id: r.id, nonce: r.nonce, state: r.state })); return;
     }
@@ -127,7 +127,7 @@ export class OfficeServer {
         const r = this.opts.onInboxClaim(sid, auth);
         if (r.ok === 'unauthorized') { res.writeHead(401, { ...sec, 'content-type': 'application/json' }).end('{"error":"unauthorized"}'); return; }
         if (r.ok === 'empty') { res.writeHead(204, sec).end(); return; }
-        res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ id: r.id, text: r.text })); return;
+        res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ id: r.id, text: r.text, model: r.model, effort: r.effort })); return;
       }
       if (!this.opts.onInboxAck) { res.writeHead(501, sec).end(); return; }
       const raw = await this.readBody(req, res, sec, 8 * 1024); if (raw == null) return;
