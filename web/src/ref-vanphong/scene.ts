@@ -73,7 +73,7 @@ export class VanphongScene {
   private s: OfficeState | null = null; private idle: Record<string, IdlePlan> = {}; private freeSince: Record<string, number> = {}; private lastMsg = 0; private dem = false; private gocVe: null | { tuMay: THREE.Vector3; tuDich: THREE.Vector3; denMay: THREE.Vector3; denDich: THREE.Vector3; bat: number; lau: number } = null;
   private town!: TownLayer; private hearts!: HeartFX; private heartCd = 0; private nem: Nem[] = []; private xaTu = 26;
   private ro: ResizeObserver; private vung: HTMLDivElement; private nutDem: HTMLButtonElement; private soft = softwareGL();
-  private povView: PovView = { pov: null, saved: null }; private keoNhin = false; private goiY!: HTMLParagraphElement;
+  private povView: PovView = { pov: null, saved: null }; private keoNhin = false; private goiY!: HTMLParagraphElement; private paused = false;
 
   constructor(private khung: HTMLElement, private store?: Pick<Storage, 'getItem' | 'setItem'>, private onMenu?: (m: MenuTarget) => void) {
     setShadows(!this.soft);
@@ -159,6 +159,9 @@ export class VanphongScene {
   private onPtrUp = () => { this.keoNhin = false; this.khung.classList.remove('is-keo'); };
 
   isPov() { return !!this.povView.pov; }
+  /** ours: stop/restart the render loop while the view is hidden (History tab); scene, sim state and WebGL context stay alive.
+   *  On resume the clock restarts from now without adding the paused time to elapsedTime (getDelta() would), so camera/flight/pond animations keyed on t don't jump. */
+  setPaused(p: boolean) { if (p === this.paused) return; this.paused = p; if (!p) this.dongHo.oldTime = performance.now(); this.renderer.setAnimationLoop(p ? null : () => this.veKhung()); }
   canEnterPov(kind: MenuTarget['kind'], id: string) {
     if (kind === 'agent') {
       const n = this.nguoi.get(id);

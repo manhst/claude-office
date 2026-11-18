@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { OfficeEvent } from './types.js';
+import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, OfficeEvent } from './types.js';
+import { HISTORY_SID, type HistoryQuery } from './history.js';
 export const HOST = '127.0.0.1';
 export function newToken() { return randomBytes(24).toString('base64url'); }
 export function tokenOk(given: string | null, expected: string) {
@@ -42,18 +43,25 @@ export function promptRequestRejection(req: Pick<IncomingMessage, 'headers' | 'm
   if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return 415;
   return 0;
 }
+/** GET /history* (UI read): loopback peer + Origin allow-list; the Bearer run token is checked separately (401). */
+export function historyRequestRejection(req: Pick<IncomingMessage, 'headers'> & { socket: { remoteAddress?: string } }): number {
+  if (!LOOPBACK.has(req.socket.remoteAddress ?? '')) return 403;
+  return originOk(req.headers.origin) ? 0 : 403;
+}
 export type EventResult = boolean | { ok: true; inboxToken?: string };
 export type PromptResult = { ok: true; id: string; nonce: string; state: string } | { ok: false; error: string; status: number };
-export type InboxClaim = { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string };
+export type InboxClaim = { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string; model?: string; effort?: string };
 export class OfficeServer {
   private http: Server; private wss: WebSocketServer;
   port = 0;
   constructor(private token: string, private snapshot: () => OfficeEvent, private opts: {
     onEvent?: (p: unknown) => EventResult; staticDir?: string;
     getSettings?: () => unknown; setSettings?: (patch: unknown) => { ok: true; view: unknown } | { ok: false; error: string };
-    onPrompt?: (p: { sid: string; text: unknown; nonce: unknown }) => PromptResult;
+    onPrompt?: (p: { sid: string; text: unknown; nonce: unknown; model?: unknown; effort?: unknown }) => PromptResult;
     onInboxClaim?: (sid: string, token: string | undefined) => InboxClaim;
     onInboxAck?: (sid: string, token: string | undefined, id: string, state: string, reason?: string) => 'unauthorized' | boolean;
+    history?: { list(q: HistoryQuery): Promise<HistoryListResponse>; detail(sid: string): Promise<HistoryDetailResponse | null>;
+      bookmark(sid: string, on: boolean, note?: string | null): Promise<HistoryBookmarkResponse | 'unknown' | 'full' | 'unavailable'> };
   } = {}) {
     this.http = createServer((req, res) => { this.handle(req, res).catch(() => { if (!res.headersSent) res.writeHead(500).end(); }); });
     this.wss = new WebSocketServer({ noServer: true });
@@ -88,6 +96,42 @@ export class OfficeServer {
       }
       res.writeHead(405, sec).end(); return;
     }
+    if (url.pathname === '/history/bookmark') {
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      if (req.method !== 'POST') { res.writeHead(405, sec).end(); return; }
+      const why = promptRequestRejection(req);
+      if (why) { req.resume(); res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { req.resume(); out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.history) { req.resume(); out(501, { error: 'unavailable' }); return; }
+      const raw = await this.readBody(req, res, sec, 4 * 1024); if (raw == null) return;
+      let p: any; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
+      const sid = typeof p?.sid === 'string' ? p.sid : '';
+      if (!HISTORY_SID.test(sid)) { out(400, { error: 'bad sid' }); return; }
+      if (typeof p.on !== 'boolean') { out(400, { error: 'on must be a boolean' }); return; }
+      if (p.note != null && typeof p.note !== 'string') { out(400, { error: 'note must be a string' }); return; }
+      const r = await this.opts.history.bookmark(sid, p.on, p.note);
+      if (r === 'unknown') { out(404, { error: 'not found' }); return; }
+      if (r === 'full') { out(409, { error: 'too many bookmarks' }); return; }
+      if (r === 'unavailable') { out(501, { error: 'unavailable' }); return; }
+      out(200, r); return;
+    }
+    if (url.pathname === '/history' || url.pathname === '/history/session') {
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      if (req.method !== 'GET') { res.writeHead(405, sec).end(); return; }
+      const why = historyRequestRejection(req);
+      if (why) { res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.history) { out(501, { error: 'unavailable' }); return; }
+      const p = url.searchParams;
+      if (url.pathname === '/history') { out(200, await this.opts.history.list({ q: p.get('q') ?? '', project: p.get('project') || undefined, auto: p.get('auto') === '1', bookmarked: p.get('bookmarked') === '1', limit: Number(p.get('limit') || 50), offset: Number(p.get('offset') || 0) })); return; }
+      const sid = p.get('sid') ?? '';
+      if (!HISTORY_SID.test(sid)) { out(400, { error: 'bad sid' }); return; } // looked up in the index only, never used as a path
+      const d = await this.opts.history.detail(sid);
+      if (!d) { out(404, { error: 'not found' }); return; }
+      out(200, d); return;
+    }
     if (url.pathname === '/event') {
       if (req.method !== 'POST') { res.writeHead(405, sec).end(); return; }
       const why = eventRequestRejection(req);
@@ -109,7 +153,7 @@ export class OfficeServer {
       if (!this.opts.onPrompt) { res.writeHead(501, { ...sec, 'content-type': 'application/json' }).end('{"error":"unavailable"}'); return; }
       const raw = await this.readBody(req, res, sec, 16 * 1024); if (raw == null) return;
       let payload: any; try { payload = raw ? JSON.parse(raw) : {}; } catch { res.writeHead(400, { ...sec, 'content-type': 'application/json' }).end('{"error":"bad json"}'); return; }
-      const r = this.opts.onPrompt({ sid: payload?.sid, text: payload?.text, nonce: payload?.nonce });
+      const r = this.opts.onPrompt({ sid: payload?.sid, text: payload?.text, nonce: payload?.nonce, model: payload?.model, effort: payload?.effort });
       if (!r.ok) { res.writeHead(r.status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ error: r.error })); return; }
       res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, id: r.id, nonce: r.nonce, state: r.state })); return;
     }
@@ -127,7 +171,7 @@ export class OfficeServer {
         const r = this.opts.onInboxClaim(sid, auth);
         if (r.ok === 'unauthorized') { res.writeHead(401, { ...sec, 'content-type': 'application/json' }).end('{"error":"unauthorized"}'); return; }
         if (r.ok === 'empty') { res.writeHead(204, sec).end(); return; }
-        res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ id: r.id, text: r.text })); return;
+        res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify({ id: r.id, text: r.text, model: r.model, effort: r.effort })); return;
       }
       if (!this.opts.onInboxAck) { res.writeHead(501, sec).end(); return; }
       const raw = await this.readBody(req, res, sec, 8 * 1024); if (raw == null) return;

@@ -11,11 +11,11 @@ const STATUS: Record<PromptAck['state'], string> = {
   dropped: 'Dropped by Claude Code. Send again only if you still want it.',
 };
 
-/** Truthful capability copy. No fake model/mode controls. */
+/** Truthful capability copy. Model/effort apply to the sent prompt's own turn only (mod `turn.step`), not to the session. */
 export function capabilityNote(s?: SessionView): string {
   if (!s) return 'Select a live session. Demo and sessions without the office mod cannot submit.';
   if (!s.canSubmit) return 'This session cannot submit to the live prompt (no $.prompt.submit). Reload the office plugin in Claude Code, then reopen the session. Change model in Claude Code — the office has no documented live model/mode setter.';
-  return 'Sends into the selected live Claude Code session as you. Pending permission prompts stay in Claude Code.';
+  return 'Sends into the selected live Claude Code session as you. Model/Effort apply to this prompt\'s turn only; the session keeps its own. Pending permission prompts stay in Claude Code.';
 }
 export function statusNote(a?: PromptAck): string | undefined {
   if (!a) return;

@@ -65,5 +65,16 @@ describe('postPrompt', () => {
     const r = await postPrompt('t', 's1', 'x', 'nonce-aaaa-bbbb-cccc-01');
     expect(r).toEqual({ ok: false, error: 'queued', status: 409 });
   });
+  it('sends a model/effort pick only when one is chosen', async () => {
+    const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, id: 'j1', nonce: 'n', state: 'queued' }) }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('sessionStorage', { getItem: () => '127.0.0.1:7777' });
+    vi.stubGlobal('location', { port: '7777', host: '127.0.0.1:7777' });
+    await postPrompt('t', 's1', 'x', 'nonce-aaaa-bbbb-cccc-01', { model: 'haiku', effort: 'low' });
+    await postPrompt('t', 's1', 'x', 'nonce-aaaa-bbbb-cccc-02', { model: '', effort: '' });
+    const bodies = (fetch.mock.calls as unknown as Array<[string, { body: string }]>).map((c) => JSON.parse(c[1].body));
+    expect(bodies[0]).toMatchObject({ model: 'haiku', effort: 'low' });
+    expect(bodies[1]).not.toHaveProperty('model'); expect(bodies[1]).not.toHaveProperty('effort');
+  });
   it('newNonce is id-shaped', () => { expect(newNonce().length).toBeGreaterThanOrEqual(8); });
 });

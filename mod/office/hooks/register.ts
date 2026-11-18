@@ -82,10 +82,30 @@ export function turnBody(sid: string, turn: Any, max = TURN_CAP.body): string {
 
 // The engine checks this module statically: `$` is never stored, destructured, spread, returned or put in objects.
 // It is only a handler parameter, the first parameter/argument of module-level helpers, and spelled `$.noun.verb(...)`.
+type Pick = { text: string; model?: string; effort?: string; at: number };
+const PICK_TTL_MS = 10 * 60_000;
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const MODEL_RE = /^[A-Za-z0-9][\w.:\-[\]]{0,79}$/;
+/** Model/effort sent with an inbox job; anything malformed is ignored (the session keeps its own). */
+export function jobPick(job: Any): { model?: string; effort?: string } {
+  const model = typeof job?.model === 'string' && MODEL_RE.test(job.model) ? job.model : undefined;
+  const effort = typeof job?.effort === 'string' && EFFORTS.includes(job.effort) ? job.effort : undefined;
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
+}
+/** The turn.step input with the office's model/effort applied, or the input as it was. */
+export function applyOverride(st: { override?: { turnId: string; model?: string; effort?: string } }, e: Any): Any {
+  const o = st.override;
+  if (!o || e?.agentId !== undefined || !e?.turnId || e.turnId !== o.turnId) return e;
+  return { ...e, ...(o.model ? { model: o.model } : {}), ...(o.effort ? { effort: o.effort } : {}) };
+}
 type State = {
   endpoint: string; inbox: string; ack: string; loopback: boolean; quiet: boolean; ended: boolean; sid: string; cwd: string; root: string; transcript: string;
   title?: string; sessionTitle?: string; state: string; tool: { name: string; detail?: string } | null; prompt?: string; queue: Promise<void>;
   inboxToken?: string; canSubmit: boolean; model?: string; submitting: boolean;
+  /** Model/effort the office UI picked for a prompt it submitted, waiting for that prompt's main turn to start. */
+  pick?: Pick;
+  /** The main turn running with the office's pick: its turn.step requests get this model/effort. */
+  override?: { turnId: string; model?: string; effort?: string };
   /** Main turn answered but $.agent.list() still has busy subagents — keep posting working until clear (esp pendingDone). */
   pendingDone: boolean;
   /** Running main-loop turn id ('' when none) and when its last progress post went out. */
@@ -146,8 +166,14 @@ export function takeInboxToken(text: unknown): string | undefined {
   if (typeof text !== 'string' || !text.trim()) return;
   try { const t = JSON.parse(text)?.inboxToken; return typeof t === 'string' && INBOX_TOK.test(t) ? t : undefined; } catch { return; }
 }
-export function canPromptSubmit($: Any): boolean {
-  try { return typeof $.prompt.submit === 'function'; } catch { return false; }
+/**
+ * `$.prompt.submit` is part of the engine API on every build that loads this module: the loader
+ * refuses a module that reads `$.noun.event` as a value (e.g. `typeof $.prompt.submit`), so it
+ * cannot be feature-detected. A build without it makes the call itself fail, which
+ * `submitPrompt` reports as `rejected`.
+ */
+export function canPromptSubmit(_$?: Any): boolean {
+  return true;
 }
 async function readModel($: Any): Promise<string | undefined> {
   try {
@@ -220,7 +246,6 @@ async function heartbeat($: Any, st: State) {
   await send($, st, 'heartbeat'); await readUsage($, st);
 }
 async function submitPrompt($: Any, text: string): Promise<{ state: string; reason?: string }> {
-  if (!canPromptSubmit($)) return { state: 'unsupported', reason: '$.prompt.submit is not a function' };
   try {
     const r = await $.prompt.submit({ text, asUser: true });
     if (r && typeof r === 'object' && r.drop) return { state: 'rejected', reason: String(r.drop).slice(0, 240) };
@@ -242,11 +267,16 @@ async function pullInbox($: Any, st: State) {
   let job: Any; try { job = JSON.parse(await fetchBody(r) || 'null'); } catch { return; }
   if (!job?.id || typeof job.text !== 'string' || !job.text.trim()) return;
   st.submitting = true;
-  try { const out = await submitPrompt($, job.text); await ackInbox($, st, String(job.id).slice(0, 64), out.state, out.reason); }
-  finally { st.submitting = false; }
+  const pick = jobPick(job);
+  st.pick = pick.model || pick.effort ? { text: job.text.trim(), ...pick, at: Date.now() } : undefined;
+  try {
+    const out = await submitPrompt($, job.text);
+    if (out.state !== 'delivered') st.pick = undefined;
+    await ackInbox($, st, String(job.id).slice(0, 64), out.state, out.reason);
+  } finally { st.submitting = false; }
 }
 /** Per-session fields. The module lives as long as the process, which can move to another session (/resume, /clear) after session.end. */
-function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined, pendingDone: false, turnId: '', progressAt: 0, msgBase: -1, inboxToken: undefined, canSubmit: false, model: undefined, submitting: false }); st.subTurns.clear(); }
+function reset(st: State, sid: string) { Object.assign(st, { sid, ended: false, pick: undefined, override: undefined, transcript: '', title: undefined, sessionTitle: undefined, state: 'idle', tool: null, prompt: undefined, pendingDone: false, turnId: '', progressAt: 0, msgBase: -1, inboxToken: undefined, canSubmit: false, model: undefined, submitting: false }); st.subTurns.clear(); }
 /** If the engine now reports another session id, start reporting that session. */
 async function follow($: Any, st: State) {
   if (st.quiet || !st.sid) return;
@@ -297,6 +327,10 @@ export const register: Register = (on: Any, options: Any) => {
       const text = typeof e?.text === 'string' && e.text.trim() ? e.text : undefined; // '' on a continuation turn
       if (e?.agentId === undefined) {
         st.turnId = turnIdOf(st, e); st.progressAt = 0; st.msgBase = -1;
+        st.override = undefined;
+        const pk = st.pick;
+        if (pk && Date.now() - pk.at > PICK_TTL_MS) st.pick = undefined;
+        else if (pk && text && text.trim() === pk.text && e?.turnId) { st.override = { turnId: String(e.turnId), model: pk.model, effort: pk.effort }; st.pick = undefined; }
         const p = firstSentence(text); if (p) st.prompt = p;
         st.pendingDone = false; setState($, st, 'thinking', null);
         void sendTurn($, st, { id: st.turnId, phase: 'start', prompt: text });
@@ -309,6 +343,8 @@ export const register: Register = (on: Any, options: Any) => {
     } catch { /* never break the session */ }
     return next(e);
   });
+  // The office UI's model/effort pick, for the main turn of the prompt it submitted only (subagents keep theirs).
+  on('turn.step', async function* ($: Any, e: Any, next: Any) { return yield* next(applyOverride(st, e)); });
   on('tool.call', async ($: Any, e: Any, next: Any) => {
     if (next?.origin?.plugin === 'engine') {
       const name = String(e?.tool ?? 'tool');
@@ -347,6 +383,7 @@ export const register: Register = (on: Any, options: Any) => {
       const end = { phase: 'end', answer: typeof e?.answer === 'string' ? e.answer : undefined, reason: e?.reason, durationMs: e?.durationMs };
       if (e?.agentId === undefined) {
         const id = e?.turnId || st.turnId || turnIdOf(st, e); st.turnId = '';
+        if (st.override && (!e?.turnId || st.override.turnId === e.turnId)) st.override = undefined;
         void sendTurn($, st, { ...end, id, steps: await readSteps($, st, undefined, end.answer) });
         await readTitle($, st);
         if (e?.reason === 'aborted') { st.pendingDone = false; setState($, st, 'idle', null); }

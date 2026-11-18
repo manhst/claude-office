@@ -13,11 +13,25 @@ export function sanitizePrompt(raw: unknown): string | undefined {
   if (!t) return;
   return t.length > PROMPT_MAX ? `${t.slice(0, PROMPT_MAX)}…` : t;
 }
+/** Effort levels Claude Code takes on a model request (`turn.step`'s `effort`). */
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type Effort = typeof EFFORTS[number];
+/** Model alias (`opus`, `sonnet`, `haiku`) or full id (`claude-opus-5-5`, `claude-sonnet-5-5[1m]`). */
+const MODEL_RE = /^[A-Za-z0-9][\w.:\-[\]]{0,79}$/;
+/** undefined = keep the session's; null = invalid. */
+export function sanitizeModel(raw: unknown): string | undefined | null {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  return typeof raw === 'string' && MODEL_RE.test(raw.trim()) ? raw.trim() : null;
+}
+export function sanitizeEffort(raw: unknown): Effort | undefined | null {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  return typeof raw === 'string' && (EFFORTS as readonly string[]).includes(raw) ? raw as Effort : null;
+}
 export function validNonce(v: unknown): v is string { return typeof v === 'string' && NONCE_RE.test(v); }
 export function validInboxToken(v: unknown): v is string { return typeof v === 'string' && TOKEN_RE.test(v); }
 
 export interface InboxJob {
-  id: string; sid: string; nonce: string; text: string;
+  id: string; sid: string; nonce: string; text: string; model?: string; effort?: Effort;
   state: PromptAckState; enqueuedAt: number; expiresAt: number;
   claimedAt?: number; reason?: string;
 }
@@ -57,12 +71,14 @@ export class PromptInbox {
       t: 'prompt.status' as const, sid: j.sid, nonce: j.nonce, state: j.state, reason: j.reason, ts: j.enqueuedAt,
     }));
   }
-  enqueue(sid: string, text: unknown, nonce: unknown, live: { exists: boolean; canSubmit: boolean }): EnqueueOk | EnqueueErr {
+  enqueue(sid: string, text: unknown, nonce: unknown, live: { exists: boolean; canSubmit: boolean }, opts: { model?: unknown; effort?: unknown } = {}): EnqueueOk | EnqueueErr {
     this.expire();
     if (!live.exists) return { ok: false, error: 'no-session', status: 404 };
     if (!live.canSubmit) return { ok: false, error: 'unsupported', status: 409 };
     const body = sanitizePrompt(text); if (!body) return { ok: false, error: 'empty', status: 400 };
     if (!validNonce(nonce)) return { ok: false, error: 'bad-nonce', status: 400 };
+    const model = sanitizeModel(opts.model); if (model === null) return { ok: false, error: 'bad-model', status: 400 };
+    const effort = sanitizeEffort(opts.effort); if (effort === null) return { ok: false, error: 'bad-effort', status: 400 };
     const seenKey = `${sid}|${nonce}`;
     const prev = this.seen.get(seenKey);
     if (prev) {
@@ -77,13 +93,13 @@ export class PromptInbox {
     }
     const id = randomBytes(12).toString('base64url');
     const now = this.now();
-    const job: InboxJob = { id, sid, nonce, text: body, state: 'queued', enqueuedAt: now, expiresAt: now + QUEUE_TTL_MS };
+    const job: InboxJob = { id, sid, nonce, text: body, ...(model ? { model } : {}), ...(effort ? { effort } : {}), state: 'queued', enqueuedAt: now, expiresAt: now + QUEUE_TTL_MS };
     this.jobs.set(id, job); this.active.set(sid, id); this.seen.set(seenKey, { id, state: 'queued' });
     while (this.seen.size > 200) this.seen.delete(this.seen.keys().next().value!);
     this.emit(job);
     return { ok: true, id, nonce, state: 'queued' };
   }
-  claim(sid: string, token: string | undefined): { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string } {
+  claim(sid: string, token: string | undefined): { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string; model?: string; effort?: Effort } {
     this.expire();
     if (!this.auth(sid, token)) return { ok: 'unauthorized' };
     const id = this.active.get(sid); if (!id) return { ok: 'empty' };
@@ -91,7 +107,7 @@ export class PromptInbox {
     job.state = 'claimed'; job.claimedAt = this.now(); job.expiresAt = job.claimedAt + CLAIM_TTL_MS;
     this.seen.set(`${sid}|${job.nonce}`, { id, state: 'claimed' });
     this.emit(job);
-    return { ok: true, id: job.id, text: job.text };
+    return { ok: true, id: job.id, text: job.text, ...(job.model ? { model: job.model } : {}), ...(job.effort ? { effort: job.effort } : {}) };
   }
   ack(sid: string, token: string | undefined, id: string, state: PromptAckState, reason?: string): 'unauthorized' | boolean {
     if (!this.auth(sid, token)) return 'unauthorized';
