@@ -38,7 +38,7 @@ npm run screens               # build + headless-Chrome screenshots (playwright-
 
 `start.cmd` / `start.command` (with an optional `demo` arg) install deps, build the web UI if `web/dist` is missing, start the server and open the token URL.
 
-CLI flags: `start [--demo|--mock] [--port 7777] [--print-token] [--user-agents <dir>] [--log-dir <dir>] [--step-ms 1500]`. Env: `OFFICE_DEMO=1`, `OFFICE_USER_AGENTS_DIR`. The UI URL with the token is written to `orchestrator/.run/ui-url.txt` (mode 600). Console output redacts the token unless `--print-token` is set. Events are logged to `orchestrator/logs/run-*.jsonl`.
+CLI flags: `start [--demo|--mock] [--port 7777] [--print-token] [--user-agents <dir>] [--log-dir <dir>] [--step-ms 1500] [--history-dir <dir>]`. Env: `OFFICE_DEMO=1`, `OFFICE_USER_AGENTS_DIR`, `OFFICE_HISTORY_DIR` (History tab transcript root; default `${CLAUDE_CONFIG_DIR or ~/.claude}/projects`, `--demo` uses `orchestrator/fixtures/demo/history`), `OFFICE_HISTORY_BOOKMARKS` (bookmarks file; default `orchestrator/.run/history-bookmarks.json`, memory only under `--demo`), `OFFICE_RUN_DIR` (replaces `orchestrator/.run/`; `test/setup.ts` points it and the history/bookmark paths at temp dirs so tests never touch a live server's files). The UI URL with the token is written to `orchestrator/.run/ui-url.txt` (mode 600). Console output redacts the token unless `--print-token` is set. Events are logged to `orchestrator/logs/run-*.jsonl`.
 
 ## Architecture notes
 
@@ -62,6 +62,7 @@ Files over 64 KB are ignored. Demo fixtures for each source live in `orchestrato
 **Server security model** (`server.ts`): binds 127.0.0.1 only.
 - WS `/ws` requires the per-run token plus a loopback Origin.
 - `POST /event` has **no token** (the mod can't know it). It accepts a request only if the peer is loopback, the request doesn't look like it came from a browser (rejects an http(s)/`null` `Origin` and cross-site/same-site `Sec-Fetch-Site`), and `Content-Type: application/json`. Bodies are capped at 64 KB.
+- `GET /history` and `/history/session` (`history.ts`) read the `<claude config>/projects` transcripts. They need a loopback peer, a loopback Origin (or none) and `Authorization: Bearer <run token>` (header only, no `?token=`). `sid` is only a lookup key in the index, never a path. All text that leaves is redacted, and tool details are summaries only. `POST /history/bookmark` `{sid, on, note?}` uses the `/prompt` gate (loopback, Origin allow-list, JSON) plus the Bearer run token, with bodies capped at 4 KB. Adding a bookmark needs an indexed sid. Bookmarks are stored in `.run/history-bookmarks.json` (`bookmarks.ts`, mode 600, atomic write).
 - Keep these checks when touching ingest. `test/e2e.test.ts` covers them.
 
 **Mod testing.** The engine's types package isn't available. `orchestrator/test/claude-code.d.ts` declares a stand-in `claude-code` module, and `orchestrator/test/mod.test.ts` imports `mod/office/hooks/register.ts` and drives it with a fake engine (`$.http`, `$.fs`, `$.clock`, `$.session`, `$.agent`). So orchestrator `npm test` and `npm run typecheck` also cover the mod. The README's "The `office` mod" table lists which engine APIs are relied on.

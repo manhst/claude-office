@@ -8,7 +8,8 @@ import { menuEnt } from '../town/sim';
 import './vanphong.css';
 
 const store = typeof localStorage === 'undefined' ? undefined : localStorage;
-export default function VanphongView({ s, now }: { s: OfficeState; now: number }) {
+/** paused: hidden behind another tab; the render loop stops but the scene (and its WebGL context) is kept. */
+export default function VanphongView({ s, now, paused = false }: { s: OfficeState; now: number; paused?: boolean }) {
   const host = useRef<HTMLDivElement>(null), scene = useRef<VanphongScene | null>(null);
   const [looks, setLooks] = useState<Looks>(() => { const l = loadLooks(store); setCurrentLooks(l); return l; });
   useEffect(() => { setCurrentLooks(looks); saveLooks(store, looks); }, [looks]);
@@ -26,15 +27,16 @@ export default function VanphongView({ s, now }: { s: OfficeState; now: number }
     const sc = new VanphongScene(host.current!, store, open); scene.current = sc; return () => { sc.dispose(); scene.current = null; };
   }, []);
   useEffect(() => { scene.current?.update(s, now); }, [s, now, looks]);
+  useEffect(() => { scene.current?.setPaused(paused); if (paused) setMenu(undefined); }, [paused]);
   useEffect(() => { if (!menu) return; const c = () => setMenu(undefined); document.addEventListener('click', c); return () => document.removeEventListener('click', c); }, [menu]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || editing) return;
+      if (e.key !== 'Escape' || editing || paused) return;
       if (!scene.current?.isPov()) return;
       e.preventDefault(); scene.current.exitPov();
     };
     document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k);
-  }, [editing]);
+  }, [editing, paused]);
   const look = menu && scene.current?.canEnterPov(menu.kind, menu.id);
   return (<>
     <section className="stage3d stage-vp" data-testid="office-vanphong"><div className="vp3d-stage" ref={host} /></section>

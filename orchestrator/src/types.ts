@@ -44,6 +44,49 @@ export interface TurnView {
   prompt?: string; steps: TurnStep[]; answer?: string; status: TurnStatus; startedAt: number; endedAt?: number; durationMs?: number;
 }
 
+/** Past Claude Code session from `<claude config>/projects/<dir>/<sid>.jsonl` (History tab, GET /history). Times are epoch ms. */
+export interface HistorySession {
+  sid: string;
+  /** working directory: first `cwd` in the transcript, else decoded from the folder name */
+  project: string;
+  /** short label: basename of project, '~' for the home dir */
+  projectName: string;
+  gitBranch?: string;
+  /** custom title > AI title > first prompt line */
+  title: string;
+  firstPrompt?: string;
+  startedAt: number; endedAt: number;
+  /** real user prompts (no tool results, no meta/hook lines) */
+  prompts: number;
+  /** user prompts + assistant text blocks */
+  messages: number;
+  costUsd?: number; model?: string; version?: string;
+  /** cli | claude-vscode | claude-desktop | sdk-cli … */
+  entrypoint?: string;
+  /** automation (entrypoint sdk-cli); hidden unless GET /history?auto=1 */
+  auto: boolean;
+  /** subagent transcripts under <dir>/<sid>/subagents/ */
+  subagents: number;
+  bytes: number;
+  /** set when the user bookmarked this sid (stored in orchestrator/.run/history-bookmarks.json) */
+  bookmark?: HistoryBookmark;
+}
+/** User bookmark on a past session. note: optional short label (≤200 chars). */
+export interface HistoryBookmark { at: number; note?: string }
+/** A list row: the session plus, when q is set, a redacted snippet around the first match and the match count. */
+export interface HistoryHit extends HistorySession { snippet?: string; hits?: number }
+/** Project facet: counts over sessions matching q + auto filter, ignoring the project filter. */
+export interface HistoryProject { project: string; projectName: string; sessions: number; lastAt: number }
+export interface HistoryListResponse { total: number; offset: number; sessions: HistoryHit[]; projects: HistoryProject[]; autoHidden: number; scannedAt: number;
+  /** bookmarked sessions matching q + project (auto ones included), for the "Bookmarked (N)" filter */
+  bookmarked: number }
+/** One transcript line: a user prompt, an assistant text block, or a tool call summary (never tool inputs/results in full). */
+export type HistoryItem = { role: 'user' | 'assistant'; text: string; ts?: number } | { role: 'tool'; name: string; detail?: string; ts?: number };
+export interface HistoryDetailResponse { session: HistorySession; items: HistoryItem[]; truncated: boolean }
+/** POST /history/bookmark body: on=true adds/updates (note replaces the old one), on=false removes. Reply: HistoryBookmarkResponse. */
+export interface HistoryBookmarkRequest { sid: string; on: boolean; note?: string }
+export interface HistoryBookmarkResponse { sid: string; bookmark: HistoryBookmark | null }
+
 type Base = { ts: number };
 export type OfficeEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }

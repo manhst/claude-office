@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import WebSocket from 'ws';
 import { start, parseArgs } from '../src/cli.js';
-import { originOk, tokenOk, eventRequestRejection, inboxGetRejection, promptRequestRejection } from '../src/server.js';
+import { originOk, tokenOk, eventRequestRejection, inboxGetRejection, promptRequestRejection, historyRequestRejection } from '../src/server.js';
 import { simulate } from '../src/simulate.js';
 import { turnBody } from '../../mod/office/hooks/register.js';
 describe('security helpers', () => {
@@ -35,6 +35,9 @@ describe('security helpers', () => {
     expect(p('127.0.0.1', { 'content-type': 'application/json', origin: 'http://127.0.0.1:5173' })).toBe(0);
     expect(p('127.0.0.1', { 'content-type': 'application/json', origin: 'https://evil.example' })).toBe(403);
     expect(p('10.0.0.2', { 'content-type': 'application/json' })).toBe(403);
+    const h = (remoteAddress: string, headers: Record<string, string> = {}) => historyRequestRejection({ socket: { remoteAddress }, headers } as any);
+    expect(h('127.0.0.1')).toBe(0); expect(h('::1', { origin: 'http://localhost:5173' })).toBe(0);
+    expect(h('10.0.0.2')).toBe(403); expect(h('127.0.0.1', { origin: 'https://evil.example' })).toBe(403); expect(h('127.0.0.1', { origin: 'null' })).toBe(403);
   });
 });
 const post = (port: number, body: string, headers: Record<string, string> = { 'content-type': 'application/json' }, method = 'POST') => new Promise<number>((res, rej) => {
@@ -125,8 +128,8 @@ describe('event body decoding and turn log', () => {
     } finally { await r.close(); }
   }, 15000);
 });
-const httpJson = (port: number, path: string, opts: { method?: string; headers?: Record<string, string>; body?: string } = {}) => new Promise<{ status: number; body: string }>((res, rej) => {
-  const q = request({ host: '127.0.0.1', port, path, method: opts.method ?? 'GET', headers: opts.headers ?? {} }, (r) => { let b = ''; r.setEncoding('utf8'); r.on('data', (c) => b += c); r.on('end', () => res({ status: r.statusCode!, body: b })); });
+const httpJson = (port: number, path: string, opts: { method?: string; headers?: Record<string, string>; body?: string } = {}) => new Promise<{ status: number; body: string; headers: Record<string, unknown> }>((res, rej) => {
+  const q = request({ host: '127.0.0.1', port, path, method: opts.method ?? 'GET', headers: opts.headers ?? {} }, (r) => { let b = ''; r.setEncoding('utf8'); r.on('data', (c) => b += c); r.on('end', () => res({ status: r.statusCode!, body: b, headers: r.headers })); });
   q.on('error', rej); q.end(opts.body);
 });
 describe('prompt reverse channel', () => {
@@ -177,5 +180,88 @@ describe('prompt reverse channel', () => {
       expect(un.status).toBe(409); expect(JSON.parse(un.body).error).toBe('unsupported');
       ws.close();
     } finally { await r.close(); }
+  }, 15000);
+});
+describe('history endpoints', () => {
+  it('parses --history-dir / OFFICE_HISTORY_DIR', () => {
+    expect(parseArgs(['--history-dir', 'some/dir']).historyDir).toBe(join(process.cwd(), 'some/dir'));
+    expect(parseArgs([]).historyDir).toBe(process.env.OFFICE_HISTORY_DIR);
+  });
+  it('GET /history and /history/session: run token (header only), loopback Origin, GET only; redacted JSON', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), secret = 'sk-abcdefghijklmnop1234';
+    mkdirSync(join(hist, '-w-shop'));
+    const line = (type: string, message: unknown, ts: string) => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, uuid: ts, timestamp: ts, entrypoint: 'cli', cwd: '/w/shop', sessionId: 'h-1', version: '2.1.0', gitBranch: 'main' });
+    writeFileSync(join(hist, '-w-shop', 'h-1.jsonl'), [line('user', { role: 'user', content: `deploy Lịch sử with ${secret}` }, '2026-11-01T10:00:00.000Z'),
+      line('assistant', { model: 'claude-opus-5-5', role: 'assistant', content: [{ type: 'thinking', thinking: 'hidden' }, { type: 'text', text: 'Deployed.' }, { type: 'tool_use', id: 't', name: 'Read', input: { file_path: '/w/shop/a.ts' } }] }, '2026-11-01T10:01:00.000Z')].join('\n') + '\n');
+    const r = await start(parseArgs(['--port', '0', '--log-dir', dir, '--history-dir', hist]));
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, get = (path: string, headers: Record<string, string> = auth, method = 'GET') => httpJson(r.port, path, { headers, method });
+      for (const path of ['/history', '/history/session?sid=h-1']) {
+        const no = await get(path, {}); expect(no.status).toBe(401); expect(JSON.parse(no.body)).toEqual({ error: 'unauthorized' });
+        expect((await get(path, { authorization: 'Bearer nope' })).status).toBe(401);
+        expect((await get(`${path}${path.includes('?') ? '&' : '?'}token=${r.token}`, {})).status).toBe(401);
+        expect((await get(path, { ...auth, origin: 'https://evil.example' })).status).toBe(403);
+        expect((await get(path, auth, 'POST')).status).toBe(405);
+      }
+      const list = await get('/history?q=lich%20su&limit=5', { ...auth, origin: 'http://127.0.0.1:7777' });
+      expect(list.status).toBe(200);
+      expect(list.headers).toMatchObject({ 'content-type': 'application/json', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' });
+      const body = JSON.parse(list.body);
+      expect(body).toMatchObject({ total: 1, offset: 0, autoHidden: 0, sessions: [{ sid: 'h-1', project: '/w/shop', projectName: 'shop', prompts: 1, messages: 2, auto: false, hits: 2 }], projects: [{ project: '/w/shop', projectName: 'shop', sessions: 1 }] });
+      expect(body.scannedAt).toBeGreaterThan(0); expect(body.sessions[0].snippet).toContain('Lịch sử');
+      expect(JSON.parse((await get('/history?limit=abc&offset=-5')).body)).toMatchObject({ total: 1, offset: 0 });
+      expect(JSON.parse((await get('/history?project=%2Fnope')).body)).toMatchObject({ total: 0, projects: [{ project: '/w/shop' }] });
+      for (const bad of ['../x', '..%2Fx', '', 'a%20b', 'x'.repeat(65)]) expect((await get(`/history/session?sid=${bad}`)).status).toBe(400);
+      expect((await get('/history/session')).status).toBe(400);
+      expect((await get('/history/session?sid=unknown-1')).status).toBe(404);
+      const d = await get('/history/session?sid=h-1');
+      expect(d.status).toBe(200);
+      expect(JSON.parse(d.body)).toMatchObject({ session: { sid: 'h-1' }, truncated: false, items: [{ role: 'user' }, { role: 'assistant', text: 'Deployed.' }, { role: 'tool', name: 'Read', detail: 'a.ts' }] });
+      for (const b of [list.body, d.body]) { expect(b).not.toContain(secret); expect(b).not.toContain('hidden'); }
+      expect(d.body).toContain('[REDACTED]');
+    } finally { await r.close(); }
+  }, 15000);
+  it('POST /history/bookmark: /prompt gates + run token, validation, add → list/detail → re-note keeps at → remove; demo keeps bookmarks in memory', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), bookmarksPath = join(dir, 'bm', 'history-bookmarks.json');
+    mkdirSync(join(hist, '-w-shop'));
+    const line = (type: string, message: unknown, ts: string, entrypoint = 'cli') => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, timestamp: ts, entrypoint, cwd: '/w/shop', gitBranch: 'main' });
+    writeFileSync(join(hist, '-w-shop', 'h-1.jsonl'), line('user', { role: 'user', content: 'deploy it' }, '2026-11-01T10:00:00.000Z') + '\n');
+    writeFileSync(join(hist, '-w-shop', 'h-2.jsonl'), line('user', { role: 'user', content: '/esp-sync' }, '2026-11-02T10:00:00.000Z', 'sdk-cli') + '\n');
+    const r = await start({ ...parseArgs(['--port', '0', '--log-dir', dir, '--history-dir', hist]), bookmarksPath });
+    try {
+      const json = { 'content-type': 'application/json' }, auth = { ...json, authorization: `Bearer ${r.token}` };
+      const post = (body: unknown, headers: Record<string, string> = auth, method = 'POST') => httpJson(r.port, '/history/bookmark', { method, headers, body: typeof body === 'string' ? body : JSON.stringify(body) });
+      const get = async (path: string) => JSON.parse((await httpJson(r.port, path, { headers: { authorization: `Bearer ${r.token}` } })).body);
+      expect((await post({ sid: 'h-1', on: true }, json)).status).toBe(401);
+      expect((await post({ sid: 'h-1', on: true }, { ...json, authorization: 'Bearer nope' })).status).toBe(401);
+      expect((await post({ sid: 'h-1', on: true }, { ...auth, origin: 'https://evil.example' })).status).toBe(403);
+      expect((await post({ sid: 'h-1', on: true }, { ...auth, 'content-type': 'text/plain' })).status).toBe(415);
+      expect((await httpJson(r.port, '/history/bookmark', { headers: auth })).status).toBe(405);
+      expect((await post('{nope')).status).toBe(400);
+      for (const body of [{ sid: '../x', on: true }, { on: true }, { sid: 'h-1', on: 'yes' }, { sid: 'h-1' }, { sid: 'h-1', on: true, note: 5 }]) expect((await post(body)).status).toBe(400);
+      expect((await post({ sid: 'h-1', on: true, note: 'x'.repeat(5000) })).status).toBe(413);
+      expect((await post({ sid: 'unknown-1', on: true })).status).toBe(404);
+      expect(JSON.stringify(await get('/history'))).not.toContain('"bookmark"');
+      const add = await post({ sid: 'h-1', on: true, note: ' release\nnotes ' }, { ...auth, origin: 'http://127.0.0.1:7777' });
+      expect(add.status).toBe(200); expect(add.headers['content-type']).toBe('application/json');
+      const b1 = JSON.parse(add.body); expect(b1).toEqual({ sid: 'h-1', bookmark: { at: expect.any(Number), note: 'release notes' } });
+      expect(JSON.parse(readFileSync(bookmarksPath, 'utf8'))).toEqual({ version: 1, bookmarks: { 'h-1': b1.bookmark } });
+      if (process.platform !== 'win32') expect(statSync(bookmarksPath).mode & 0o777).toBe(0o600);
+      expect(await get('/history')).toMatchObject({ total: 1, bookmarked: 1, sessions: [{ sid: 'h-1', bookmark: b1.bookmark }] });
+      expect((await get('/history/session?sid=h-1')).session.bookmark).toEqual(b1.bookmark);
+      expect((await post({ sid: 'h-2', on: true })).status).toBe(200); // auto session
+      expect(await get('/history')).toMatchObject({ total: 1, autoHidden: 1, bookmarked: 2 });
+      expect((await get('/history?bookmarked=1')).sessions.map((s: any) => s.sid)).toEqual(['h-2', 'h-1']);
+      const re = JSON.parse((await post({ sid: 'h-1', on: true, note: 'renamed' })).body);
+      expect(re).toEqual({ sid: 'h-1', bookmark: { at: b1.bookmark.at, note: 'renamed' } });
+      expect(JSON.parse((await post({ sid: 'h-1', on: true })).body).bookmark).toEqual({ at: b1.bookmark.at });
+      for (const sid of ['h-1', 'h-1', 'h-2', 'never-seen']) expect(JSON.parse((await post({ sid, on: false })).body)).toEqual({ sid, bookmark: null });
+      expect(await get('/history?bookmarked=1')).toMatchObject({ total: 0, bookmarked: 0 });
+      expect(JSON.parse(readFileSync(bookmarksPath, 'utf8'))).toEqual({ version: 1, bookmarks: {} });
+    } finally { await r.close(); }
+    const saved = process.env.OFFICE_HISTORY_BOOKMARKS; delete process.env.OFFICE_HISTORY_BOOKMARKS;
+    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.OFFICE_HISTORY_BOOKMARKS = saved; }
+    const d = await start(o);
+    try { expect(d.bookmarks.path).toBeUndefined(); } finally { await d.close(); }
   }, 15000);
 });
