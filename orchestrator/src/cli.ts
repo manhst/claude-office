@@ -11,6 +11,7 @@ import { UsageStore } from './usage.js';
 import { ItOpsMonitor } from './itops.js';
 import { HistoryIndex, historyRoot } from './history.js';
 import { BookmarkStore } from './bookmarks.js';
+import { ClaudeConfig, claudePaths } from './claudeConfig.js';
 import { applyPatch, loadSettings, resolveItopsConfig, saveSettings, toView, type OfficeSettingsFile, type SettingsPatch } from './settings.js';
 const here = dirname(fileURLToPath(import.meta.url));
 export interface StartOpts { demo: boolean; port: number; logDir: string; printToken: boolean; webDir: string; stepMs: number; userAgentsDir?: string; prometheus?: string; settingsPath?: string; historyDir?: string; bookmarksPath?: string; runDir?: string }
@@ -45,6 +46,9 @@ export async function start(o: StartOpts) {
   // History tab: past transcripts; demo shows fixtures only, never this machine's sessions
   const bookmarks = new BookmarkStore(o.bookmarksPath ?? (o.demo ? undefined : join(runDir, 'history-bookmarks.json'))); // demo: memory only
   const history = new HistoryIndex(o.historyDir ?? (o.demo ? resolve(here, '../fixtures/demo/history') : historyRoot()), { bookmarks });
+  // Claude config tab: Claude Code's MCP servers; demo reads fixtures (project paths mapped under fixtures/…/fs) and never writes
+  const ccDemo = o.demo ? resolve(here, '../fixtures/demo/claude-config') : undefined;
+  const claude = new ClaudeConfig({ ...claudePaths(process.env, ccDemo), runDir, demo: o.demo, fsRoot: ccDemo && !process.env.OFFICE_CLAUDE_JSON ? join(ccDemo, 'fs') : undefined });
   const liveSid = (raw: unknown) => {
     const sid = typeof (raw as any)?.sid === 'string' ? String((raw as any).sid).replace(/[^\w-]/g, '').slice(0, 64) : '';
     return sid && tracker.list().some((s) => s.sid === sid) ? sid : '';
@@ -65,7 +69,7 @@ export async function start(o: StartOpts) {
     onInboxClaim: (sid, tok) => inbox.claim(sid, tok),
     onInboxAck: (sid, tok, id, state, reason) => inbox.ack(sid, tok, id, state as any, reason),
     staticDir: existsSync(o.webDir) ? o.webDir : undefined,
-    history,
+    history, claude,
     getSettings: () => view(),
     setSettings: (raw) => {
       try {
@@ -93,7 +97,7 @@ export async function start(o: StartOpts) {
   console.error(`[office] settings: ${settingsPath}`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
   const close = async () => { clearInterval(sweep); itops.stop(); history.stop(); await server.close(); };
-  return { port, token, tracker, server, inbox, usage, itops, history, bookmarks, settingsPath, close, logPath: log.path };
+  return { port, token, tracker, server, inbox, usage, itops, history, bookmarks, claude, settingsPath, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

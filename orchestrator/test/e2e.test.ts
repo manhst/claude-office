@@ -265,3 +265,37 @@ describe('history endpoints', () => {
     try { expect(d.bookmarks.path).toBeUndefined(); } finally { await d.close(); }
   }, 15000);
 });
+describe('claude config endpoints', () => {
+  it('GET /claude-config + POST /claude-config/mcp/*: run token (header only), Origin, JSON, size cap; secrets stay masked', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'office-')), cj = process.env.OFFICE_CLAUDE_JSON!, secret = 'secret-value-1234567';
+    writeFileSync(cj, JSON.stringify({ mcpServers: { a: { type: 'stdio', command: 'node', args: [], env: { API_TOKEN: secret, MODE: 'dev' } } } }));
+    const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, json = { ...auth, 'content-type': 'application/json' };
+      const call = (path: string, body?: string, headers: Record<string, string> = json, method = 'POST') => httpJson(r.port, path, { method, headers, body });
+      expect((await call('/claude-config', undefined, {}, 'GET')).status).toBe(401);
+      expect((await call(`/claude-config?token=${r.token}`, undefined, {}, 'GET')).status).toBe(401);
+      expect((await call('/claude-config', undefined, { ...auth, origin: 'https://evil.example' }, 'GET')).status).toBe(403);
+      expect((await call('/claude-config', '{}')).status).toBe(405);
+      const v = await call('/claude-config', undefined, { ...auth, origin: 'http://127.0.0.1:7777' }, 'GET');
+      expect(v.status).toBe(200); expect(v.headers['content-type']).toBe('application/json'); expect(v.body).not.toContain(secret);
+      expect(JSON.parse(v.body)).toMatchObject({ writable: true, cli: { version: '9.9.9' }, servers: [{ name: 'a', scope: 'user', env: [{ key: 'API_TOKEN', masked: true }, { key: 'MODE', value: 'dev' }] }] });
+      for (const op of ['save', 'delete', 'reveal', 'test']) {
+        const path = `/claude-config/mcp/${op}`;
+        expect((await call(path, '{}', { 'content-type': 'application/json' })).status).toBe(401);
+        expect((await call(path, '{}', { ...json, authorization: 'Bearer nope' })).status).toBe(401);
+        expect((await call(path, '{}', { ...json, origin: 'https://evil.example' })).status).toBe(403);
+        expect((await call(path, '{}', { ...auth, 'content-type': 'text/plain' })).status).toBe(415);
+        expect((await call(path, undefined, auth, 'GET')).status).toBe(405);
+        expect((await call(path, `{"x":"${'y'.repeat(65 * 1024)}"}`)).status).toBe(413);
+        const bad = await call(path, '{nope'); expect(bad.status).toBe(400); expect(JSON.parse(bad.body)).toEqual({ error: 'bad json' });
+      }
+      expect(JSON.parse((await call('/claude-config/mcp/reveal', JSON.stringify({ scope: 'user', name: 'a', field: 'env', key: 'API_TOKEN' }))).body)).toEqual({ value: secret });
+      const saved = await call('/claude-config/mcp/save', JSON.stringify({ target: { scope: 'user', name: 'b' }, server: { type: 'http', url: 'https://b.example/mcp' } }));
+      expect(saved.status).toBe(200); expect(JSON.parse(saved.body)).toMatchObject({ ok: true, backup: expect.any(String) });
+      expect(JSON.parse(readFileSync(cj, 'utf8')).mcpServers.b).toEqual({ type: 'http', url: 'https://b.example/mcp' });
+      const bad = await call('/claude-config/mcp/save', JSON.stringify({ target: { scope: 'user', name: 'a/b' }, server: { type: 'http', url: 'https://b' } }));
+      expect(bad.status).toBe(400); expect(JSON.parse(bad.body).error).toContain('name');
+    } finally { await r.close(); }
+  }, 20000);
+});

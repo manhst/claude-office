@@ -20,13 +20,18 @@ stop_server() {
   for _ in $(seq 1 20); do [ -z "$(listener)" ] && return 0; sleep 0.5; done
   kill -KILL "$pid" $pp 2>/dev/null; sleep 0.5; [ -z "$(listener)" ]
 }
+# The claude CLI refuses MCP config writes from a Claude Code session env (Claude tab read-only). When this launcher runs clean
+# (Finder/Dock) but the server inherited such an env (started from a session), restart it so the tab can write.
+session_env() { ps eww -o command= -p "$1" 2>/dev/null | tr ' ' '\n' | grep -qE '^(CLAUDECODE|CLAUDE_CODE_CHILD_SESSION|CLAUDE_CODE_SESSION_ID)='; }
+clean_launch() { [ -z "${CLAUDECODE}${CLAUDE_CODE_CHILD_SESSION}${CLAUDE_CODE_SESSION_ID}" ]; }
 changed() { [ -f "$MARK" ] && [ -n "$(find "$REPO/orchestrator/src" "$REPO/mod/office" "$REPO/web/src" "$REPO/web/index.html" -newer "$MARK" -type f 2>/dev/null | head -n1)" ]; }
 
 pid="$(listener)"
 if [ -n "$pid" ]; then
   healthy || fail "Port $PORT is used by another program (pid $pid), not the office server."
-  if ! changed; then open_ui || fail "Server is running but orchestrator/.run/ui-url.txt is missing. Restart it from Terminal."; exit 0; fi
-  note "Code changed, restarting the server…"
+  if clean_launch && session_env "$pid"; then note "Restarting the server outside the Claude Code session…"
+  elif changed; then note "Code changed, restarting the server…"
+  else open_ui || fail "Server is running but orchestrator/.run/ui-url.txt is missing. Restart it from Terminal."; exit 0; fi
   stop_server "$pid" || fail "Could not stop the old server (pid $pid)."
 fi
 

@@ -87,6 +87,62 @@ export interface HistoryDetailResponse { session: HistorySession; items: History
 export interface HistoryBookmarkRequest { sid: string; on: boolean; note?: string }
 export interface HistoryBookmarkResponse { sid: string; bookmark: HistoryBookmark | null }
 
+/** Claude config tab (GET /claude-config). Where an MCP server entry lives: user = ~/.claude.json mcpServers; local = ~/.claude.json
+ *  projects[path].mcpServers; project = <path>/.mcp.json; settings = ~/.claude/settings.json mcpServers (NOT loaded by Claude Code: read-only, clone it to use it). */
+export type McpScope = 'user' | 'local' | 'project' | 'settings';
+/** env var / header. value is omitted (masked:true) when key or value looks secret; POST /claude-config/mcp/reveal returns it. */
+export interface McpPair { key: string; value?: string; masked?: boolean }
+export interface McpServerView {
+  name: string; scope: McpScope;
+  /** project path for local/project scope */
+  project?: string;
+  /** file the entry lives in */
+  file: string;
+  /** type as stored ('' when absent = stdio) */
+  type: string; command?: string; args?: string[]; url?: string;
+  env: McpPair[]; headers: McpPair[];
+  /** other keys of the entry (oauth, timeout…): kept as they are on edit/clone, not editable here */
+  extraKeys: string[];
+  /** project scope: approval from projects[path].enabledMcpjsonServers / disabledMcpjsonServers */
+  approval?: 'enabled' | 'disabled' | 'pending';
+  /** a same-named entry in a scope that wins for this project (local > project > user) */
+  shadowedBy?: { scope: McpScope; project?: string };
+  /** e.g. unknown type, command not found, missing url */
+  warnings: string[];
+  /** hash of the stored entry; edits/deletes send it back and get 409 if the file changed meanwhile */
+  hash: string;
+  readOnly: boolean;
+}
+export interface ClaudeProjectView { path: string; exists: boolean; localServers: number; hasMcpJson: boolean; trusted: boolean; allowedTools: number; lastSessionId?: string; lastCost?: number }
+export interface ClaudeConfigView {
+  files: { claudeJson: string; settings: string }; readAt: number;
+  /** false in --demo or when the claude CLI is missing (then cli.error says why): the UI is read-only */
+  writable: boolean; cli: { path?: string; version?: string; error?: string };
+  servers: McpServerView[]; projects: ClaudeProjectView[];
+}
+export interface McpRef { scope: McpScope; project?: string; name: string }
+/** keep:true = reuse the stored value of this key from `original` (edit) or `cloneFrom` (clone), so secrets never round-trip through the browser. */
+export interface McpPairInput { key: string; value?: string; keep?: boolean }
+export interface McpServerInput { type: string; command?: string; args?: string[]; url?: string; env?: McpPairInput[]; headers?: McpPairInput[] }
+/** POST /claude-config/mcp/save. original: edit that entry (hash must still match, else 409; target may differ = move/rename).
+ *  cloneFrom: new entry copied from another (keep values + extra keys come from it). Neither: new entry (409 if the name exists in the target scope).
+ *  target.scope must be user | local | project; local/project need target.project (a known project path). */
+export interface McpSaveRequest { target: McpRef; server: McpServerInput; original?: McpRef & { hash: string }; cloneFrom?: McpRef;
+  /** project scope writes <project>/.mcp.json (usually committed): kept or secret-looking env/header values there need this, else 400 {error:'confirm-required', reason} */
+  confirmProjectSecrets?: boolean }
+export interface McpDeleteRequest extends McpRef { hash: string }
+export interface McpRevealRequest extends McpRef { field: 'env' | 'headers'; key: string }
+export interface McpRevealResponse { value: string }
+/** POST /claude-config/mcp/test: a stored entry (ref), or an unsaved draft (server; keep values from `from`; runs in `project` or the home dir). */
+export type McpTestRequest = ({ ref: McpRef } | { server: McpServerInput; from?: McpRef; project?: string }) & {
+  /** required to start a project-scope (.mcp.json) server that Claude Code hasn't approved or whose project isn't trusted; else 400 {error:'confirm-required', reason} */
+  confirm?: boolean };
+export interface McpTestResult { ok: boolean; ms: number; server?: { name?: string; version?: string }; tools?: string[]; error?: string; stderr?: string }
+/** Error body of the /claude-config routes. confirm-required: resend with the named confirm flag after asking the user (reason says what will happen). */
+export interface McpErrorResponse { error: string; reason?: string; backup?: string }
+/** Reply of save/delete: the fresh view, plus the backup file written before the change. */
+export interface McpWriteResponse { ok: true; view: ClaudeConfigView; backup?: string }
+
 type Base = { ts: number };
 export type OfficeEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }

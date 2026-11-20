@@ -121,9 +121,9 @@ export function projectOptions(projects: readonly HistoryProject[], current = ''
   for (const p of projects) out.push({ value: p.project, label: `${(n.get(p.projectName) ?? 0) > 1 ? p.project : p.projectName} (${p.sessions})`, title: p.project });
   return out;
 }
-export type MainTab = 'office' | 'history';
+export type MainTab = 'office' | 'history' | 'claude';
 export const TAB_KEY = 'office.tab';
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 const local = (): Store | undefined => { try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; } };
-export function loadTab(store: Store | undefined = local()): MainTab { try { return store?.getItem(TAB_KEY) === 'history' ? 'history' : 'office'; } catch { return 'office'; } }
+export function loadTab(store: Store | undefined = local()): MainTab { try { const t = store?.getItem(TAB_KEY); return t === 'history' || t === 'claude' ? t : 'office'; } catch { return 'office'; } }
 export function saveTab(t: MainTab, store: Store | undefined = local()) { try { store?.setItem(TAB_KEY, t); } catch { /* private mode / quota */ } }
