@@ -14,7 +14,7 @@ const save = (f: string, v: unknown) => writeFileSync(f, `${JSON.stringify(v, nu
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** temp ~/.claude.json (user + 3 projects), proj-a/.mcp.json, settings.json; the fake claude CLI writes the same temp files */
 function world(extraEnv: NodeJS.ProcessEnv = {}) {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'office-ccw-'))), claudeJson = join(dir, '.claude.json'), settings = join(dir, 'settings.json'), runDir = join(dir, 'run');
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'deck-ccw-'))), claudeJson = join(dir, '.claude.json'), settings = join(dir, 'settings.json'), runDir = join(dir, 'run');
   const pA = join(dir, 'proj-a'), pB = join(dir, 'proj-b'), gone = join(dir, 'gone'), log = join(dir, 'cli.log'); mkdirSync(pA); mkdirSync(pB);
   save(claudeJson, {
     numStartups: 7, mcpServers: {
@@ -31,7 +31,7 @@ function world(extraEnv: NodeJS.ProcessEnv = {}) {
   });
   save(join(pA, '.mcp.json'), { mcpServers: { pj1: { command: NODE, args: [FAKE] }, pj2: { command: 'node' }, pj3: { command: NODE, args: [FAKE, '${HOME}'] }, gh: { command: 'node' } } });
   save(settings, { permissions: {}, mcpServers: { cursor1: { type: 'http', url: 'https://c.example/mcp', headers: { 'X-Api-Key': 'k-123' } }, 'draw.io': { command: 'node' } } });
-  const env = { ...process.env, OFFICE_CLAUDE_JSON: claudeJson, FAKE_CLAUDE_LOG: log, ...extraEnv };
+  const env = { ...process.env, DECK_CLAUDE_JSON: claudeJson, FAKE_CLAUDE_LOG: log, ...extraEnv };
   const calls = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   return { dir, claudeJson, settings, runDir, pA, pB, gone, calls, cfg: new ClaudeConfig({ claudeJson, settings, runDir, env, home: dir }) };
 }
@@ -42,20 +42,20 @@ const edit = (s: McpServerView, server: unknown, extra: object = {}) => ({ targe
 
 describe('claude config: paths, CLI and helpers', () => {
   it('refuses the real files and the real CLI under vitest', () => {
-    expect(() => claudePaths({ VITEST: 'true' })).toThrow(/OFFICE_CLAUDE_JSON/);
-    expect(() => claudePaths({ VITEST: 'true', OFFICE_CLAUDE_JSON: '/tmp/x.json', OFFICE_CLAUDE_SETTINGS: join(process.env.HOME ?? '', '.claude', 'settings.json') })).toThrow();
-    expect(claudePaths(process.env).claudeJson).toBe(process.env.OFFICE_CLAUDE_JSON);
+    expect(() => claudePaths({ VITEST: 'true' })).toThrow(/DECK_CLAUDE_JSON/);
+    expect(() => claudePaths({ VITEST: 'true', DECK_CLAUDE_JSON: '/tmp/x.json', DECK_CLAUDE_SETTINGS: join(process.env.HOME ?? '', '.claude', 'settings.json') })).toThrow();
+    expect(claudePaths(process.env).claudeJson).toBe(process.env.DECK_CLAUDE_JSON);
     expect(findClaude({ VITEST: 'true', PATH: process.env.PATH })).toEqual({ error: expect.stringContaining('never run the real') });
-    expect(findClaude({ OFFICE_CLAUDE_BIN: '/nope/claude' }).error).toBeDefined();
+    expect(findClaude({ DECK_CLAUDE_BIN: '/nope/claude' }).error).toBeDefined();
   });
   it('run() never throws, even when spawn does; which() skips relative PATH entries', async () => {
     expect(await run('bad\0bin', [])).toMatchObject({ code: null, error: expect.any(String) });
-    const d = mkdtempSync(join(tmpdir(), 'office-which-')); writeFileSync(join(d, 'office-which-probe'), '');
-    expect(which('office-which-probe', d)).toBe(join(d, 'office-which-probe'));
-    expect(which('office-which-probe', relative(process.cwd(), d))).toBeUndefined();
+    const d = mkdtempSync(join(tmpdir(), 'deck-which-')); writeFileSync(join(d, 'deck-which-probe'), '');
+    expect(which('deck-which-probe', d)).toBe(join(d, 'deck-which-probe'));
+    expect(which('deck-which-probe', relative(process.cwd(), d))).toBeUndefined();
   });
   it('configKey: git root of the real path, a worktree resolves to its main repo', async () => {
-    const d = realpathSync(mkdtempSync(join(tmpdir(), 'office-git-'))), repo = join(d, 'repo'), sub = join(repo, 'sub'), wt = join(d, 'wt');
+    const d = realpathSync(mkdtempSync(join(tmpdir(), 'deck-git-'))), repo = join(d, 'repo'), sub = join(repo, 'sub'), wt = join(d, 'wt');
     mkdirSync(join(repo, '.git', 'worktrees', 'wt'), { recursive: true }); mkdirSync(sub); mkdirSync(wt);
     writeFileSync(join(repo, '.git', 'worktrees', 'wt', 'commondir'), '../..\n'); writeFileSync(join(wt, '.git'), `gitdir: ${join(repo, '.git', 'worktrees', 'wt')}\n`);
     expect([await configKey(sub), await configKey(repo), await configKey(wt), await configKey(d)]).toEqual([repo, repo, repo, d]);
@@ -88,11 +88,11 @@ describe('claude config: view', () => {
       { path: w.pB, exists: true, localServers: 0, hasMcpJson: false, trusted: false, allowedTools: 0 },
     ]);
   });
-  it('read-only without a CLI, with config overrides but no OFFICE_CLAUDE_BIN, and in demo mode', async () => {
-    const w = world({ OFFICE_CLAUDE_BIN: join(tmpdir(), 'no-such-claude') }), v = await w.cfg.view();
+  it('read-only without a CLI, with config overrides but no DECK_CLAUDE_BIN, and in demo mode', async () => {
+    const w = world({ DECK_CLAUDE_BIN: join(tmpdir(), 'no-such-claude') }), v = await w.cfg.view();
     expect(v.writable).toBe(false); expect(v.cli.error).toBeDefined(); expect(v.servers.every((s) => s.readOnly)).toBe(true);
-    expect(await post(w.cfg, 'save', {})).toEqual({ status: 503, body: { error: 'read-only', reason: expect.stringContaining('OFFICE_CLAUDE_BIN') } });
-    const split = new ClaudeConfig({ claudeJson: w.claudeJson, settings: w.settings, runDir: w.runDir, env: { ...process.env, OFFICE_CLAUDE_JSON: w.claudeJson, OFFICE_CLAUDE_BIN: '' } });
+    expect(await post(w.cfg, 'save', {})).toEqual({ status: 503, body: { error: 'read-only', reason: expect.stringContaining('DECK_CLAUDE_BIN') } });
+    const split = new ClaudeConfig({ claudeJson: w.claudeJson, settings: w.settings, runDir: w.runDir, env: { ...process.env, DECK_CLAUDE_JSON: w.claudeJson, DECK_CLAUDE_BIN: '' } });
     expect((await split.view())).toMatchObject({ writable: false, cli: { error: expect.stringContaining('different files') } });
     const demo = new ClaudeConfig({ claudeJson: w.claudeJson, settings: w.settings, runDir: w.runDir, demo: true });
     expect((await demo.view()).writable).toBe(false);
@@ -122,13 +122,13 @@ describe('claude config: save', () => {
     expect(r.status).toBe(200);
     const want = { type: 'http', url: 'https://h2.example/mcp', headers: { Authorization: 'Bearer abcdefghijklmnop', 'X-Env': 'prd' }, timeout: 5000, oauth: { clientId: 'c1' } };
     expect(json(w.claudeJson).mcpServers.web).toEqual(want);
-    const c = w.calls(); expect(c.map((x) => `${x.op}:${x.name.replace(/__office_tmp_[0-9a-f]+$/, '__tmp')}`)).toEqual(['add-json:web__tmp', 'remove:web__tmp', 'remove:web', 'add-json:web']);
-    expect(JSON.parse(c[0].input)).toEqual(want); expect(Object.keys(json(w.claudeJson).mcpServers).some((n) => n.includes('office_tmp'))).toBe(false);
+    const c = w.calls(); expect(c.map((x) => `${x.op}:${x.name.replace(/__deck_tmp_[0-9a-f]+$/, '__tmp')}`)).toEqual(['add-json:web__tmp', 'remove:web__tmp', 'remove:web', 'add-json:web']);
+    expect(JSON.parse(c[0].input)).toEqual(want); expect(Object.keys(json(w.claudeJson).mcpServers).some((n) => n.includes('deck_tmp'))).toBe(false);
     expect((await post(w.cfg, 'save', edit(web, server))).body).toEqual({ error: 'changed' }); // stale hash
     const fresh = find(await w.cfg.view(), 'user', 'web'), cj = json(w.claudeJson); cj.mcpServers.web.url = 'https://changed.example'; save(w.claudeJson, cj);
     expect((await post(w.cfg, 'save', edit(fresh, server))).status).toBe(409);
   });
-  it('a refusal at the proof step changes nothing (session marker the office does not check itself)', async () => {
+  it('a refusal at the proof step changes nothing (session marker Claude Deck does not check itself)', async () => {
     const w = world({ FAKE_CLAUDE_SESSION: '1' }), web = find(await w.cfg.view(), 'user', 'web'), before = json(w.claudeJson).mcpServers.web;
     const r = await post(w.cfg, 'save', edit(web, { type: 'http', url: 'https://x.example' }));
     expect(r).toEqual({ status: 500, body: { error: `claude mcp add-json failed (nothing was changed): ${IN_SESSION}`, backup: expect.any(String) } });
@@ -137,7 +137,7 @@ describe('claude config: save', () => {
     expect((await post(w.cfg, 'save', { target: { scope: 'user', name: 'n2' }, server: { type: 'http', url: 'https://n.example' } })).status).toBe(503);
   });
   it('restores the original when the final add-json fails, and reports the CLI error', async () => {
-    const flag = join(tmpdir(), `office-fail-${Date.now()}`); writeFileSync(flag, '1');
+    const flag = join(tmpdir(), `deck-fail-${Date.now()}`); writeFileSync(flag, '1');
     const w = world({ FAKE_CLAUDE_FAIL: `add-json|web|${flag}` }), web = find(await w.cfg.view(), 'user', 'web'), before = json(w.claudeJson).mcpServers.web;
     const r = await post(w.cfg, 'save', edit(web, { type: 'http', url: 'https://other.example' }));
     expect(r).toEqual({ status: 500, body: { error: expect.stringMatching(/injected failure for add-json web.*original entry was restored/), backup: expect.any(String) } });
@@ -259,14 +259,14 @@ describe('claude config: real CLI facts', () => {
   it('inside a Claude Code session (CLAUDE_CODE_CHILD_SESSION / CLAUDECODE / CLAUDE_CODE_SESSION_ID) the tab is read-only, nothing is spawned', async () => {
     for (const marker of [{ CLAUDE_CODE_CHILD_SESSION: '1' }, { CLAUDECODE: '1' }, { CLAUDE_CODE_SESSION_ID: 'abc' }]) {
       const w = world(marker), v = await w.cfg.view();
-      expect(v).toMatchObject({ writable: false, cli: { path: process.env.OFFICE_CLAUDE_BIN, error: IN_SESSION } }); expect(v.cli.version).toBeUndefined();
+      expect(v).toMatchObject({ writable: false, cli: { path: process.env.DECK_CLAUDE_BIN, error: IN_SESSION } }); expect(v.cli.version).toBeUndefined();
       expect(v.servers.every((x) => x.readOnly)).toBe(true);
       expect(await post(w.cfg, 'save', { target: { scope: 'user', name: 'n' }, server })).toEqual({ status: 503, body: { error: 'read-only', reason: IN_SESSION } });
       expect(w.calls()).toEqual([]);
     }
   });
   it('the fake CLI refuses stdin JSON inside a session and bad names, like the real one', async () => {
-    const w = world(), go = (env: NodeJS.ProcessEnv, name = 'x') => run(process.env.OFFICE_CLAUDE_BIN!, ['mcp', 'add-json', '-s', 'user', name, '-'], { input: '{"command":"node"}', env: { ...process.env, OFFICE_CLAUDE_JSON: w.claudeJson, ...env } });
+    const w = world(), go = (env: NodeJS.ProcessEnv, name = 'x') => run(process.env.DECK_CLAUDE_BIN!, ['mcp', 'add-json', '-s', 'user', name, '-'], { input: '{"command":"node"}', env: { ...process.env, DECK_CLAUDE_JSON: w.claudeJson, ...env } });
     for (const marker of [{ CLAUDECODE: '1' }, { CLAUDE_CODE_CHILD_SESSION: '1' }]) { const r = await go(marker); expect(r.code).toBe(1); expect(r.stderr).toMatch(/refused inside a Claude Code session/); }
     expect((await go({}, 'a.b')).stderr).toMatch(/Names can only contain letters, numbers, hyphens, and underscores/);
     expect(json(w.claudeJson).mcpServers.x).toBeUndefined();
@@ -297,7 +297,7 @@ describe('claude config: test probe', () => {
     expect((await post(w.cfg, 'test', { ref: { scope: 'user', name: 'nope' } })).status).toBe(404);
     expect((await post(w.cfg, 'test', { ref: { scope: 'user', name: 'odd' } })).body).toMatchObject({ ok: false, error: 'unknown type "https"' });
   });
-  it('project-scope entries need confirm unless approved in a trusted project, and get no ${VAR} expansion from the office env', async () => {
+  it('project-scope entries need confirm unless approved in a trusted project, and get no ${VAR} expansion from the Claude Deck env', async () => {
     const w = world(), cj = json(w.claudeJson); cj.projects[w.pB] = { enabledMcpjsonServers: ['pq'] }; save(w.claudeJson, cj); save(join(w.pB, '.mcp.json'), { mcpServers: { pq: { command: NODE, args: [FAKE] } } });
     expect((await post(w.cfg, 'test', { ref: { scope: 'project', project: w.pA, name: 'pj1' } })).body).toMatchObject({ ok: true }); // enabled + trusted
     const pj3 = { scope: 'project', project: w.pA, name: 'pj3' };
@@ -348,10 +348,10 @@ describe('claude config: test probe', () => {
     });
     await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r())); const port = (srv.address() as any).port, base = `http://127.0.0.1:${port}`, o = { name: 'web', cwd: tmpdir() };
     try {
-      const ok = await probeMcp({ type: 'http', url: `${base}/mcp`, headers: { Authorization: 'Bearer ${OFFICE_TEST_TOKEN}' } }, { ...o, env: { OFFICE_TEST_TOKEN: 'good' } });
+      const ok = await probeMcp({ type: 'http', url: `${base}/mcp`, headers: { Authorization: 'Bearer ${DECK_TEST_TOKEN}' } }, { ...o, env: { DECK_TEST_TOKEN: 'good' } });
       expect(ok).toMatchObject({ ok: true, server: { name: 'http-fake', version: '2.0' }, tools: ['search'] });
       expect(seen.slice(0, 3)).toEqual(['initialize sid=- pv=-', 'notifications/initialized sid=sess-1 pv=2025-06-18', 'tools/list sid=sess-1 pv=2025-06-18']);
-      expect(await probeMcp({ type: 'http', url: `${base}/mcp`, headers: { Authorization: 'Bearer ${OFFICE_TEST_TOKEN}' } }, { ...o, env: { OFFICE_TEST_TOKEN: 'good' }, vars: {} })).toMatchObject({ ok: false, error: expect.stringContaining('needs auth') });
+      expect(await probeMcp({ type: 'http', url: `${base}/mcp`, headers: { Authorization: 'Bearer ${DECK_TEST_TOKEN}' } }, { ...o, env: { DECK_TEST_TOKEN: 'good' }, vars: {} })).toMatchObject({ ok: false, error: expect.stringContaining('needs auth') });
       expect(await probeMcp({ type: 'streamable-http', url: `${base}/mcp`, headers: { Authorization: 'Bearer good' } }, o)).toMatchObject({ ok: true, tools: ['search'] });
       expect(await probeMcp({ type: 'http', url: `${base}/mcp`, headers: { Authorization: 'Bearer bad' } }, o)).toMatchObject({ ok: false, error: 'needs auth (run /mcp or `claude mcp login web` in Claude Code)' });
       expect(await probeMcp({ type: 'sse', url: `${base}/sse` }, { ...o, name: 's' })).toMatchObject({ ok: true, server: { name: 'http-fake' }, tools: ['search'] });

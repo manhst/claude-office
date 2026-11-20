@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   RUN_SPEED_DEFAULT, RUN_SPEED_MAX, RUN_SPEED_MIN, TOWN_RUN_SPEED_MAX,
   clampRunSpeed, loadRunSpeed, saveRunSpeed, townRunSpeed, walkerSpeedFor,
-} from '../src/vpRunSpeed';
+} from '../src/officeRunSpeed';
 import { WALK_SPEED } from '../src/walk';
 import { PX } from '../src/town/map';
 import type { Goal } from '../src/walk';
@@ -12,7 +12,7 @@ const home: Goal = { key: 'home', to: [0, 0, 0], home: true, face: 0 };
 const visit: Goal = { key: 'visit:b', to: [1, 0, 0], home: false, face: 0 };
 const cafe: Goal = { key: 'coffee:0', to: [-8, 0, -7], home: false, face: 0 };
 
-describe('vpRunSpeed', () => {
+describe('officeRunSpeed', () => {
   beforeEach(() => {
     mem.clear();
     Object.defineProperty(globalThis, 'localStorage', {

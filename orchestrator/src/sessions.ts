@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
 import { redactText } from './redact.js';
 import { loadProfiles } from './profiles.js';
-import type { AgentProfile, AgentState, AgentView, OfficeEvent, ProfileSource, SessionState, SessionView, SubagentInfo, TurnStatus, TurnStep, TurnView } from './types.js';
+import type { AgentProfile, AgentState, AgentView, DeckEvent, ProfileSource, SessionState, SessionView, SubagentInfo, TurnStatus, TurnStep, TurnView } from './types.js';
 
-/** One event POSTed by the `office` mod (see mod/office/register.ts). Every field except type+sid is optional and merged. */
+/** One event POSTed by the `deck` mod (see mod/deck/register.ts). Every field except type+sid is optional and merged. */
 export interface ModEvent {
   type: 'start' | 'heartbeat' | 'state' | 'tool' | 'subagents' | 'prompt' | 'end' | 'turn';
   sid: string; project?: string; cwd?: string; root?: string; title?: string; transcript?: string;
@@ -72,16 +72,16 @@ export interface TrackerOpts { staleMs?: number; desks?: number; cols?: number; 
 export class SessionTracker {
   private sessions = new Map<string, SessionView>();
   private desks = new Map<string, Desk>();
-  private listeners: Array<(e: OfficeEvent) => void> = [];
+  private listeners: Array<(e: DeckEvent) => void> = [];
   /** Recent turns across sessions, oldest first; kept after their session leaves. */
   private turns: TurnView[] = [];
   private calls = 0;
   constructor(private o: TrackerOpts = {}) {}
   private now() { return (this.o.now ?? Date.now)(); }
-  on(fn: (e: OfficeEvent) => void) { this.listeners.push(fn); }
-  private emit(e: OfficeEvent) { for (const l of this.listeners) l(e); }
+  on(fn: (e: DeckEvent) => void) { this.listeners.push(fn); }
+  private emit(e: DeckEvent) { for (const l of this.listeners) l(e); }
   list(): SessionView[] { return [...this.sessions.values()].map((s) => ({ ...s, subagents: [...s.subagents], agentIds: [...s.agentIds] })); }
-  snapshot(): OfficeEvent { return { t: 'office.snapshot', agents: [...this.desks.values()].map((d) => ({ ...d.view, desk: { ...d.view.desk } })), sessions: this.list(), turns: this.turns.map(copyTurn), ts: this.now() }; }
+  snapshot(): DeckEvent { return { t: 'deck.snapshot', agents: [...this.desks.values()].map((d) => ({ ...d.view, desk: { ...d.view.desk } })), sessions: this.list(), turns: this.turns.map(copyTurn), ts: this.now() }; }
 
   ingest(raw: unknown): boolean {
     const e = parseModEvent(raw); if (!e) return false;
@@ -139,14 +139,14 @@ export class SessionTracker {
     for (const p of profiles.slice(0, this.o.perSession ?? 6)) {
       const used = new Set([...this.desks.values()].map((d) => d.view.desk.y * cols + d.view.desk.x));
       let slot = 0; while (used.has(slot)) slot++;
-      if (slot >= total) { this.emit({ t: 'office.notice', level: 'warn', text: `No free desk for ${p.name} (${s.project})`, ts }); break; }
+      if (slot >= total) { this.emit({ t: 'deck.notice', level: 'warn', text: `No free desk for ${p.name} (${s.project})`, ts }); break; }
       const id = `${e.sid}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${s.agentIds.length}`;
       const desk = { x: slot % cols, y: Math.floor(slot / cols) };
       const d: Desk = { id, sid: e.sid, profile: p, view: { id, role: p.name, name: p.name, state: 'idle', desk } };
       this.desks.set(id, d); s.agentIds.push(id);
       this.emit({ t: 'agent.spawned', id, role: p.name, name: p.name, desk, tools: p.tools, sessionId: e.sid, model: p.model, ts });
     }
-    this.emit({ t: 'office.notice', level: 'info', text: `Session joined: ${s.project}`, ts });
+    this.emit({ t: 'deck.notice', level: 'info', text: `Session joined: ${s.project}`, ts });
     return s;
   }
   private drop(sid: string) {
@@ -155,7 +155,7 @@ export class SessionTracker {
     const s = this.sessions.get(sid); if (!s) return;
     for (const id of s.agentIds) { this.desks.delete(id); this.emit({ t: 'agent.left', id, ts }); }
     this.sessions.delete(sid);
-    this.emit({ t: 'office.notice', level: 'info', text: `Session left: ${s.project}`, ts });
+    this.emit({ t: 'deck.notice', level: 'info', text: `Session left: ${s.project}`, ts });
     this.emit({ t: 'sessions.update', sessions: this.list(), ts });
   }
   /** Push live session activity onto desks: busy subagents claim distinct desks (name match, else free); main turn on lead / first free. */

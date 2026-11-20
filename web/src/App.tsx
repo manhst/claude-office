@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState, type KeyboardEvent } from 'react';
-import { reduce, initialState, type OfficeState } from './reducer';
+import { reduce, initialState, type DeckState } from './reducer';
 import { takeToken, connect } from './connection';
-import type { OfficeEvent } from './types';
+import type { DeckEvent } from './types';
 import { UsageBars } from './UsageBars';
 import { AgentsPanel } from './AgentsPanel';
 import { ResponseLog } from './ResponseLog';
@@ -16,7 +16,7 @@ import { HistoryView } from './HistoryView';
 import { ClaudeConfigView } from './ClaudeConfigView';
 import { ModelReportView } from './ModelReportView';
 import { loadTab, saveTab, type MainTab, type OpenRequest } from './history';
-const VanphongView = lazy(() => import('./ref-vanphong/VanphongView')); // ported reference visuals, own chunk (see ref-vanphong/NOTICE)
+const OfficeView = lazy(() => import('./office3d/OfficeView')); // ported reference visuals, own chunk (see office3d/NOTICE)
 function useNow(ms = 250) { const [n, set] = useState(Date.now()); useEffect(() => { const t = setInterval(() => set(Date.now()), ms); return () => clearInterval(t); }, [ms]); return n; }
 export function App() {
   const [boot] = useState(() => takeToken());
@@ -26,7 +26,7 @@ export function App() {
   const onSplit = useCallback((r: number) => setSplit(r), []);
   useEffect(() => {
     if (!boot.token) return;
-    return connect(boot.wsUrl, boot.token, (e) => dispatch({ type: 'event', e: e as OfficeEvent }), (status, retries) => dispatch({ type: 'conn', status, retries }));
+    return connect(boot.wsUrl, boot.token, (e) => dispatch({ type: 'event', e: e as DeckEvent }), (status, retries) => dispatch({ type: 'conn', status, retries }));
   }, [boot]);
   const now = useNow();
   const [picked, setPicked] = useState<string>();
@@ -44,13 +44,13 @@ export function App() {
   const hist = !!boot.token && tab === 'history', cc = !!boot.token && tab === 'claude', rep = !!boot.token && tab === 'report', away = hist || cc || rep;
   return (
     <div className="app">
-      <header><h1>Văn phòng ảo <span>· virtual office</span></h1>{boot.token ? <ViewTabs tab={tab} onChange={setTab} /> : null}<Conn s={s} />
+      <header><h1>Claude Deck</h1>{boot.token ? <ViewTabs tab={tab} onChange={setTab} /> : null}<Conn s={s} />
         <UsageBars u={s.usage} now={now} />
         {boot.token ? <SettingsButton onClick={() => setSettingsOpen(true)} /> : null}
       </header>
       <main style={{ ['--map-frac' as string]: String(split) }} {...(boot.token ? { id: 'panel-office', role: 'tabpanel', 'aria-labelledby': 'tab-office' } : {})} hidden={away}>
         {s.conn === 'no-token' ? <div className="empty">No run token. Open the URL from <code>orchestrator/.run/ui-url.txt</code>.</div>
-          : seen.office ? <Suspense fallback={<div className="empty stage3d">Loading Vanphong…</div>}><VanphongView s={s} now={now} paused={away} /></Suspense> : null}
+          : seen.office ? <Suspense fallback={<div className="empty stage3d">Loading Office…</div>}><OfficeView s={s} now={now} paused={away} /></Suspense> : null}
         {s.conn !== 'no-token' ? <SplitGutter ratio={split} onChange={onSplit} /> : null}
         <div className="side"><SessionPanel s={s} selected={selected} onSelect={setPicked} now={now} /><ResponseLog s={s} now={now} />
           {boot.token ? <PromptComposer selected={session} token={boot.token} ack={selected ? s.prompts[selected] : undefined} drafts={drafts} setDraft={(sid, text) => setDrafts((d) => ({ ...d, [sid]: text }))} demo={!!session && !session.canSubmit} /> : null}
@@ -63,7 +63,7 @@ export function App() {
     </div>
   );
 }
-const TABS: [MainTab, string][] = [['office', 'Văn phòng'], ['history', 'Lịch sử'], ['claude', 'Cấu hình Claude'], ['report', 'Hiệu suất']];
+const TABS: [MainTab, string][] = [['office', 'Office'], ['history', 'History'], ['claude', 'Claude Config'], ['report', 'Performance']];
 /** Header tablist (roving tabindex; arrows/Home/End switch and keep focus on the tab). */
 function ViewTabs({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab, byKey?: boolean) => void }) {
   const key = (e: KeyboardEvent) => {
@@ -74,7 +74,7 @@ function ViewTabs({ tab, onChange }: { tab: MainTab; onChange: (t: MainTab, byKe
   return <div className="vtabs" role="tablist" aria-label="View" onKeyDown={key}>{TABS.map(([t, label]) => (
     <button key={t} type="button" role="tab" id={`tab-${t}`} className="vtab" aria-selected={t === tab} aria-controls={`panel-${t}`} tabIndex={t === tab ? 0 : -1} onClick={() => onChange(t)} data-testid={`tab-${t}`}>{label}</button>))}</div>;
 }
-function Conn({ s }: { s: OfficeState }) {
+function Conn({ s }: { s: DeckState }) {
   const label = { 'no-token': 'no token', connecting: 'connecting…', open: 'live', reconnecting: `reconnecting (try ${s.retries})` }[s.conn];
   return <div className={`conn conn-${s.conn}`} data-testid="conn"><IconDot size={10} />{label}</div>;
 }

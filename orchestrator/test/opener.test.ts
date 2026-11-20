@@ -34,7 +34,7 @@ const HOME = '/Users/me', EXT = `${HOME}/.cursor/extensions`;
 type MacOpts = Partial<SessionOpenerOpts> & { answer?: (c: Call) => ExecResult | Promise<ExecResult>; ext?: boolean; cwd?: string; live?: boolean; at?: Partial<SessionLocation>; running?: (b: string) => boolean };
 /** a Mac with iTerm in ~/Applications, Terminal in Utilities, Cursor found by Spotlight only, Cursor's extension installed; every sid in `sids` is indexed */
 function mac(o: MacOpts = {}) {
-  const cwd = o.cwd ?? '/w/shop', runDir = o.runDir ?? mkdtempSync(join(tmpdir(), 'office-run-'));
+  const cwd = o.cwd ?? '/w/shop', runDir = o.runDir ?? mkdtempSync(join(tmpdir(), 'deck-run-'));
   const fs = fakeFs(['/A/Cursor.app', `${HOME}/Applications/iTerm.app`, '/S/Utilities/Terminal.app', '/Other/Cursor.app', '/Applications/Cursor 2.app', `${HOME}/Downloads/Cursor.app`, `${HOME}/.Trash/Cursor.app`, cwd,
     ...(o.ext === false ? [] : [`${EXT}/anthropic.claude-code-2.1.329-darwin-arm64`])], { [`${EXT}/.obsolete`]: '{"anthropic.claude-code-2.1.1-darwin-arm64":true}', [`${EXT}/anthropic.claude-code-2.1.1-darwin-arm64/x`]: '' });
   const { exec, calls } = fakeExec({ '/A/Cursor.app': 'com.example.NotCursor', [`${HOME}/Applications/iTerm.app`]: 'com.googlecode.iterm2', '/S/Utilities/Terminal.app': 'com.apple.Terminal' },
@@ -42,7 +42,7 @@ function mac(o: MacOpts = {}) {
   const sleeps: number[] = [], later: Array<[() => void, number]> = [];
   const op = new SessionOpener({ platform: 'darwin', home: HOME, appDirs: ['/A', `${HOME}/Applications`, '/S/Utilities'], fs, exec, sleep: async (ms) => { sleeps.push(ms); }, claude: () => CLAUDE, now: () => NOW, runDir,
     historyRoot: `${HOME}/.claude/projects`, later: (fn, ms) => { later.push([fn, ms]); },
-    env: { HOME, USER: 'me', PATH: '/x/bin', CLAUDECODE: '1', CLAUDE_CODE_SESSION_ID: 'abc', OFFICE_RUN_DIR: '/r', ANTHROPIC_API_KEY: 'sk-ant-secret', NODE_OPTIONS: '--require x' },
+    env: { HOME, USER: 'me', PATH: '/x/bin', CLAUDECODE: '1', CLAUDE_CODE_SESSION_ID: 'abc', DECK_RUN_DIR: '/r', ANTHROPIC_API_KEY: 'sk-ant-secret', NODE_OPTIONS: '--require x' },
     locate: async (sid) => ([SID, SID2].includes(sid) ? { cwd, project: '/w/shop', folder: folderOf(cwd), mtimeMs: NOW - 3_600_000, ...o.at } : null), isLive: () => !!o.live, ...o });
   return { op, calls, sleeps, later, runDir, get launches() { return calls.filter((c) => c.bin === '/usr/bin/osascript' || c.bin === '/usr/bin/open'); } };
 }
@@ -67,7 +67,7 @@ describe('SessionOpener detection', () => {
     expect(await op.openers()).toEqual({ openers: [{ id: 'windows-terminal', label: 'Windows Terminal', kind: 'terminal', resumes: true }, { id: 'cursor', label: 'Cursor', kind: 'editor', resumes: true }] });
     expect(await new SessionOpener({ platform: 'linux', locate: async () => null }).openers()).toEqual({ openers: [], reason: expect.stringContaining('macOS') });
     const { op: d, calls } = mac({ demo: true });
-    expect(await d.openers()).toEqual({ openers: [], reason: expect.stringContaining('demo') });
+    expect(await d.openers()).toEqual({ openers: [], reason: expect.stringContaining('Demo mode') });
     expect(await d.open({ sid: SID, app: 'iterm' })).toMatchObject({ status: 409, body: { error: 'unavailable' } }); expect(calls).toEqual([]);
     expect(await new SessionOpener({ platform: 'darwin', fs: fakeFs([]), appDirs: [], locate: async () => null }).openers()).toEqual({ openers: [], reason: expect.any(String) }); // vitest: no real exec
   });
@@ -79,7 +79,7 @@ describe('resume script', () => {
     expect(resumeScript('/w/it\'s', '/opt/c laude', SID, '/cfg/x')).toBe(`#!/bin/sh\ncd -- '/w/it'\\''s' || exit 1\nexport CLAUDE_CONFIG_DIR='/cfg/x'\nexec '/opt/c laude' --resume ${SID}\n`);
     expect(shellQuote("it's")).toBe(`'it'\\''s'`);
     if (process.platform === 'win32') return;
-    const base = mkdtempSync(join(tmpdir(), 'office-q-')), nasty = join(base, `a\\'b "c" $(echo INJECTED) \`echo TICK\` !! ; & * ~`); mkdirSync(nasty);
+    const base = mkdtempSync(join(tmpdir(), 'deck-q-')), nasty = join(base, `a\\'b "c" $(echo INJECTED) \`echo TICK\` !! ; & * ~`); mkdirSync(nasty);
     const fake = join(base, 'fake claude.sh'); writeFileSync(fake, '#!/bin/sh\nprintf \'%s|\' "$(pwd -P)" "$@"\n'); chmodSync(fake, 0o755); // stands in for claude: prints where it runs and its args
     const s = join(base, 'resume.sh'); writeFileSync(s, resumeScript(nasty, fake, SID, '/cfg/x'));
     expect(execFileSync('/bin/sh', [s], { encoding: 'utf8' })).toBe(`${realpathSync(nasty)}|--resume|${SID}|`);
@@ -103,11 +103,11 @@ describe('SessionOpener launching (macOS)', () => {
     expect(statSync(join(m.runDir, 'resume')).mode & 0o777).toBe(0o700);
     for (const l of [...ITERM_SCRIPT, ...TERMINAL_SCRIPT]) expect(l).not.toMatch(/rm -rf|\/w\/|resume\//); // data never reaches the AppleScript source
     expect(ITERM_SCRIPT).toContain('set wasRunning to application id "com.googlecode.iterm2" is running'); expect(TERMINAL_SCRIPT).toContain('do script cmd in window 1');
-    expect(it1.env).toEqual({ PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME, USER: 'me' }); // no CLAUDECODE / CLAUDE_CODE_* / OFFICE_* / NODE_OPTIONS / keys
+    expect(it1.env).toEqual({ PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME, USER: 'me' }); // no CLAUDECODE / CLAUDE_CODE_* / DECK_* / OFFICE_* / NODE_OPTIONS / keys
     expect(m.later.map(([, ms]) => ms)).toEqual([120_000, 120_000]);
     expect(scripts(m.runDir)).toHaveLength(2); for (const [fn] of m.later) fn(); await new Promise((r) => setTimeout(r, 20)); expect(scripts(m.runDir)).toEqual([]);
   });
-  it('CLAUDE_CONFIG_DIR: a non-default History root or the office env is passed on in the script only', async () => {
+  it('CLAUDE_CONFIG_DIR: a non-default History root or the Claude Deck env is passed on in the script only', async () => {
     const line = async (o: MacOpts) => { const m = mac(o); await m.op.open({ sid: SID, app: 'iterm' }); return readFileSync(/'(.+)'/.exec(m.launches[0].args.at(-1)!)![1], 'utf8'); };
     expect(await line({})).not.toContain('CLAUDE_CONFIG_DIR');
     expect(await line({ historyRoot: '/cfg/alt/projects' })).toContain("export CLAUDE_CONFIG_DIR='/cfg/alt'\n");
@@ -118,17 +118,17 @@ describe('SessionOpener launching (macOS)', () => {
     const denied = await run(() => ({ code: 1, stdout: '', stderr: '0:120: execution error: Not authorized to send Apple events to iTerm. (-1743)' }));
     expect(denied).toEqual({ r: { status: 409, body: { error: 'not-authorized', reason: expect.stringContaining('Privacy & Security → Automation') } }, left: [] });
     const pending = await run(() => ({ code: null, stdout: '', stderr: '', error: 'timed out' }));
-    expect(pending).toEqual({ r: { status: 409, body: { error: 'automation-pending', reason: 'macOS đang hỏi quyền cho phép điều khiển iTerm — bấm OK rồi thử lại.' } }, left: [] });
+    expect(pending).toEqual({ r: { status: 409, body: { error: 'automation-pending', reason: 'macOS is asking for permission to control iTerm. Click OK, then try again.' } }, left: [] });
     const broken = await run(() => ({ code: 1, stdout: '', stderr: 'execution error: boom sk-abcdefghijklmnop1234 (-2700)' }));
     expect(broken.r).toMatchObject({ status: 500, body: { error: 'launch-failed' } }); expect(JSON.stringify(broken)).not.toContain('sk-abcdefghijklmnop1234'); expect(broken.left).toEqual([]);
     expect(OPENER_CAP.osaMs).toBe(60_000);
   });
   it('refuses a run dir that is unsafe to type, or missing; sweeps scripts older than 10 min', async () => {
-    const bad = mkdtempSync(join(tmpdir(), "office-it's-")), m = mac({ runDir: bad });
+    const bad = mkdtempSync(join(tmpdir(), "deck-it's-")), m = mac({ runDir: bad });
     expect(await m.op.open({ sid: SID, app: 'iterm' })).toMatchObject({ status: 500, body: { error: 'unsafe-path' } }); expect(m.launches).toEqual([]); expect(scripts(bad)).toEqual([]);
     expect(await mac({ runDir: '' }).op.open({ sid: SID, app: 'terminal' })).toMatchObject({ status: 500, body: { error: 'unsafe-path' } });
     expect(SAFE_SCRIPT_PATH.test('/Users/CrossianLLC/1.ManhST/1.SRC/mine/claude-office/claude-office/orchestrator/.run/resume/0a1b2c3d4e5f.sh')).toBe(true);
-    const runDir = mkdtempSync(join(tmpdir(), 'office-run-')), dir = join(runDir, 'resume'), old = (Date.now() - 11 * 60_000) / 1000; mkdirSync(dir);
+    const runDir = mkdtempSync(join(tmpdir(), 'deck-run-')), dir = join(runDir, 'resume'), old = (Date.now() - 11 * 60_000) / 1000; mkdirSync(dir);
     for (const n of ['old1.sh', 'new1.sh', 'Keep.sh', 'x.txt']) writeFileSync(join(dir, n), '');
     for (const n of ['old1.sh', 'Keep.sh', 'x.txt']) utimesSync(join(dir, n), old, old);
     const s = new SessionOpener({ platform: 'darwin', runDir, locate: async () => null, exec: fakeExec({}).exec }); await s.sweep();
@@ -154,7 +154,7 @@ describe('SessionOpener launching (Windows)', () => {
   const win = (o: { claude?: string; spawnOk?: (n: number) => boolean; cwd?: string } = {}) => {
     const dir = o.cwd ?? cwd, fs = fakeFs([dir, 'C:\\Users\\me\\.cursor\\extensions\\anthropic.claude-code-2.1.329-win32-x64'], { [wt]: '', [cur]: '' }), launched: Array<[string, string[], NodeJS.ProcessEnv]> = [];
     const op = new SessionOpener({ platform: 'win32', home: 'C:\\Users\\me', historyRoot: 'D:\\cfg\\projects', fs, exec: fakeExec({}).exec, sleep: async () => {}, now: () => NOW, claude: () => o.claude ?? 'C:\\Program Files\\claude\\claude.exe',
-      env: { LOCALAPPDATA: la, Path: 'C:\\bin', SystemRoot: 'C:\\Windows', ComSpec: 'C:\\Windows\\system32\\cmd.exe', CLAUDECODE: '1', OFFICE_RUN_DIR: 'x', ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '--require x', VSCODE_PID: '1', ANTHROPIC_API_KEY: 'k' },
+      env: { LOCALAPPDATA: la, Path: 'C:\\bin', SystemRoot: 'C:\\Windows', ComSpec: 'C:\\Windows\\system32\\cmd.exe', CLAUDECODE: '1', DECK_RUN_DIR: 'x', ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '--require x', VSCODE_PID: '1', ANTHROPIC_API_KEY: 'k' },
       launch: async (bin, args, env) => { launched.push([bin, args, env]); return o.spawnOk ? o.spawnOk(launched.length) : true; },
       locate: async () => ({ cwd: dir, project: dir, folder: folderOf(dir), mtimeMs: 0 }) });
     return { op, launched };
@@ -189,19 +189,19 @@ describe('SessionOpener refusals', () => {
     for (const sid of ['', 'x', '../etc', `${SID}x`, 5]) expect(await op.open({ sid, app: 'iterm' })).toMatchObject({ status: 400, body: { error: 'bad-sid' } });
     expect(await op.open({ sid: SID, app: 'iterm', confirm: 'yes' })).toMatchObject({ status: 400, body: { error: 'bad-confirm' } });
     expect(await op.open({ sid: '99999999-2222-4333-8444-555555555555', app: 'iterm' })).toEqual({ status: 404, body: { error: 'not-found', reason: expect.any(String) } });
-    expect(await mac({ at: { cwd: undefined } }).op.open({ sid: SID, app: 'iterm' })).toEqual({ status: 409, body: { error: 'no-project', reason: expect.stringContaining('không ghi lại') } });
+    expect(await mac({ at: { cwd: undefined } }).op.open({ sid: SID, app: 'iterm' })).toEqual({ status: 409, body: { error: 'no-project', reason: expect.stringContaining('did not record a project folder') } });
     for (const cwd of ['relative/dir', '/w/a\nb', '/w/a\u0085b', '/w/a\u2028b', '/w/a\u009bb', `/${'x'.repeat(4100)}`])
       expect(await mac({ cwd, at: { folder: 'x'.repeat(201) } }).op.open({ sid: SID, app: 'iterm' })).toMatchObject({ status: 400, body: { error: 'bad-project' } });
-    expect(await mac({ at: { folder: '-w-other' } }).op.open({ sid: SID, app: 'iterm' })).toEqual({ status: 400, body: { error: 'bad-project', reason: expect.stringContaining('không khớp') } });
+    expect(await mac({ at: { folder: '-w-other' } }).op.open({ sid: SID, app: 'iterm' })).toEqual({ status: 400, body: { error: 'bad-project', reason: expect.stringContaining('does not match') } });
     expect(await mac({ at: { folder: 'y'.repeat(201) } }).op.open({ sid: SID, app: 'iterm' })).toMatchObject({ status: 200 }); // long folder names are hashed by Claude Code: not compared
     expect(await mac({ at: { cwd: '/w/deleted', folder: '-w-deleted' } }).op.open({ sid: SID, app: 'iterm' })).toEqual({ status: 409, body: { error: 'no-project', reason: expect.stringContaining('/w/shop') } });
     const ms = OPENER_CAP.statMs; OPENER_CAP.statMs = 20;
-    try { const hung = mac(); (hung.op as any).fs = { ...(hung.op as any).fs, kind: () => new Promise(() => {}) }; expect(await hung.op.open({ sid: SID, app: 'iterm' })).toMatchObject({ status: 409, body: { error: 'no-project', reason: expect.stringContaining('không phản hồi') } }); }
+    try { const hung = mac(); (hung.op as any).fs = { ...(hung.op as any).fs, kind: () => new Promise(() => {}) }; expect(await hung.op.open({ sid: SID, app: 'iterm' })).toMatchObject({ status: 409, body: { error: 'no-project', reason: expect.stringContaining('not responding') } }); }
     finally { OPENER_CAP.statMs = ms; }
     for (const app of ['vscode', 'windows-terminal', 'xterm', undefined]) expect(await op.open({ sid: SID, app })).toMatchObject({ status: 400, body: { error: 'unknown-app' } });
     expect(m.launches).toEqual([]);
   });
-  it('confirm-required when live in the office, opened here <2 min ago, or the transcript changed <2 min ago (distinct reasons); one launch at a time', async () => {
+  it('confirm-required when live in Claude Deck, opened here <2 min ago, or the transcript changed <2 min ago (distinct reasons); one launch at a time', async () => {
     const reasons: string[] = [];
     const live = mac({ live: true }), r1 = await live.op.open({ sid: SID, app: 'iterm' });
     expect(r1).toMatchObject({ status: 409, body: { error: 'confirm-required' } }); reasons.push((r1.body as any).reason);

@@ -1,29 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentUI, MessageUI } from '../src/reducer';
-import { bubbleFor, idleLine, idlePlans, lookFor, vpBubble, newFlights, roomWalls, subtitleFor, vpChair, vpDesk, vpGoal, vpHome, vpObstacles, vpPlan, vpStatus, vpVisit, ROOM,
-  BBQ_SPOTS, BIEN, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, FURNITURE, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, ROMANCE_CENTERS, VP_BOUNDS } from '../src/ref-vanphong/adapter';
-import { chuanHoa, MAU_SAN } from '../src/ref-vanphong/characters';
+import { bubbleFor, idleLine, idlePlans, lookFor, officeBubble, newFlights, roomWalls, subtitleFor, officeChair, officeDesk, officeGoal, officeHome, officeObstacles, officePlan, officeStatus, officeVisit, ROOM,
+  BBQ_SPOTS, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, FURNITURE, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POOL_SPOTS, ROMANCE_CENTERS, OFFICE3D_BOUNDS, FLOOR } from '../src/office3d/adapter';
+import { normalizeLook, PRESET_LOOKS } from '../src/office3d/characters';
 import { blocked, clearLine } from '../src/walk';
 import { BUBBLE_MS, DOOR, allDesks } from '../src/layout';
 
 const ag = (id: string, p: Partial<AgentUI> = {}): AgentUI => ({ id, role: 'coder', name: id, state: 'idle', desk: { x: 0, y: 0 }, tools: [], ...p });
 
-describe('ref-vanphong adapter', () => {
-  it('maps every reducer state to a reference status class', () => {
-    expect(['idle', 'thinking', 'working', 'talking', 'done', 'error'].map((s) => vpStatus(s as AgentUI['state'])))
-      .toEqual(['ranh', 'dang-nghi', 'dang-lam', 'dang-nghe', 'xong', 'loi']);
+describe('office3d adapter', () => {
+  it('maps every reducer state to a status class', () => {
+    expect(['idle', 'thinking', 'working', 'talking', 'done', 'error'].map((s) => officeStatus(s as AgentUI['state'])))
+      .toEqual(['idle', 'thinking', 'working', 'talking', 'done', 'error']);
   });
   it('picks a preset look by role, stable by id for unknown roles', () => {
-    expect(lookFor(ag('a', { role: 'Researcher' }))).toBe(MAU_SAN.nu_01);
-    expect(lookFor(ag('a', { role: 'coder' }))).toBe(MAU_SAN.nam_01);
+    expect(lookFor(ag('a', { role: 'Researcher' }))).toBe(PRESET_LOOKS.female_01);
+    expect(lookFor(ag('a', { role: 'coder' }))).toBe(PRESET_LOOKS.male_01);
     const x = lookFor(ag('zz', { role: 'astronaut' }));
     expect(lookFor(ag('zz', { role: 'astronaut' }))).toBe(x);
-    expect(Object.values(MAU_SAN)).toContain(x);
+    expect(Object.values(PRESET_LOOKS)).toContain(x);
   });
   it('normalises bad appearance data like the reference', () => {
-    const n = chuanHoa({ kieu_toc: 'nope', toc: 'red' });
-    expect(n.kieu_toc).toBe('ngan'); expect(n.gioi).toBe('nu'); expect(n.toc).toBe('#6b5b95'); expect(n.phu).toBe(n.mat);
-    expect(chuanHoa({ kieu_toc: 'nhon' }).gioi).toBe('nam');
+    const n = normalizeLook({ hairStyle: 'nope', hair: 'red' });
+    expect(n.hairStyle).toBe('short'); expect(n.gender).toBe('female'); expect(n.hair).toBe('#6b5b95'); expect(n.accent).toBe(n.eyes);
+    expect(normalizeLook({ hairStyle: 'spiky' }).gender).toBe('male');
   });
   it('bubble: result when done, error when failed, fresh text otherwise, dots while busy', () => {
     const now = 100_000;
@@ -41,27 +41,27 @@ describe('ref-vanphong adapter', () => {
     expect(subtitleFor(ag('a', { state: 'idle' }))).toBe('');
   });
   it('seats face +z behind the desk; home and visit spots are walkable', () => {
-    const d = { x: 2, y: 1 }, [dx, , dz] = vpDesk(d);
-    expect(vpChair(d)).toEqual([dx, 0, dz - 0.62]);
-    const obs = vpObstacles();
+    const d = { x: 2, y: 1 }, [dx, , dz] = officeDesk(d);
+    expect(officeChair(d)).toEqual([dx, 0, dz - 0.62]);
+    const obs = officeObstacles();
     for (const desk of [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 1 }]) {
-      expect(blocked(vpHome(desk)[0], vpHome(desk)[2], obs)).toBe(false);
-      expect(blocked(vpVisit(desk)[0], vpVisit(desk)[2], obs)).toBe(false);
+      expect(blocked(officeHome(desk)[0], officeHome(desk)[2], obs)).toBe(false);
+      expect(blocked(officeVisit(desk)[0], officeVisit(desk)[2], obs)).toBe(false);
     }
   });
   it('agents enter through the room door gap, never through glass', () => {
     const walls = roomWalls();
-    const p = vpPlan(DOOR, vpHome({ x: 2, y: 1 }));
+    const p = officePlan(DOOR, officeHome({ x: 2, y: 1 }));
     for (let i = 1; i < p.length; i++) expect(clearLine(p[i - 1], p[i], walls)).toBe(true);
     expect(p.some(([x, , z]) => Math.abs(x) < ROOM.door / 2 && Math.abs(z - ROOM.z0) < 0.6)).toBe(true);
   });
   it('goal: home facing +z, or the colleague asked until they reply', () => {
     const agents = { a: ag('a'), b: ag('b', { desk: { x: 1, y: 1 } }) };
-    expect(vpGoal(agents.a, agents, [])).toMatchObject({ key: 'home', home: true, face: 0 });
+    expect(officeGoal(agents.a, agents, [])).toMatchObject({ key: 'home', home: true, face: 0 });
     const ask: MessageUI = { from: 'a', to: 'b', text: 'q', kind: 'ask', ts: 1 };
-    const g = vpGoal(agents.a, agents, [ask]);
-    expect(g).toMatchObject({ key: 'visit:b', home: false }); expect(g.to).toEqual(vpVisit(agents.b.desk));
-    expect(vpGoal(agents.a, agents, [ask, { from: 'b', to: 'a', text: 'r', kind: 'reply', ts: 2 }]).key).toBe('home');
+    const g = officeGoal(agents.a, agents, [ask]);
+    expect(g).toMatchObject({ key: 'visit:b', home: false }); expect(g.to).toEqual(officeVisit(agents.b.desk));
+    expect(officeGoal(agents.a, agents, [ask, { from: 'b', to: 'a', text: 'r', kind: 'reply', ts: 2 }]).key).toBe('home');
   });
   it('flights: only new messages between known, distinct agents', () => {
     const agents = { a: ag('a'), b: ag('b') };
@@ -70,15 +70,15 @@ describe('ref-vanphong adapter', () => {
     expect(newFlights({ agents, messages }, 5).map((m) => m.ts)).toEqual([7]);
   });
   it('pantry and game room: furniture on the floor, every idle spot walkable and reachable without crossing glass or furniture', () => {
-    for (const f of Object.values(FURNITURE)) { expect(f.x - f.hx).toBeGreaterThanOrEqual(BIEN.x0); expect(f.x + f.hx).toBeLessThanOrEqual(BIEN.x1); expect(f.z - f.hz).toBeGreaterThanOrEqual(BIEN.z0); }
-    const obs = vpObstacles(), walls = roomWalls();
+    for (const f of Object.values(FURNITURE)) { expect(f.x - f.hx).toBeGreaterThanOrEqual(FLOOR.x0); expect(f.x + f.hx).toBeLessThanOrEqual(FLOOR.x1); expect(f.z - f.hz).toBeGreaterThanOrEqual(FLOOR.z0); }
+    const obs = officeObstacles(), walls = roomWalls();
     const pts = [...COFFEE_SPOTS.map((s) => s.to), ...POOL_SPOTS.map((s) => s.to), ...MASSAGE_SPOTS.map((s) => s.to), ...BBQ_SPOTS.map((s) => s.to),
       ...([[CHAT_SPOTS, PAIR_GAP.chat], [FIGHT_SPOTS, PAIR_GAP.fight], [ROMANCE_CENTERS, PAIR_GAP.romance]] as const).flatMap(([cs, d]) => cs.flatMap((c) => [[c[0] - d, 0, c[2]], [c[0] + d, 0, c[2]]] as [number, number, number][]))];
     for (const p of pts) {
       expect(blocked(p[0], p[2], obs), String(p)).toBe(false);
-      expect(p[0] > VP_BOUNDS.x0 && p[0] < VP_BOUNDS.x1 && p[2] > VP_BOUNDS.z0 && p[2] < VP_BOUNDS.z1, String(p)).toBe(true);
-      for (const from of [vpHome({ x: 0, y: 0 }), vpHome({ x: 2, y: 1 })]) {
-        const path = vpPlan(from, p);
+      expect(p[0] > OFFICE3D_BOUNDS.x0 && p[0] < OFFICE3D_BOUNDS.x1 && p[2] > OFFICE3D_BOUNDS.z0 && p[2] < OFFICE3D_BOUNDS.z1, String(p)).toBe(true);
+      for (const from of [officeHome({ x: 0, y: 0 }), officeHome({ x: 2, y: 1 })]) {
+        const path = officePlan(from, p);
         expect(path.at(-1)).toEqual(p);
         for (let i = 1; i < path.length; i++) expect(clearLine(path[i - 1], path[i], walls), `${from} -> ${p}`).toBe(true);
       }
@@ -97,7 +97,7 @@ describe('ref-vanphong adapter', () => {
       }
       const spots = Object.values(plans).map((p) => p.to.join()); expect(new Set(spots).size).toBe(spots.length); // nobody shares a spot
     }
-    expect([...kinds].sort()).toEqual(['atm', 'bbq', 'bia', 'chat', 'coffee', 'fight', 'gate', 'gym', 'massage', 'pod', 'pool', 'print', 'romance', 'smoke']);
+    expect([...kinds].sort()).toEqual(['atm', 'bbq', 'beer', 'chat', 'coffee', 'fight', 'gate', 'gym', 'massage', 'pod', 'pool', 'print', 'romance', 'smoke']);
     const busy = { ...agents, a0: ag('a0', { state: 'working' }) };
     for (let slot = 0; slot < 20; slot++) expect(idlePlans(busy, order, [], slot * IDLE_SLOT_MS)['a0']).toBeUndefined();
     const all = (t: number) => Object.fromEntries(order.map((id) => [id, t]));
@@ -108,19 +108,19 @@ describe('ref-vanphong adapter', () => {
     expect(wandering(now, all(cut + 1))).toBe(0); // free after the cutoff: stays put for the rest of the slot
     expect(wandering(now + IDLE_SLOT_MS - 2000, all(cut + 1))).toBe(0);
     const plan = { kind: 'coffee' as const, key: 'coffee:1', ...COFFEE_SPOTS[0] };
-    expect(vpGoal(busy.a0, busy, [], plan).key).toBe('home');
-    expect(vpGoal(agents.a0, agents, [], plan)).toMatchObject({ key: 'coffee:1', home: false, to: COFFEE_SPOTS[0].to });
+    expect(officeGoal(busy.a0, busy, [], plan).key).toBe('home');
+    expect(officeGoal(agents.a0, agents, [], plan)).toMatchObject({ key: 'coffee:1', home: false, to: COFFEE_SPOTS[0].to });
   });
-  it('vpBubble: arrived at an idle activity shows only small talk (never the done result); otherwise bubbleFor', () => {
+  it('officeBubble: arrived at an idle activity shows only small talk (never the done result); otherwise bubbleFor', () => {
     const order = allDesks().map((_, i) => `a${i}`), now0 = 5 * IDLE_SLOT_MS;
     const agents = Object.fromEntries(order.map((id, i) => [id, ag(id, { desk: allDesks()[i], state: 'done', result: 'RESULT' })]));
     const plans = idlePlans(agents, order, [], now0); expect(Object.keys(plans).length).toBeGreaterThan(0);
     for (const [id, p] of Object.entries(plans)) for (let t = now0; t < now0 + IDLE_SLOT_MS; t += 400) {
-      const b = vpBubble(agents[id], p, true, t), line = idleLine(id, p, t);
+      const b = officeBubble(agents[id], p, true, t), line = idleLine(id, p, t);
       expect(b).toEqual(line ? { text: line, show: true, dots: false } : { text: '', show: false, dots: false });
-      expect(vpBubble(agents[id], p, false, t)).toEqual(bubbleFor(agents[id], t)); // at the desk or walking: the result
+      expect(officeBubble(agents[id], p, false, t)).toEqual(bubbleFor(agents[id], t)); // at the desk or walking: the result
     }
-    expect(vpBubble(agents.a0, undefined, true, now0).text).toBe('RESULT');
+    expect(officeBubble(agents.a0, undefined, true, now0).text).toBe('RESULT');
   });
   it('idle lines: a pair takes turns, solo activities speak only sometimes', () => {
     const a = { kind: 'chat' as const, key: 'chat:1:x', to: [0, 0, 0] as [number, number, number], face: 0, partner: 'y', first: true }, b = { ...a, partner: 'x', first: false };

@@ -1,20 +1,20 @@
 import { useState } from 'react';
-import type { OfficeState } from './reducer';
+import type { DeckState } from './reducer';
 import type { SessionView } from './types';
 import { STATE_COLORS } from './layout';
 import { STATE_KEY, STATE_LABEL, sessionDumpRows } from './sessionView';
 import { loadCollapse, setCollapse } from './collapse';
 import { IconBranch, IconTerminal, IconTool } from './icons';
 
-/** Lists every active session the `office` mod reported; selected session shows a CLI-like field dump (no agent MD bodies). */
-export function SessionPanel({ s, selected, onSelect, now }: { s: OfficeState; selected?: string; onSelect: (sid: string) => void; now: number }) {
+/** Lists every active session the `deck` mod reported; selected session shows a CLI-like field dump (no agent MD bodies). */
+export function SessionPanel({ s, selected, onSelect, now }: { s: DeckState; selected?: string; onSelect: (sid: string) => void; now: number }) {
   const cur = s.sessions.find((x) => x.sid === selected);
   const [collapsed, setCollapsed] = useState(() => loadCollapse().session);
   const toggle = () => setCollapsed(setCollapse('session', !collapsed).session);
   return (
     <section className="sessions" data-testid="sessions">
       <h2>Sessions <small>{s.sessions.length}</small></h2>
-      {!s.sessions.length && <div className="muted">No active Claude Code sessions. Install the <code>office</code> mod and open a session.</div>}
+      {!s.sessions.length && <div className="muted">No active Claude Code sessions. Install the <code>deck</code> mod and open a session.</div>}
       <ul>{s.sessions.map((x) => (
         <li key={x.sid}><button className={`sess ${x.sid === selected ? 'sel' : ''}`} onClick={() => onSelect(x.sid)} data-testid={`session-${x.sid}`} aria-pressed={x.sid === selected}>
           <i className="sdot" style={{ background: STATE_COLORS[STATE_KEY[x.state]] }} /><IconTerminal />

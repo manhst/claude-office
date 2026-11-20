@@ -13,7 +13,7 @@ describe('fold', () => {
     expect(fold('Lịch Sử')).toBe('lich su');
     expect(fold('Đơn')).toBe('don');
     expect(fold('đường ĐI')).toBe('duong di');
-    for (const s of ['Lịch Sử', 'Văn phòng ảo', 'ÀÁÂÃ èéêë', 'naïve café', '😀 emoji ok', 'İstanbul']) expect(fold(s)).toHaveLength(s.length);
+    for (const s of ['Lịch Sử', 'Claude Deck', 'ÀÁÂÃ èéêë', 'naïve café', '😀 emoji ok', 'İstanbul']) expect(fold(s)).toHaveLength(s.length);
     expect(fold('npm TEST --Run')).toBe('npm test --run');
   });
   it('matches the per-unit rule from the contract', () => {

@@ -1,5 +1,5 @@
 /** Authenticated GET /claude-config and POST /claude-config/mcp/* (Bearer run token in the Authorization header only, never in a URL). */
-import { officeHttpBase } from './settingsApi';
+import { deckHttpBase } from './settingsApi';
 import type { ClaudeConfigView, McpDeleteRequest, McpErrorResponse, McpRevealRequest, McpRevealResponse, McpSaveRequest, McpTestRequest, McpTestResult, McpWriteResponse } from './types';
 
 /** HTTP failure with the server's McpErrorResponse (`error`, `reason`, `backup`); status 0 = network error, -1 = response was not JSON. */
@@ -14,7 +14,7 @@ async function call<T>(token: string, path: string, body?: unknown, signal?: Abo
   const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: 'application/json' };
   const init: RequestInit = body === undefined ? { headers, cache: 'no-store', signal } : { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal };
   let r: Response;
-  try { r = await fetch(`${officeHttpBase()}${path}`, init); } catch (e) { if (signal?.aborted) throw e; throw new ConfigHttpError(0); }
+  try { r = await fetch(`${deckHttpBase()}${path}`, init); } catch (e) { if (signal?.aborted) throw e; throw new ConfigHttpError(0); }
   if (!r.ok) { const j = await r.json().catch(() => null) as Record<string, unknown> | null; throw new ConfigHttpError(r.status, { error: str(j?.error), reason: str(j?.reason), backup: str(j?.backup) }); }
   try { return (await r.json()) as T; } catch (e) { if (signal?.aborted) throw e; throw new ConfigHttpError(-1); }
 }

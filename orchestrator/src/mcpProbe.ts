@@ -4,9 +4,9 @@ import { delimiter, join } from 'node:path';
 import { redactText } from './redact.js';
 import type { McpTestResult } from './types.js';
 
-/** Dirs searched after PATH for commands (the office may run with a GUI app's short PATH). */
+/** Dirs searched after PATH for commands (Claude Deck may run with a GUI app's short PATH). */
 export const EXTRA_BIN_DIRS = () => [join(homedir(), '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
-const INIT = { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-office', version: '1.0.0' } };
+const INIT = { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-deck', version: '1.0.0' } };
 const obj = (v: unknown): Record<string, any> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as any) : {});
 const str = (v: unknown) => (typeof v === 'string' && v ? redactText(v, 200) : undefined);
 const parse = (s: string): any => { try { return JSON.parse(s); } catch { return undefined; } };
@@ -29,7 +29,7 @@ class Dialog {
   private list(cursor?: string) { return { jsonrpc: '2.0', id: this.id++, method: 'tools/list', params: cursor ? { cursor } : {} }; }
   private end(r: Done): { done: Done } { return { done: { ...r, ...(this.server ? { server: this.server } : {}), ...(this.ready ? { tools: this.tools } : {}) } }; }
   feed(m: any): { send: any[] } | { done: Done } {
-    if (typeof m?.method === 'string') return { send: m.id !== undefined ? [{ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'not supported by the claude-office test' } }] : [] };
+    if (typeof m?.method === 'string') return { send: m.id !== undefined ? [{ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'not supported by the claude-deck test' } }] : [] };
     const e = m?.error ? redactText(String(m.error.message ?? JSON.stringify(m.error)), 300) : '';
     if (m?.id === 1) {
       if (e || !m.result) return this.end({ ok: false, error: `initialize failed: ${e || 'no result'}` });

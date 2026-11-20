@@ -3,7 +3,7 @@ import type { PromptAck, SessionView } from './types';
 import { capabilityNote, composerBusy, statusNote } from './composerCopy';
 import { EFFORT_CHOICES, MODEL_CHOICES, newNonce, postPrompt } from './submitPrompt';
 
-const PICK_KEY = 'vp-prompt-pick';
+const PICK_KEY = 'deck.promptPick';
 function loadPick(): { model: string; effort: string } {
   try {
     const j = JSON.parse(localStorage.getItem(PICK_KEY) ?? '{}');

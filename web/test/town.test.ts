@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { LINES } from '../src/town/dialogue';
 import { agentPartnerId, BOSS_ID, BOSS_LOOK, BOSS_NAME, forceBoss, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, menuEnt, step, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
-import { ITOPS_SPOT, inPond, pondCenter, CAFE, TRADA, BUILDING, ATM, ATM_SPOTS, GATE, PRINT, ROADS, crossesBuilding, waypoint, toWorld, fromWorld, PX, type Box } from '../src/town/map';
-import { BIEN } from '../src/ref-vanphong/adapter';
+import { ITOPS_SPOT, inPond, pondCenter, CAFE, TEA_STALL, BUILDING, ATM, ATM_SPOTS, GATE, PRINT, ROADS, crossesBuilding, waypoint, toWorld, fromWorld, PX, type Box } from '../src/town/map';
+import { FLOOR } from '../src/office3d/adapter';
 import { loadLooks, setIdent, agentKey, setCurrentLooks, currentName, currentLook } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
-import { lookFor } from '../src/ref-vanphong/adapter';
+import { lookFor } from '../src/office3d/adapter';
 const seq = (xs: number[]) => { let i = 0; return () => xs[i++ % xs.length]; };
 const run = (w: World, from: number, ms: number, r: () => number, it?: any, prey: AgentPrey[] = []) => { for (let t = from; t <= from + ms; t += 200) w = step(w, t, r, it, prey); return w; };
 const ent = (w: World, id: string) => w.ents.find((e) => e.id === id)!;
@@ -49,7 +49,7 @@ describe('town sim', () => {
     w = run(w, 3200, 20000, seq([0.95]));
     expect(ent(w, 'npc-1').act).not.toBe('gone');
   });
-  it('dog barks, cat picks fights with the dog, NPCs go to the cafe / trà đá', () => {
+  it('dog barks, cat picks fights with the dog, NPCs go to the cafe / iced tea stall', () => {
     const w0 = initialWorld(0);
     const w = step({ ...w0, t: 0 }, 2000, seq([0.1]));
     expect(ent(w, 'dog').act).toBe('bark'); expect(LINES.dogBark).toContain(ent(w, 'dog').say);
@@ -57,10 +57,10 @@ describe('town sim', () => {
     const npc = ent(w, 'npc-1'); expect(npc.next).toBe('drink');
     expect(npc.tx).toBeGreaterThan(CAFE.x); expect(npc.ty).toBeLessThan(CAFE.y + CAFE.h);
     const w2 = step({ ...w0, t: 0 }, 2000, seq([0.3]));
-    expect(ent(w2, 'npc-1').next).toBe('beer'); expect(ent(w2, 'npc-1').tx).toBeGreaterThan(TRADA.x - 20);
+    expect(ent(w2, 'npc-1').next).toBe('tea'); expect(ent(w2, 'npc-1').tx).toBeGreaterThan(TEA_STALL.x - 20);
     let f = w, fought = false; for (let t = 2200; t < 10000; t += 200) { f = step(f, t, seq([0.99])); fought ||= ent(f, 'dog').act === 'fight' && ent(f, 'cat').act === 'fight'; }
     expect(fought).toBe(true);
-    expect(inPond(pondCenter())).toBe(true); expect(toWorld(BUILDING)).toEqual([BIEN.x0, BIEN.z0]); expect(toWorld({ x: BUILDING.x + BUILDING.w, y: BUILDING.y + BUILDING.h })).toEqual([BIEN.x1, BIEN.z1]);
+    expect(inPond(pondCenter())).toBe(true); expect(toWorld(BUILDING)).toEqual([FLOOR.x0, FLOOR.z0]); expect(toWorld({ x: BUILDING.x + BUILDING.w, y: BUILDING.y + BUILDING.h })).toEqual([FLOOR.x1, FLOOR.z1]);
     const p = fromWorld(3, -2); expect(toWorld(p)[0]).toBeCloseTo(3); expect(toWorld(p)[1]).toBeCloseTo(-2);
   });
 });
@@ -190,8 +190,8 @@ describe('side characters walk around the building', () => {
     expect(waypoint({ x: 1400, y: 300 }, { x: 1500, y: 600 })).toEqual({ x: 1500, y: 600 });
   });
 });
-describe('visiting Sếp', () => {
-  it('menuEnt includes the visiting boss even though initialWorld has no sếp', () => {
+describe('visiting boss', () => {
+  it('menuEnt includes the visiting boss even though initialWorld has no boss', () => {
     expect(initialWorld(0).ents.find((e) => e.kind === 'boss' || e.id === BOSS_ID)).toBeUndefined();
     expect(menuEnt(BOSS_ID)).toEqual({ name: BOSS_NAME, look: BOSS_LOOK });
     expect(menuEnt('npc-1')?.name).toBe('Tèo');
@@ -205,19 +205,19 @@ describe('visiting Sếp', () => {
     expect(w.ents.find((e) => e.kind === 'boss')).toBeUndefined();
     expect(w.bossUntil).toBeUndefined();
   });
-  it('throwing Sếp uses the pond fall, then leaves with no ghost, duplicate, or stuck visit', () => {
+  it('throwing the boss uses the pond fall, then leaves with no ghost, duplicate, or stuck visit', () => {
     let w = forceBoss(initialWorld(0), 1000);
     w = throwIntoPond(w, BOSS_ID, 1000);
     expect(ent(w, BOSS_ID).act).toBe('fall');
     expect(ent(w, BOSS_ID).tx).toBe(pondCenter().x);
-    w = step(w, 1200, () => 0.001); // would spawn a visit if the falling sếp were ignored
+    w = step(w, 1200, () => 0.001); // would spawn a visit if the falling boss were ignored
     expect(w.ents.filter((e) => e.kind === 'boss')).toHaveLength(1);
     expect(ent(w, BOSS_ID).act).toBe('fall');
     w = run(w, 1200, 10_000, () => 0.5);
     expect(w.ents.find((e) => e.kind === 'boss')).toBeUndefined();
     expect(w.bossUntil).toBeUndefined();
   });
-  it('an expired visit does not yank Sếp out of the pond animation or spawn a second sếp', () => {
+  it('an expired visit does not yank the boss out of the pond animation or spawn a second boss', () => {
     let w = forceBoss(initialWorld(0), 1000);
     w = throwIntoPond(w, BOSS_ID, 1000);
     w = { ...w, bossUntil: 1000 };
@@ -231,23 +231,23 @@ describe('visiting Sếp', () => {
 });
 describe('names and avatars (Phúc presets)', () => {
   it('stores name + preset id, rejects junk', () => {
-    const store = { getItem: () => JSON.stringify({ 'agent:coder': { name: ' Hùng ', look: 'nam_03' }, x: { look: '<svg onload=1>' }, y: 5 }) };
-    expect(loadLooks(store)).toEqual({ 'agent:coder': { name: 'Hùng', look: 'nam_03' } });
+    const store = { getItem: () => JSON.stringify({ 'agent:coder': { name: ' Hùng ', look: 'male_03' }, x: { look: '<svg onload=1>' }, y: 5 }) };
+    expect(loadLooks(store)).toEqual({ 'agent:coder': { name: 'Hùng', look: 'male_03' } });
     expect(setIdent({}, 'k', { name: '', look: 'bad' })).toEqual({});
     expect(agentKey({ name: 'coder' })).toBe('agent:coder');
     const k = `npc:${BOSS_ID}`;
-    const saved = setIdent({}, k, { name: ' Sếp Lớn ', look: 'nam_07' });
-    expect(saved[k]).toEqual({ name: 'Sếp Lớn', look: 'nam_07' });
+    const saved = setIdent({}, k, { name: ' Big Boss ', look: 'male_07' });
+    expect(saved[k]).toEqual({ name: 'Big Boss', look: 'male_07' });
     setCurrentLooks(saved);
-    expect(currentName(k)).toBe('Sếp Lớn');
-    expect(currentLook(k)).toBe('nam_07');
+    expect(currentName(k)).toBe('Big Boss');
+    expect(currentLook(k)).toBe('male_07');
     setCurrentLooks({});
   });
-  it('renders 20 presets as cropped SVG; Vanphong 3D picks the chosen preset', () => {
+  it('renders 20 presets as cropped SVG; Office 3D picks the chosen preset', () => {
     expect(PRESETS).toHaveLength(20);
-    const svg = chibiSvg('nu_04')!; expect(svg).toMatch(/^<svg class="svg-nv" viewBox="30 8 100 100"/); expect(svg).not.toContain('class="ban"');
-    setCurrentLooks({ 'agent:coder': { look: 'nu_10' } });
-    expect(lookFor({ role: 'coder', id: 'x', name: 'coder' }).toc).toBe('#d6455d');
+    const svg = chibiSvg('female_04')!; expect(svg).toMatch(/^<svg class="svg-avatar" viewBox="30 8 100 100"/); expect(svg).not.toContain('class="desk"');
+    setCurrentLooks({ 'agent:coder': { look: 'female_10' } });
+    expect(lookFor({ role: 'coder', id: 'x', name: 'coder' }).hair).toBe('#d6455d');
     setCurrentLooks({});
   });
 });

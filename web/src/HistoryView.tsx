@@ -29,7 +29,7 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
   const [bmOnly, setBmOnly] = useState(false), [bmErr, setBmErr] = useState<{ sid: string; text: string }>(), [openers, setOpeners] = useState<readonly HistoryOpener[]>([]);
   const bmSeq = useRef(new Map<string, number>()), bmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(bmTimer.current), []);
-  useEffect(() => { // "Mở lại" apps: fetched once when the tab first opens, kept for its lifetime; any failure (old orchestrator…) just hides the button
+  useEffect(() => { // "Reopen" apps: fetched once when the tab first opens, kept for its lifetime; any failure (old orchestrator…) just hides the button
     const ac = new AbortController(); fetchOpeners(token, ac.signal).then((r) => setOpeners(Array.isArray(r.openers) ? r.openers : []), () => {}); return () => ac.abort();
   }, [token]);
   const input = useRef<HTMLInputElement>(null), listEl = useRef<HTMLDivElement>(null), detEl = useRef<HTMLElement>(null), gen = useRef(0), moreAc = useRef<AbortController | undefined>(undefined);
@@ -147,7 +147,7 @@ const Row = memo(function Row({ x, sel, live, terms, now, onPick, onStar, dim, e
 });
 
 /** Memoised (stable props), and the highlighted transcript is memoised on (items, terms): typing, list loads and the app tick don't redo it. */
-const COPIED = { cmd: 'Đã sao chép lệnh', sid: 'Sid copied', 'cmd-fail': 'Không sao chép được: lệnh đã được chọn, bấm ⌘C / Ctrl+C', 'sid-fail': 'Copy failed' } as const;
+const COPIED = { cmd: 'Command copied', sid: 'Sid copied', 'cmd-fail': 'Couldn\'t copy: the command is selected, press ⌘C / Ctrl+C', 'sid-fail': 'Copy failed' } as const;
 const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err, token, openers, active }: { x: HistorySession; det?: DetState; terms: readonly string[]; live: boolean; onRetry: () => void; onStar?: OnStar; err?: string; token: string; openers: readonly HistoryOpener[]; active: boolean }) {
   const m = det?.data?.session ?? x, items = det?.data?.items, cmd = resumeCommand(m.project, m.sid), op = useOpenSession(token, m.sid, openers);
   const [copied, setCopied] = useState<keyof typeof COPIED>();
@@ -193,7 +193,7 @@ const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err,
       <button type="button" className="hist-btn" onClick={() => copy('sid', m.sid)}>Copy sid</button>
       <span role="status" className={copied?.endsWith('fail') ? 'fail' : undefined}>{copied ? COPIED[copied] : ''}</span>
     </div>
-    <div className="hd-cmdrow" title="Lệnh mở lại phiên này trong terminal (luôn dùng được)"><code className="hd-cmd" ref={cmdEl}>{cmd}</code><button type="button" className="hist-btn" onClick={() => copy('cmd', cmd)} data-testid="history-copy-resume">Sao chép</button></div>
+    <div className="hd-cmdrow" title="Command that resumes this session in a terminal (always works)"><code className="hd-cmd" ref={cmdEl}>{cmd}</code><button type="button" className="hist-btn" onClick={() => copy('cmd', cmd)} data-testid="history-copy-resume">Copy</button></div>
     {shOnlyPath(m.project) ? <p className="muted hd-note" data-testid="history-sh-only">{SH_ONLY_NOTE}</p> : null}
     {det?.data?.truncated ? <p className="muted hd-note">Transcript truncated by the orchestrator: showing {plural(det.data.items.length, 'item')}.</p> : null}
     <div className="hx-scroll" ref={tx} data-testid="history-transcript">

@@ -122,7 +122,7 @@ export function projectOptions(projects: readonly HistoryProject[], current = ''
   for (const p of projects) out.push({ value: p.project, label: `${(n.get(p.projectName) ?? 0) > 1 ? p.project : p.projectName} (${p.sessions})`, title: p.project });
   return out;
 }
-/** Placeholder for a session opened by sid alone (from the "Hiệu suất" tab) until /history/session answers; bytes -1 marks it. */
+/** Placeholder for a session opened by sid alone (from the "Performance" tab) until /history/session answers; bytes -1 marks it. */
 export const ghostSession = (sid: string): HistorySession => ({ sid, project: '', projectName: '', title: '', startedAt: 0, endedAt: 0, prompts: 0, messages: 0, auto: false, subagents: 0, bytes: -1 });
 export const isGhost = (x: HistorySession) => x.bytes < 0;
 /** The selection to keep once a transcript is loaded: a placeholder for that sid becomes the loaded session (same object otherwise). */
@@ -134,37 +134,37 @@ export const GHOST_RETRY_MS = 2000;
 /** Request from another tab to open a sid in History; n changes on every request so the same sid can be opened again. */
 export type OpenRequest = { sid: string; n: number };
 export type MainTab = 'office' | 'history' | 'claude' | 'report';
-export const TAB_KEY = 'office.tab';
+export const TAB_KEY = 'deck.tab';
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 const local = (): Store | undefined => { try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; } };
-/** "Mở lại": last app used (localStorage, best effort). */
-export const OPENER_KEY = 'office.opener';
+/** "Reopen": last app used (localStorage, best effort). */
+export const OPENER_KEY = 'deck.opener';
 export function loadOpener(store: Store | undefined = local()): string | undefined { try { return store?.getItem(OPENER_KEY) ?? undefined; } catch { return undefined; } }
 export function saveOpener(id: string, store: Store | undefined = local()) { try { store?.setItem(OPENER_KEY, id); } catch { /* private mode / quota */ } }
 /** The main button's app: the last one used if it is still offered, else the first. */
 export const pickOpener = (openers: readonly HistoryOpener[], last?: string) => openers.find((o) => o.id === last) ?? openers[0];
 /** Menu hint for an editor without the Claude Code extension (it only opens the folder). */
-export const openerHint = (o: HistoryOpener) => o.kind === 'editor' && !o.resumes ? '(chỉ mở thư mục)' : '';
+export const openerHint = (o: HistoryOpener) => o.kind === 'editor' && !o.resumes ? '(opens the folder only)' : '';
 /** Inline status after POST /history/open succeeded. */
-export const openedText = (r: Pick<HistoryOpenResponse, 'resumed' | 'note'>, label: string) => `${r.resumed ? 'Đã mở trong' : 'Đã mở thư mục trong'} ${label}${r.note ? `. ${r.note}` : ''}`;
+export const openedText = (r: Pick<HistoryOpenResponse, 'resumed' | 'note'>, label: string) => `${r.resumed ? 'Opened in' : 'Opened the folder in'} ${label}${r.note ? `. ${r.note}` : ''}`;
 /** Inline error for a failed open: the server's reason when it gave one (status 0 = network, -1 = not JSON).
  *  409 automation-pending = macOS is showing its Automation prompt (osascript timed out); 409 busy = another launch is running (one at a time). */
 export function openErrorText(status: number, error?: string, reason?: string) {
   if (reason) return reason;
-  if (error === 'automation-pending') return 'macOS đang hỏi quyền cho văn phòng điều khiển ứng dụng: bấm OK trong hộp thoại đó rồi bấm Mở lại.';
-  if (error === 'busy') return 'Đang mở một phiên khác. Thử lại sau giây lát.';
-  if (status === 401 || status === 403) return 'Run token bị từ chối. Mở lại URL trong orchestrator/.run/ui-url.txt.';
-  if (status === 0) return 'Không kết nối được orchestrator.';
-  if (status === -1) return 'Orchestrator trả về dữ liệu không đọc được.';
-  if (!error && (status === 404 || status === 405 || status === 501)) return 'Orchestrator này chưa hỗ trợ “Mở lại”. Khởi động lại nó.';
-  return `Không mở được${error ? `: ${error}` : ` (${status})`}.`;
+  if (error === 'automation-pending') return 'macOS is asking whether Claude Deck may control the app: click OK in that dialog, then click Reopen.';
+  if (error === 'busy') return 'Another session is opening. Try again in a moment.';
+  if (status === 401 || status === 403) return 'Run token rejected. Reopen the URL in orchestrator/.run/ui-url.txt.';
+  if (status === 0) return 'Can\'t reach the orchestrator.';
+  if (status === -1) return 'The orchestrator sent a response that can\'t be read.';
+  if (!error && (status === 404 || status === 405 || status === 501)) return 'This orchestrator doesn\'t support “Reopen” yet. Restart it.';
+  return `Couldn't open${error ? `: ${error}` : ` (${status})`}.`;
 }
 export const isOpenConfirm = (error?: string) => error === 'confirm-required';
 /** A launch still running after this long may be waiting on the macOS Automation prompt: show `permissionHint`. */
 export const OPEN_SLOW_MS = 3000;
-export const permissionHint = (label: string) => `Nếu macOS hỏi quyền điều khiển ${label}, bấm OK.`;
+export const permissionHint = (label: string) => `If macOS asks for permission to control ${label}, click OK.`;
 /** The copyable command is quoted for sh/bash/zsh only: a POSIX path with \ ! ' or a control character (newline…) reads differently in fish & co. */
 export const shOnlyPath = (project: string) => !isWinPath(project) && /[\\!'\x00-\x1f\x7f]/.test(project);
-export const SH_ONLY_NOTE = 'đường dẫn có ký tự đặc biệt — chỉ dùng trong bash/zsh';
+export const SH_ONLY_NOTE = 'the path has special characters: use in bash/zsh only';
 export function loadTab(store: Store | undefined = local()): MainTab { try { const t = store?.getItem(TAB_KEY); return t === 'history' || t === 'claude' || t === 'report' ? t : 'office'; } catch { return 'office'; } }
 export function saveTab(t: MainTab, store: Store | undefined = local()) { try { store?.setItem(TAB_KEY, t); } catch { /* private mode / quota */ } }

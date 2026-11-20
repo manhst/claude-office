@@ -341,7 +341,7 @@ describe('errors and API', () => {
   });
   it('read-only reason: inside a Claude Code session gets the restart advice', () => {
     expect(readOnlyReason({})).toEqual({ text: 'demo mode', inSession: false });
-    expect(readOnlyReason({ error: 'claude CLI not found (install Claude Code or set OFFICE_CLAUDE_BIN)' }).inSession).toBe(false);
+    expect(readOnlyReason({ error: 'claude CLI not found (install Claude Code or set DECK_CLAUDE_BIN)' }).inSession).toBe(false);
     expect(readOnlyReason({ error: 'started inside a Claude Code session (CLAUDECODE=1): the claude CLI refuses config writes' }).inSession).toBe(true);
   });
   it('a save never sends original and cloneFrom together', () => {

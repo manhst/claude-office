@@ -2,9 +2,9 @@
 export function takeToken(loc: Location = location, store: Storage = sessionStorage): { token: string | null; wsUrl: string } {
   const h = new URLSearchParams(loc.hash.replace(/^#/, ''));
   const fromHash = h.get('token');
-  if (fromHash) { store.setItem('office.token', fromHash); if (h.get('ws')) store.setItem('office.ws', h.get('ws')!); history.replaceState(null, '', loc.pathname + loc.search); }
-  const hostPort = store.getItem('office.ws') ?? (loc.port === '5173' || loc.port === '4173' ? '127.0.0.1:7777' : loc.host);
-  return { token: fromHash ?? store.getItem('office.token'), wsUrl: `ws://${hostPort}/ws` };
+  if (fromHash) { store.setItem('deck.token', fromHash); if (h.get('ws')) store.setItem('deck.ws', h.get('ws')!); history.replaceState(null, '', loc.pathname + loc.search); }
+  const hostPort = store.getItem('deck.ws') ?? (loc.port === '5173' || loc.port === '4173' ? '127.0.0.1:7777' : loc.host);
+  return { token: fromHash ?? store.getItem('deck.token'), wsUrl: `ws://${hostPort}/ws` };
 }
 export function backoffMs(attempt: number, rand = Math.random) { return Math.round(Math.min(10_000, 500 * 2 ** attempt) * (0.75 + rand() * 0.5)); }
 export function connect(wsUrl: string, token: string, onEvent: (e: unknown) => void, onStatus: (s: 'connecting' | 'open' | 'reconnecting', retries: number) => void) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DEFAULT_SPLIT, MIN_MAP_PX, MIN_SIDE_PX, VP_SPLIT_KEY, clampSplit, loadSplit, saveSplit, splitFromPointer } from '../src/splitPrefs';
+import { DEFAULT_SPLIT, MIN_MAP_PX, MIN_SIDE_PX, SPLIT_KEY, clampSplit, loadSplit, saveSplit, splitFromPointer } from '../src/splitPrefs';
 
 describe('clampSplit', () => {
   it('keeps the default 80:20 when there is room', () => {
@@ -40,11 +40,11 @@ describe('split persistence', () => {
   it('defaults to 80:20 and persists a chosen ratio', () => {
     expect(loadSplit()).toBe(DEFAULT_SPLIT);
     expect(saveSplit(0.65)).toBeCloseTo(clampSplit(0.65, 0));
-    expect(mem.get(VP_SPLIT_KEY)).toBeTruthy();
+    expect(mem.get(SPLIT_KEY)).toBeTruthy();
     expect(loadSplit()).toBeCloseTo(clampSplit(0.65, 0));
   });
   it('ignores garbage in localStorage', () => {
-    mem.set(VP_SPLIT_KEY, 'nope');
+    mem.set(SPLIT_KEY, 'nope');
     expect(loadSplit()).toBe(DEFAULT_SPLIT);
   });
 });

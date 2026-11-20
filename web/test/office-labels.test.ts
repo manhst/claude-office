@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { DEFAULT_LABELS, LABEL_ROWS, applyLabelVisibility, isLabelOn, loadLabels, monitorLabelVisible, saveLabels, type LabelPrefs } from '../src/vpLabels';
+import { DEFAULT_LABELS, LABEL_ROWS, applyLabelVisibility, isLabelOn, loadLabels, monitorLabelVisible, saveLabels, type LabelPrefs } from '../src/officeLabels';
 
 const mem = new Map<string, string>();
 const fakeStore = {
@@ -8,7 +8,7 @@ const fakeStore = {
   removeItem: (k: string) => { mem.delete(k); },
 };
 
-describe('vpLabels', () => {
+describe('officeLabels', () => {
   beforeEach(() => {
     mem.clear();
     Object.defineProperty(globalThis, 'localStorage', { value: fakeStore, configurable: true });
@@ -18,9 +18,9 @@ describe('vpLabels', () => {
     expect(DEFAULT_LABELS.cafe).toBe(true);
     expect(DEFAULT_LABELS.massage).toBe(true);
     expect(DEFAULT_LABELS.bbq).toBe(true);
-    expect(DEFAULT_LABELS.trada).toBe(true);
+    expect(DEFAULT_LABELS['iced-tea']).toBe(true);
     expect(DEFAULT_LABELS.pond).toBe(true);
-    expect(DEFAULT_LABELS.bia).toBe(true);
+    expect(DEFAULT_LABELS['beer-stall']).toBe(true);
     for (const k of ['garden', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'pantry', 'game', 'workroom'] as const) {
       expect(DEFAULT_LABELS[k], k).toBe(false);
     }
@@ -49,7 +49,7 @@ describe('vpLabels', () => {
     expect(monitorLabelVisible({ state: 'error' }, DEFAULT_LABELS)).toBe(true);
   });
 
-  it('applyLabelVisibility toggles nhan-an class (CSS2D-safe)', () => {
+  it('applyLabelVisibility toggles label-hidden class (CSS2D-safe)', () => {
     const classes = new Set<string>();
     const el = {
       classList: {
@@ -62,8 +62,8 @@ describe('vpLabels', () => {
       setAttribute: (_k: string, _v: string) => {},
     } as unknown as HTMLElement;
     applyLabelVisibility(el, false);
-    expect(el.classList.contains('nhan-an')).toBe(true);
+    expect(el.classList.contains('label-hidden')).toBe(true);
     applyLabelVisibility(el, true);
-    expect(el.classList.contains('nhan-an')).toBe(false);
+    expect(el.classList.contains('label-hidden')).toBe(false);
   });
 });

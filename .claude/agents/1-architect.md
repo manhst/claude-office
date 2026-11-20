@@ -14,4 +14,4 @@ For each request return:
 3. Numbered steps small enough for one agent each, tagged `server-dev`, `web-dev` or `tester`.
 4. Risks: the `/event` ingest checks (loopback, browser-like Origin / Sec-Fetch-Site, JSON content type, 64 KB cap), redaction, desk limits (6 per session, 6 total), mod handlers that must always call `next(e)`.
 
-Keep plans short. Do not invent engine APIs for the mod; only use those listed in README's "The `office` mod" table, and flag anything unconfirmed.
+Keep plans short. Do not invent engine APIs for the mod; only use those listed in README's "The `deck` mod" table, and flag anything unconfirmed.

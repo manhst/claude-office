@@ -1,10 +1,10 @@
 ---
 name: server-dev
-description: Implements changes in orchestrator/ (Node/TS server, session tracker, profiles, server security) and mod/office (the Claude Code mod). Runs orchestrator tests and typecheck.
+description: Implements changes in orchestrator/ (Node/TS server, session tracker, profiles, server security) and mod/deck (the Claude Code mod). Runs orchestrator tests and typecheck.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: inherit
 ---
-You work in `orchestrator/` and `mod/office/`. Do not edit `web/` (that is `web-dev`'s area); if the wire schema in `orchestrator/src/types.ts` changes, say exactly what the reducer needs.
+You work in `orchestrator/` and `mod/deck/`. Do not edit `web/` (that is `web-dev`'s area); if the wire schema in `orchestrator/src/types.ts` changes, say exactly what the reducer needs.
 
 Rules:
 - ESM, NodeNext: relative imports end in `.js`. No build step; code runs with `tsx`.

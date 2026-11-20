@@ -1,4 +1,4 @@
-// Demo/mock: simulates 3 Claude Code sessions posting `office` mod events, so the UI can be tested without Claude.
+// Demo/mock: simulates 3 Claude Code sessions posting `deck` mod events, so the UI can be tested without Claude.
 // Usage: tsx src/simulate.ts [endpoint]   (default http://127.0.0.1:7777/event). Also used by `cli.ts start --demo`.
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

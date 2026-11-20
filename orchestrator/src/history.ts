@@ -17,7 +17,7 @@ export const HISTORY_CAP = { block: 4096, hay: 64 * 1024, budget: 96 * 1024 * 10
   terms: 8, term: 100, hits: 999, ttlMs: 10_000, head: 512, line: 8 * 1024 * 1024, missMs: 5000 };
 const C = HISTORY_CAP;
 const FOLD = new Uint16Array(65536);
-/** Search fold, one output unit per UTF-16 unit so indexes map 1:1: `(c.normalize('NFD')[0] ?? c).toLowerCase()[0]`, then 'đ' → 'd'. web/ duplicates it for highlighting; keep identical. */
+/** Search fold, one output unit per UTF-16 unit so indexes map 1:1: `(c.normalize('NFD')[0] ?? c).toLowerCase()[0]`, then 'đ' → 'd' (intentionally folds Vietnamese input). web/ duplicates it for highlighting; keep identical. */
 export function fold(s: string): string {
   if (!/[^\x00-\x7f]/.test(s)) return s.toLowerCase();
   const out = new Uint16Array(s.length);

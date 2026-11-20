@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { ClaudeConfigView, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, ModelReportResponse, OfficeEvent } from './types.js';
+import type { ClaudeConfigView, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, ModelReportResponse, DeckEvent } from './types.js';
 import { redactText } from './redact.js';
 import { HISTORY_SID, type HistoryQuery } from './history.js';
 export const HOST = '127.0.0.1';
@@ -52,10 +52,10 @@ export function historyRequestRejection(req: Pick<IncomingMessage, 'headers'> & 
 export type EventResult = boolean | { ok: true; inboxToken?: string };
 export type PromptResult = { ok: true; id: string; nonce: string; state: string } | { ok: false; error: string; status: number };
 export type InboxClaim = { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string; model?: string; effort?: string };
-export class OfficeServer {
+export class DeckServer {
   private http: Server; private wss: WebSocketServer;
   port = 0;
-  constructor(private token: string, private snapshot: () => OfficeEvent, private opts: {
+  constructor(private token: string, private snapshot: () => DeckEvent, private opts: {
     onEvent?: (p: unknown) => EventResult; staticDir?: string;
     getSettings?: () => unknown; setSettings?: (patch: unknown) => { ok: true; view: unknown } | { ok: false; error: string };
     onPrompt?: (p: { sid: string; text: unknown; nonce: unknown; model?: unknown; effort?: unknown }) => PromptResult;
@@ -255,7 +255,7 @@ export class OfficeServer {
     return body;
   }
   listen(port: number) { return new Promise<number>((res, rej) => { this.http.once('error', rej); this.http.listen(port, HOST, () => { this.port = (this.http.address() as any).port; res(this.port); }); }); }
-  broadcast(e: OfficeEvent) { const s = JSON.stringify(e); for (const c of this.wss.clients) if (c.readyState === WebSocket.OPEN) c.send(s); }
+  broadcast(e: DeckEvent) { const s = JSON.stringify(e); for (const c of this.wss.clients) if (c.readyState === WebSocket.OPEN) c.send(s); }
   async close() {
     // graceful: let queued frames flush, then force after 1s
     await Promise.all([...this.wss.clients].map((c) => new Promise<void>((r) => { const t = setTimeout(() => { c.terminate(); r(); }, 1000); c.once('close', () => { clearTimeout(t); r(); }); c.close(1000, 'run finished'); })));

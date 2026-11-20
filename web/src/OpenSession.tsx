@@ -5,7 +5,7 @@ import { isOpenConfirm, loadOpener, OPEN_SLOW_MS, openedText, openErrorText, ope
 import type { Ask } from './Confirm';
 
 export type OpenMsg = { kind: 'ok' | 'err'; text: string };
-/** "Mở lại" state for one session: last-used app, busy flag, inline status, the app label once a launch is slow (≥3 s: maybe the macOS
+/** "Reopen" state for one session: last-used app, busy flag, inline status, the app label once a launch is slow (≥3 s: maybe the macOS
  *  Automation prompt), and the confirm the server asks for (409 confirm-required: live or just-written session → its reason, resend with confirm:true). */
 export function useOpenSession(token: string, sid: string, openers: readonly HistoryOpener[]) {
   const [last, setLast] = useState(loadOpener), [busy, setBusy] = useState(false), [slow, setSlow] = useState<string>(), [msg, setMsg] = useState<OpenMsg>(), [ask, setAsk] = useState<Ask>();
@@ -22,7 +22,7 @@ export function useOpenSession(token: string, sid: string, openers: readonly His
     }, (e) => {
       if (!alive.current) return;
       const h = e instanceof HistoryHttpError ? e : undefined;
-      if (!confirm && isOpenConfirm(h?.error)) setAsk({ title: 'Mở thêm một cửa sổ?', body: h?.reason ?? 'Phiên này đang chạy trong văn phòng.', ok: 'Vẫn mở', cancel: 'Huỷ', run: () => open(app, true) });
+      if (!confirm && isOpenConfirm(h?.error)) setAsk({ title: 'Open another window?', body: h?.reason ?? 'This session is running in Claude Deck.', ok: 'Open anyway', cancel: 'Cancel', run: () => open(app, true) });
       else setMsg({ kind: 'err', text: openErrorText(h?.status ?? 0, h?.error, h?.reason) });
     }).finally(() => { inFlight.current = false; clearTimeout(slowT.current); if (alive.current) { setBusy(false); setSlow(undefined); } });
   }, [token, sid, openers]);
@@ -50,11 +50,11 @@ export function OpenButton({ openers, cur, busy, onOpen }: { openers: readonly H
   };
   const hint = openerHint(cur);
   return <div className="hopen" ref={wrap}>
-    <button type="button" className="hist-btn hopen-main" aria-disabled={busy} aria-busy={busy} onClick={() => { if (!busy) onOpen(cur.id); }} title={`Mở lại phiên này trong ${cur.label}${hint ? ` ${hint}` : ''}`} data-testid="history-open">
-      {busy ? <><span className="hopen-spin" aria-hidden="true" />Đang mở…</> : <>Mở lại <small>{cur.label}</small></>}</button>
-    <button ref={btn} type="button" className="hist-btn hopen-more" aria-haspopup="menu" aria-expanded={shown} aria-controls={shown ? id : undefined} aria-label="Chọn ứng dụng để mở lại" aria-disabled={busy}
+    <button type="button" className="hist-btn hopen-main" aria-disabled={busy} aria-busy={busy} onClick={() => { if (!busy) onOpen(cur.id); }} title={`Reopen this session in ${cur.label}${hint ? ` ${hint}` : ''}`} data-testid="history-open">
+      {busy ? <><span className="hopen-spin" aria-hidden="true" />Opening…</> : <>Reopen <small>{cur.label}</small></>}</button>
+    <button ref={btn} type="button" className="hist-btn hopen-more" aria-haspopup="menu" aria-expanded={shown} aria-controls={shown ? id : undefined} aria-label="Choose an app to reopen in" aria-disabled={busy}
       onClick={() => { if (!busy) setAt(shown ? undefined : home); }} onKeyDown={(e) => { if (!busy) btnKey(e); }} data-testid="history-open-menu">▾</button>
-    {shown ? <div id={id} role="menu" aria-label="Mở lại trong" className="hopen-list" onKeyDown={menuKey}>
+    {shown ? <div id={id} role="menu" aria-label="Reopen in" className="hopen-list" onKeyDown={menuKey}>
       {openers.map((o, i) => <button key={o.id} ref={(el) => { items.current[i] = el; }} type="button" role="menuitemradio" aria-checked={o.id === cur.id} tabIndex={i === at ? 0 : -1}
         onClick={() => pick(o)} onMouseEnter={() => setAt(i)} data-testid={`history-open-${o.id}`}><i aria-hidden="true">{o.id === cur.id ? '✓' : ''}</i>{o.label}{openerHint(o) ? <small>{openerHint(o)}</small> : null}</button>)}
     </div> : null}

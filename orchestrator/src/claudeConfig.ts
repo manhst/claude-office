@@ -18,8 +18,8 @@ const SECRET = /(pass|secret|token|key|auth|cookie|credential|session|private)/i
 const USERINFO = /[a-z][\w+.-]*:\/\/[^\s/?#@:]*:[^\s/?#@]+@/i, QUERY = /[?&](api[_-]?key|key|token|access[_-]?token|secret|password|sig|signature)=/i;
 /** Mask rule for env/header values: secret-looking key, URL userinfo password, secret query param, or anything redactText changes. */
 export const looksSecret = (key: string, value: string) => SECRET.test(key) || USERINFO.test(value) || QUERY.test(value) || redactText(value, Infinity) !== value;
-/** cli.error when the office runs inside a Claude Code session, where `claude mcp add-json … -` refuses stdin by design (never worked around). */
-export const IN_SESSION = 'The office server was started from inside a Claude Code session, where the claude CLI refuses these writes. Restart it with the Văn phòng ảo app or a normal terminal.';
+/** cli.error when Claude Deck runs inside a Claude Code session, where `claude mcp add-json … -` refuses stdin by design (never worked around). */
+export const IN_SESSION = 'The Claude Deck server was started from inside a Claude Code session, where the claude CLI refuses these writes. Restart it with the Claude Deck app or a normal terminal.';
 const REFUSED = /refused inside a Claude Code session/i;
 /** Same session test as the claude CLI (plus CLAUDE_CODE_SESSION_ID). */
 const inSession = (env: NodeJS.ProcessEnv) => Boolean(env.CLAUDE_CODE_CHILD_SESSION || env.CLAUDECODE || env.CLAUDE_CODE_SESSION_ID);
@@ -47,15 +47,15 @@ const canon = (e: unknown) => {
   for (const k of ['args', 'env', 'headers']) if ((Array.isArray(o[k]) && !o[k].length) || (o[k] && typeof o[k] === 'object' && !Array.isArray(o[k]) && !Object.keys(o[k]).length)) delete o[k];
   return stableJson(o);
 };
-/** Claude Code's files: OFFICE_CLAUDE_JSON / OFFICE_CLAUDE_SETTINGS, else (demoDir's fixtures, else) `$CLAUDE_CONFIG_DIR/.claude.json` or ~/.claude.json and
+/** Claude Code's files: DECK_CLAUDE_JSON / DECK_CLAUDE_SETTINGS, else (demoDir's fixtures, else) `$CLAUDE_CONFIG_DIR/.claude.json` or ~/.claude.json and
  *  `<config dir>/settings.json`. Under vitest the real files are refused, loudly. */
 export function claudePaths(env: NodeJS.ProcessEnv = process.env, demoDir?: string) {
   const dir = env.CLAUDE_CONFIG_DIR, home = homedir();
-  const claudeJson = resolve(env.OFFICE_CLAUDE_JSON || (demoDir ? join(demoDir, '.claude.json') : join(dir || home, '.claude.json')));
-  const settings = resolve(env.OFFICE_CLAUDE_SETTINGS || (demoDir ? join(demoDir, 'settings.json') : join(dir || join(home, '.claude'), 'settings.json')));
+  const claudeJson = resolve(env.DECK_CLAUDE_JSON || (demoDir ? join(demoDir, '.claude.json') : join(dir || home, '.claude.json')));
+  const settings = resolve(env.DECK_CLAUDE_SETTINGS || (demoDir ? join(demoDir, 'settings.json') : join(dir || join(home, '.claude'), 'settings.json')));
   if (env.VITEST) {
     const real = [join(home, '.claude.json'), join(home, '.claude', 'settings.json'), ...(dir ? [join(dir, '.claude.json'), join(dir, 'settings.json')] : [])].map((p) => resolve(p));
-    if (!env.OFFICE_CLAUDE_JSON || !env.OFFICE_CLAUDE_SETTINGS || real.includes(claudeJson) || real.includes(settings)) throw new Error('claudePaths: tests must set OFFICE_CLAUDE_JSON and OFFICE_CLAUDE_SETTINGS to temp files, never the real Claude Code config');
+    if (!env.DECK_CLAUDE_JSON || !env.DECK_CLAUDE_SETTINGS || real.includes(claudeJson) || real.includes(settings)) throw new Error('claudePaths: tests must set DECK_CLAUDE_JSON and DECK_CLAUDE_SETTINGS to temp files, never the real Claude Code config');
   }
   return { claudeJson, settings };
 }
@@ -64,12 +64,12 @@ export function which(name: string, path = process.env.PATH ?? '', exts = proces
   for (const d of [...path.split(delimiter), ...EXTRA_BIN_DIRS()]) if (d && isAbsolute(d)) for (const x of exts) { const f = join(d, name + x); if (isFileSync(f)) return f; }
   return undefined;
 }
-/** The claude CLI: OFFICE_CLAUDE_BIN, else `claude` on PATH / the usual install dirs. Under vitest only OFFICE_CLAUDE_BIN (a fake) is accepted. */
+/** The claude CLI: DECK_CLAUDE_BIN, else `claude` on PATH / the usual install dirs. Under vitest only DECK_CLAUDE_BIN (a fake) is accepted. */
 export function findClaude(env: NodeJS.ProcessEnv = process.env): Cli {
-  if (env.OFFICE_CLAUDE_BIN) return isFileSync(env.OFFICE_CLAUDE_BIN) ? { path: resolve(env.OFFICE_CLAUDE_BIN) } : { error: 'OFFICE_CLAUDE_BIN does not exist' };
-  if (env.VITEST) return { error: 'tests never run the real claude CLI (set OFFICE_CLAUDE_BIN)' };
+  if (env.DECK_CLAUDE_BIN) return isFileSync(env.DECK_CLAUDE_BIN) ? { path: resolve(env.DECK_CLAUDE_BIN) } : { error: 'DECK_CLAUDE_BIN does not exist' };
+  if (env.VITEST) return { error: 'tests never run the real claude CLI (set DECK_CLAUDE_BIN)' };
   const p = which('claude', env.PATH, process.platform === 'win32' ? ['.exe'] : ['']);
-  return p ? { path: p } : { error: 'claude CLI not found (install Claude Code or set OFFICE_CLAUDE_BIN)' };
+  return p ? { path: p } : { error: 'claude CLI not found (install Claude Code or set DECK_CLAUDE_BIN)' };
 }
 /** Runs a command without a shell (a .js/.mjs path runs under node), `input` on stdin; output capped at 64 KB each; killed after timeoutMs; never throws. */
 export function run(bin: string, args: string[], o: { cwd?: string; input?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {}) {
@@ -184,12 +184,12 @@ export class ClaudeConfig {
     return (await Promise.all(dirs.flatMap((d) => exts.map((x) => this.kind(join(d, name + x)))))).includes('file');
   }
   /** claude CLI path + version (`claude --version`), cached; a failure is retried after a minute. No version (read-only) inside a Claude Code session, once
-   *  the CLI refused a write as such, or when the config files are overridden without OFFICE_CLAUDE_BIN. */
+   *  the CLI refused a write as such, or when the config files are overridden without DECK_CLAUDE_BIN. */
   cli(): Promise<Cli> {
     if (this.o.demo) return Promise.resolve({ error: 'demo mode: read-only' });
     if (this.refused || inSession(this.env)) { const f = findClaude(this.env); return Promise.resolve({ ...(f.path ? { path: f.path } : {}), error: IN_SESSION }); }
-    if ((this.env.OFFICE_CLAUDE_JSON || this.env.OFFICE_CLAUDE_SETTINGS) && !this.env.OFFICE_CLAUDE_BIN)
-      return Promise.resolve({ error: 'OFFICE_CLAUDE_JSON / OFFICE_CLAUDE_SETTINGS are set without OFFICE_CLAUDE_BIN: reads and claude CLI writes would target different files' });
+    if ((this.env.DECK_CLAUDE_JSON || this.env.DECK_CLAUDE_SETTINGS) && !this.env.DECK_CLAUDE_BIN)
+      return Promise.resolve({ error: 'DECK_CLAUDE_JSON / DECK_CLAUDE_SETTINGS are set without DECK_CLAUDE_BIN: reads and claude CLI writes would target different files' });
     const c = this.cliCache;
     if (!c || Date.now() - c.at > 60_000) {
       const p = (async (): Promise<Cli> => {
@@ -354,7 +354,7 @@ export class ClaudeConfig {
     }
     const backup = this.backup([this.o.claudeJson, ...[t, orig].flatMap((x) => (x?.scope === 'project' ? [this.mcpFile(x.project!)] : []))]), bk = backup ? { backup } : {};
     if (same) { // prove the CLI takes the new JSON (temp name) before removing anything
-      let tmp: McpRef; do { const sfx = `__office_tmp_${randomBytes(3).toString('hex')}`; tmp = { ...t, name: `${t.name.slice(0, 64 - sfx.length)}${sfx}` }; } while (this.stored(r, tmp) !== undefined);
+      let tmp: McpRef; do { const sfx = `__deck_tmp_${randomBytes(3).toString('hex')}`; tmp = { ...t, name: `${t.name.slice(0, 64 - sfx.length)}${sfx}` }; } while (this.stored(r, tmp) !== undefined);
       let x = await this.mcp('add-json', tmp, e); if (x) return fail(500, `claude mcp add-json failed (nothing was changed): ${x}`, bk);
       x = await this.mcp('remove', tmp); if (x) return fail(500, `could not remove the temporary entry ${tmp.name}: ${x}`, bk);
       x = await this.mcp('remove', orig!); if (x) return fail(500, `claude mcp remove failed: ${x}`, bk);
@@ -386,7 +386,7 @@ export class ClaudeConfig {
     return { status: 200, body: { value: text(m[b.key]) } };
   }
   /** Runs a probe. Project-scope entries (.mcp.json, often from a cloned repo) need confirm:true unless Claude Code approved them in a trusted project,
-   *  and never get `${VAR}` expansion from the office's env. At most 3 at a time (429). */
+   *  and never get `${VAR}` expansion from Claude Deck's env. At most 3 at a time (429). */
   private async test(b: Record<string, any>, signal?: AbortSignal): Promise<Reply> {
     const r = await this.read(); let entry: unknown, name: string, cwd = this.home, gate: McpRef | undefined;
     if (b.ref !== undefined) {

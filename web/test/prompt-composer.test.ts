@@ -2,12 +2,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { reduce, initialState } from '../src/reducer';
 import { capabilityNote, composerBusy, statusNote } from '../src/composerCopy';
 import { postPrompt, newNonce } from '../src/submitPrompt';
-import type { OfficeEvent, PromptAck, SessionView } from '../src/types';
+import type { DeckEvent, PromptAck, SessionView } from '../src/types';
 
 const sess = (p: Partial<SessionView> = {}): SessionView => ({
   sid: 's1', project: 'p', cwd: '/p', state: 'idle', subagents: [], startedAt: 1, lastSeen: 1, source: 'default', profiles: [], agentIds: [], ...p,
 });
-const ev = (...es: OfficeEvent[]) => es.reduce((s, e) => reduce(s, { type: 'event', e }), initialState());
+const ev = (...es: DeckEvent[]) => es.reduce((s, e) => reduce(s, { type: 'event', e }), initialState());
 
 describe('composer copy', () => {
   it('is truthful: no fake setters, busy only while queued/claimed', () => {
@@ -31,7 +31,7 @@ describe('reducer: prompt.status', () => {
     s = ev(a, { t: 'prompt.status', sid: 's1', nonce: 'n1', state: 'delivered', ts: 3 });
     expect(s.prompts.s1.state).toBe('delivered');
     expect(s.turns).toHaveLength(0);
-    s = reduce(s, { type: 'event', e: { t: 'office.snapshot', agents: [], sessions: [sess({ canSubmit: true })], prompts: [{ t: 'prompt.status', sid: 's1', nonce: 'n2', state: 'claimed', ts: 4 }], ts: 5 } });
+    s = reduce(s, { type: 'event', e: { t: 'deck.snapshot', agents: [], sessions: [sess({ canSubmit: true })], prompts: [{ t: 'prompt.status', sid: 's1', nonce: 'n2', state: 'claimed', ts: 4 }], ts: 5 } });
     expect(s.prompts.s1).toMatchObject({ state: 'claimed', nonce: 'n2' });
     expect(s.sessions[0].canSubmit).toBe(true);
   });

@@ -2,7 +2,7 @@
   "numStartups": 42,
   "mcpServers": {
     "github": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_demoDemoDemoDemoDemoDemoDemo1234" } },
-    "postgres-shop-dev": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://demo@dev-db.example.internal:5432/shop"], "env": { "PGAPPNAME": "claude-office-demo" } },
+    "postgres-shop-dev": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://demo@dev-db.example.internal:5432/shop"], "env": { "PGAPPNAME": "claude-deck-demo" } },
     "postgres-shop-prd": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://readonly@prd-db.example.internal:5432/shop"], "env": { "PGPASSWORD": "demo-not-a-real-password" } },
     "docs": { "type": "http", "url": "https://mcp.example.com/docs", "headers": { "Authorization": "Bearer demo-token-1234567890", "X-Team": "shop" }, "timeout": 30000 },
     "legacy-api": { "type": "https", "url": "https://legacy.example.com/mcp" }

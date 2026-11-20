@@ -24,7 +24,7 @@ const R_EXIT = /^\s*Exit code \d+/;
 const R_VERIFY = new RegExp(String.raw`\b(vitest|jest|pytest|phpunit|rspec|npm (run )?test|npm t\b|yarn test|pnpm test|go test|dotnet (test|build)|cargo (test|build)|mvn \S*\s*(test|verify|package)` +
   String.raw`|gradlew? \S*\s*test|tsc\b|typecheck|npm run build|yarn build|pnpm build|go build|make test)`, 'i');
 const R_VFAIL = /\b[1-9]\d* (failed|failing)\b|Tests?:?\s+[1-9]\d* failed|error TS\d+|\berror CS\d+|Build FAILED|npm ERR!|ELIFECYCLE|AssertionError|Traceback \(most recent|\bERROR in\b|compilation failed/i, R_VFAIL_CS = /\bFAIL\b/;
-/** phrases aimed at the assistant's last answer, on folded text (no diacritics, lowercase); narrow on purpose */
+/** phrases aimed at the assistant's last answer, on folded text (no diacritics, lowercase); narrow on purpose. Intentionally matches Vietnamese user prompts: do not translate. */
 const R_CORR = new RegExp(String.raw`^\s*(stop|dung lai|khoan|tu tu da)\b|\b(sai roi|sai het|lam sai|may sai|khong dung roi|chua dung|van loi|van sai|van chua (duoc|chay|dung|fix|sua)|van khong (duoc|chay)` +
   String.raw`|van bi loi|lam lai di|lam lai tu dau|lam lai cho|tu revert|sao tu nhien|tu y (sua|xoa|lam|commit|push)|ai bao (may|sua|xoa)|hieu sai|hieu nham|nham roi` +
   String.raw`|khong phai (the|vay|nhu the)|ko phai (the|vay)|that.?s (wrong|not (it|what))|still (broken|failing|fails|not working|doesn)|does ?n.?t work|not working|did ?n.?t work|you broke)\b`);
@@ -61,7 +61,7 @@ const scrub = (s: string) => redactText(s, Infinity).replace(R_COOKIE, '$1…').
 export function errorPattern(txt: string): string {
   const ls: string[] = [];
   for (const l of txt.replace(/\r/g, '').split('\n')) { const s = l.trim(); if ((s && !s.startsWith('<')) || l.includes('tool_use_error')) ls.push(s); }
-  if (!ls.length) return '(trống)';
+  if (!ls.length) return '(empty)';
   let h = cut(ls[0].replace(/<\/?tool_use_error>/g, '').trim(), 1000);
   if (R_EXIT.test(h)) for (let i = ls.length - 1; i >= 1; i--) if (/error|fatal|not found|failed|denied|exception|cannot|no such/i.test(ls[i])) { h = `${h} · ${cut(ls[i], 1000)}`; break; }
   const t = scrub(h).replace(R_PATH, '<path>').replace(/(["'`])[^"'`]{1,120}\1/g, '$1…$1').replace(/\b\d{1,3}(\.\d{1,3}){3}(:\d+)?\b/g, '<ip>').replace(/\b\d{4,}\b/g, 'N').replace(/\s+/g, ' ');
@@ -69,7 +69,7 @@ export function errorPattern(txt: string): string {
 }
 /** Short label of an API model id: claude-opus-5-5 → Opus 5.5, claude-haiku-4-5-20251001 → Haiku 4.5; anything else as is. */
 export function modelLabel(m: string) { const x = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(m); return x ? `${x[1][0].toUpperCase()}${x[1].slice(1)} ${x[2]}${x[3] ? `.${x[3]}` : ''}` : m || '?'; }
-/** Correction-phrase fold (the .py's): đ → d, NFD, combining marks dropped, lowercase; first 600 chars. */
+/** Correction-phrase fold (the .py's; intentionally handles Vietnamese input): đ → d, NFD, combining marks dropped, lowercase; first 600 chars. */
 const foldCorr = (s: string) => s.slice(0, 2400).replace(/[đĐ]/g, 'd').normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase().slice(0, 600);
 const interrupted = (j: any) => { const c = j.message?.content; return typeof c === 'string' ? c.trimStart().startsWith(INTR) : Array.isArray(c) && c.some((b) => b?.type === 'text' && typeof b.text === 'string' && b.text.trimStart().startsWith(INTR)); };
 const resultText = (b: any): string => { const c = b.content; return typeof c === 'string' ? c : Array.isArray(c) ? c.filter((x) => x?.type === 'text').map((x) => (typeof x.text === 'string' ? x.text : '')).join('\n') : ''; };
@@ -232,7 +232,7 @@ async function parseFile(file: string, sub: boolean, sid: string, dir: string, h
   if (!sub) {
     const raw = cwd ?? decodeProjectDir(dir);
     a.project = redactText(raw.slice(0, 1200), 300); a.projectName = redactText(projectLabel(raw, home).slice(0, 1200), 300);
-    a.title = scrub(cut((custom || ai || '(không tên)').replace(/\s+/g, ' ').trim(), 400)).slice(0, 90);
+    a.title = scrub(cut((custom || ai || '(untitled)').replace(/\s+/g, ' ').trim(), 400)).slice(0, 90);
   }
   return a;
 }
@@ -242,7 +242,7 @@ interface Cached { mtimeMs: number; size: number; a: Agg | null }
 interface Acc { c: number[]; dur: number[]; eff: Map<string, number>; sessions: number; subruns: number; lines: number; prs: number; vsess: number; vgreen: number }
 const tick = () => new Promise<void>((r) => setImmediate(r));
 const counts = (c: number[], o = 0): ModelErrorCounts => Object.fromEntries(CATS.map((k, i) => [k, c[o + i]])) as ModelErrorCounts;
-/** Model report over the transcripts under `root` (Hiệu suất tab, GET /model-report). Each file is parsed once into day-bucketed aggregates (counters, turn times,
+/** Model report over the transcripts under `root` (Performance tab, GET /model-report). Each file is parsed once into day-bucketed aggregates (counters, turn times,
  *  normalized error patterns, a per-session summary; never transcript text), so any window and the weekly trend come from memory. The first scan is awaited; later
  *  requests answer at once and refresh in the background when the data is ≥10 s old (refreshing:true), re-parsing only new or changed files (mtime/size); fresh
  *  waits for a scan that started after the request. One scan at a time; answers are memoized per scan. */

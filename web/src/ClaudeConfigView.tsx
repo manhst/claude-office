@@ -20,7 +20,7 @@ const CHIPS: (McpScope | 'all')[] = ['all', ...SCOPES];
 const errText = (i: ErrInfo, kind: Parameters<typeof configErrorText>[2]) => configErrorText(i.status, i.error, kind, i);
 const SCOPE_HINT: Record<Scope3, string> = { user: '~/.claude.json · every project, only you', local: '~/.claude.json · this project only, only you', project: '<project>/.mcp.json · shared with the repo (each user approves it)' };
 
-/** "Cấu hình Claude" tab: Claude Code's MCP servers across scopes (GET /claude-config); add / edit / clone / delete / test / import. Writes go through the claude CLI. */
+/** "Claude Config" tab: Claude Code's MCP servers across scopes (GET /claude-config); add / edit / clone / delete / test / import. Writes go through the claude CLI. */
 export const ClaudeConfigView = memo(function ClaudeConfigView({ token, active, focusTick }: { token: string; active: boolean; focusTick: number }) {
   const [cfg, setCfg] = useState<Cfg>(), [loading, setLoading] = useState(true), [loadErr, setLoadErr] = useState<string>(), [reload, setReload] = useState(0);
   const [q, setQ] = useState(''), [scope, setScope] = useState<McpScope | 'all'>('all'), [project, setProject] = useState('');

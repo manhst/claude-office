@@ -4,7 +4,7 @@ import { fetchModelReport, reportStatus } from './modelReportApi';
 import { isAbort } from './historyApi';
 import {
   barMax, barWidth, CAT_HINT, CAT_LABEL, CATS, colorSlot, effortTop, fmtDay, fmtDayTime, fmtDec, fmtDur, fmtN, fmtNum, fmtPct, fmtStamp, fmtTick, fmtUsd, labeler, linePath, mainCause, nearestIndex, niceScale,
-  patternGroups, pct, perTurn, RATE_COLS, rateOf, RECHECK_MS, reportErrorText, reportTiles, shortSid, shortTool, tipLeft, trendSeries, weekLabel, weekRows, windowText, WINDOWS, xAt, xTicks, type TrendKind,
+  patternGroups, pct, perTurn, plural, RATE_COLS, rateOf, RECHECK_MS, reportErrorText, reportTiles, shortSid, shortTool, tipLeft, trendSeries, weekLabel, weekRows, windowText, WINDOWS, xAt, xTicks, type TrendKind,
 } from './modelReport';
 
 type Lbl = (id: string) => string;
@@ -12,15 +12,15 @@ type Lbl = (id: string) => string;
 const slotVar = (s: number) => ({ '--c': `var(--mr-s${s})` } as CSSProperties);
 function Sw({ slot }: { slot: number }) { return <span className="mr-sw" style={slotVar(slot)} aria-hidden="true" />; }
 function Model({ m, order }: { m: ModelStats; order: readonly string[] }) { return <><Sw slot={colorSlot(m.model, order)} />{m.label}{m.smallSample ? <Small /> : null}</>; }
-function Small() { return <span className="mr-tag" title="Dưới 200 lần gọi tool hoặc dưới 20 lượt: tỉ lệ chưa có ý nghĩa">ít dữ liệu</span>; }
-const none = (cols: number) => <tr><td colSpan={cols} className="muted">Không có</td></tr>;
+function Small() { return <span className="mr-tag" title="Under 200 tool calls or under 20 turns: the rates don't mean much yet">small sample</span>; }
+const none = (cols: number) => <tr><td colSpan={cols} className="muted">None</td></tr>;
 
-/** "Hiệu suất" tab: how each Claude model did in this machine's Claude Code transcripts (GET /model-report). Fetches only while visible. */
+/** "Performance" tab: how each Claude model did in this machine's Claude Code transcripts (GET /model-report). Fetches only while visible. */
 export const ModelReportView = memo(function ModelReportView({ token, active, onOpenSession }: { token: string; active: boolean; onOpenSession: (sid: string) => void }) {
   const [days, setDays] = useState(30), [auto, setAuto] = useState(false), [reload, setReload] = useState(0);
   const [data, setData] = useState<{ r: ModelReportResponse; key: string }>(), [loading, setLoading] = useState(false), [recheck, setRecheck] = useState(false), [err, setErr] = useState<string>(), [pick, setPick] = useState<string>();
   const done = useRef<string | undefined>(undefined), freshAt = useRef(-1), key = `${days}|${auto ? 1 : 0}|${reload}`;
-  useEffect(() => { // a window/auto change or "Làm mới" makes a new key; the last report stays up (dimmed) until the new one lands. Hidden → abort, refetched on return.
+  useEffect(() => { // a window/auto change or "Refresh" makes a new key; the last report stays up (dimmed) until the new one lands. Hidden → abort, refetched on return.
     if (!active || done.current === key) return;
     const ac = new AbortController(), fresh = freshAt.current === reload, show = (r: ModelReportResponse) => { setData({ r, key }); setErr(undefined); };
     let timer: ReturnType<typeof setTimeout> | undefined, follow = false;
@@ -35,18 +35,18 @@ export const ModelReportView = memo(function ModelReportView({ token, active, on
   }, [token, key, active, days, auto, reload]);
   const r = data?.r, sel = pick && r?.models.some((m) => m.model === pick) ? pick : undefined;
   const onPick = useCallback((m: string) => setPick((p) => p === m ? undefined : m), []);
-  const refresh = () => { freshAt.current = reload + 1; setReload(reload + 1); }; // only "Làm mới" / "Thử lại" ask the server to rescan first
+  const refresh = () => { freshAt.current = reload + 1; setReload(reload + 1); }; // only "Refresh" / "Retry" ask the server to rescan first
   return (
     <div className="mr" data-testid="report">
       <div className="mr-head">
-        <div className="cc-seg" role="group" aria-label="Khoảng thời gian">{WINDOWS.map(([d, l]) => <button key={d} type="button" aria-pressed={d === days} onClick={() => setDays(d)} data-testid={`report-days-${d}`}>{l}</button>)}</div>
-        <label className="hist-auto" title="Phiên chạy bằng claude -p từ script/plugin (entrypoint sdk-cli)"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} data-testid="report-auto" />Tính cả phiên tự động (sdk-cli)</label>
-        <button type="button" className="hist-btn" onClick={refresh} disabled={loading} data-testid="report-refresh">Làm mới</button>
-        <span className="mr-stamp" role="status" title={r ? `Báo cáo tạo lúc ${fmtStamp(r.generatedAt)}` : undefined}>{loading ? 'Đang tạo báo cáo…' : r ? `dữ liệu lúc ${fmtStamp(r.scannedAt || r.generatedAt)}${recheck ? ' · đang quét lại…' : ''}` : ''}</span>
+        <div className="cc-seg" role="group" aria-label="Time range">{WINDOWS.map(([d, l]) => <button key={d} type="button" aria-pressed={d === days} onClick={() => setDays(d)} data-testid={`report-days-${d}`}>{l}</button>)}</div>
+        <label className="hist-auto" title="Sessions run with claude -p from a script or plugin (entrypoint sdk-cli)"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} data-testid="report-auto" />Include automated sessions (sdk-cli)</label>
+        <button type="button" className="hist-btn" onClick={refresh} disabled={loading} data-testid="report-refresh">Refresh</button>
+        <span className="mr-stamp" role="status" title={r ? `Report built at ${fmtStamp(r.generatedAt)}` : undefined}>{loading ? 'Building report…' : r ? `data as of ${fmtStamp(r.scannedAt || r.generatedAt)}${recheck ? ' · rescanning…' : ''}` : ''}</span>
       </div>
-      {err ? <div className="hist-err" role="alert"><span>{err}</span><button type="button" className="hist-btn" onClick={refresh} disabled={loading}>Thử lại</button></div> : null}
+      {err ? <div className="hist-err" role="alert"><span>{err}</span><button type="button" className="hist-btn" onClick={refresh} disabled={loading}>Retry</button></div> : null}
       {r ? <Report r={r} stale={loading || data?.key !== key} sel={sel} onPick={onPick} onOpen={onOpenSession} />
-        : loading ? <div className="muted hist-empty">Đang đọc transcript Claude Code…</div> : null}
+        : loading ? <div className="muted hist-empty">Reading Claude Code transcripts…</div> : null}
     </div>
   );
 });
@@ -55,14 +55,14 @@ const Report = memo(function Report({ r, stale, sel, onPick, onOpen }: { r: Mode
   const label = useMemo(() => labeler(r.models), [r.models]), has = r.models.length > 0;
   return (
     <div className={`mr-body${stale ? ' stale' : ''}`}>
-      <p className="mr-lead">Từ transcript Claude Code trên máy này, {windowText(r)}. Mọi số là tín hiệu gián tiếp; xem phần “Cách đọc” ở cuối.</p>
+      <p className="mr-lead">From the Claude Code transcripts on this machine, {windowText(r)}. Every number is an indirect signal; see “How to read this” at the end.</p>
       <div className="mr-tiles">{reportTiles(r).map((t) => <div key={t.k} className="mr-tile"><div className="k">{t.k}</div><div className="v">{t.v}</div><div className="d">{t.d}</div></div>)}</div>
-      {has ? <Quality r={r} sel={sel} onPick={onPick} /> : <p className="muted hist-empty">Không có phiên Claude Code nào trong khoảng này{r.auto ? '' : ' (chưa tính phiên tự động)'}.</p>}
-      <h2>Xu hướng theo tuần</h2>
-      <p className="mr-note">Mỗi đường là một model (tối đa 5 model gọi tool nhiều nhất trong giai đoạn này). Màu của mỗi model giữ nguyên khi đổi khoảng thời gian.</p>
+      {has ? <Quality r={r} sel={sel} onPick={onPick} /> : <p className="muted hist-empty">No Claude Code sessions in this range{r.auto ? '' : ' (automated sessions excluded)'}.</p>}
+      <h2>Weekly trend</h2>
+      <p className="mr-note">One line per model (up to the 5 models with the most tool calls in this range). Each model keeps its color when you change the range.</p>
       <div className="mr-charts">
-        <TrendChart r={r} kind="misuse" title="Model dùng sai tool" sub="% số lần gọi tool, tuần có ít nhất 30 lần gọi" unit="%" vol="lần gọi tool" label={label} />
-        <TrendChart r={r} kind="friction" title="Bạn ngắt hoặc sửa" sub="số lần trên 100 lượt, tuần có ít nhất 10 lượt" unit="" vol="lượt" label={label} />
+        <TrendChart r={r} kind="misuse" title="Model misused a tool" sub="% of tool calls, weeks with at least 30 calls" unit="%" vol="tool calls" label={label} />
+        <TrendChart r={r} kind="friction" title="You interrupted or corrected" sub="per 100 turns, weeks with at least 10 turns" unit="" vol="turns" label={label} />
       </div>
       {has ? <>
         <Speed r={r} />
@@ -79,17 +79,17 @@ const Report = memo(function Report({ r, stale, sel, onPick, onOpen }: { r: Mode
 function Quality({ r, sel, onPick }: { r: ModelReportResponse; sel?: string; onPick: (m: string) => void }) {
   const ms = r.models, mx = useMemo(() => RATE_COLS.map((c) => barMax(ms, c)), [ms]);
   return <section>
-    <h2>Chất lượng theo model</h2>
-    <p className="mr-note">Thấp là tốt, trừ cột cuối. “Bạn ngắt” = số lần bấm Esc trên 100 lượt. “Bạn sửa” = số câu kiểu “sai rồi”, “vẫn lỗi”, “làm lại”, “revert” trên 100 câu hỏi (ước lượng theo từ khoá). Test/build xanh = phiên có chạy test, build hoặc typecheck mà lần chạy cuối cùng pass. Bấm vào một model để lọc phần “Lỗi gặp nhiều nhất”.</p>
+    <h2>Quality by model</h2>
+    <p className="mr-note">Lower is better, except the last column. “You interrupt” = Esc presses per 100 turns. “You correct” = prompts like “that's wrong”, “still broken”, “redo”, “revert” per 100 prompts (a keyword estimate). Last run green = sessions that ran tests, a build or a typecheck and whose last run passed. Click a model to filter “Most common errors”.</p>
     <div className="mr-tw"><table className="mr-t" data-testid="report-quality">
-      <thead><tr><th>Model</th><th className="num">Phiên</th><th className="num">Lượt</th><th className="num">Gọi tool</th>{RATE_COLS.map((c) => <th key={c.key} className="num" title={c.title}>{c.label}</th>)}<th className="num">Test/build fail</th><th className="num">Lần cuối xanh</th></tr></thead>
+      <thead><tr><th>Model</th><th className="num">Sessions</th><th className="num">Turns</th><th className="num">Tool calls</th>{RATE_COLS.map((c) => <th key={c.key} className="num" title={c.title}>{c.label}</th>)}<th className="num">Test/build fail</th><th className="num">Last run green</th></tr></thead>
       <tbody>{ms.map((m) => { const on = sel === m.model; return <tr key={m.model} className={`mr-pick${on ? ' sel' : ''}`} onClick={() => onPick(m.model)}>
-        <th scope="row"><button type="button" className="mr-mbtn" aria-pressed={on} title={on ? 'Bỏ lọc' : 'Chỉ xem lỗi của model này'}><Sw slot={colorSlot(m.model, r.modelOrder)} />{m.label}</button>{m.smallSample ? <Small /> : null}</th>
-        <td className="num">{fmtN(m.sessions)}{m.subagentRuns ? <span className="mr-sub">+ {fmtN(m.subagentRuns)} subagent</span> : null}</td>
+        <th scope="row"><button type="button" className="mr-mbtn" aria-pressed={on} title={on ? 'Clear filter' : 'Show only this model\'s errors'}><Sw slot={colorSlot(m.model, r.modelOrder)} />{m.label}</button>{m.smallSample ? <Small /> : null}</th>
+        <td className="num">{fmtN(m.sessions)}{m.subagentRuns ? <span className="mr-sub">+ {plural(m.subagentRuns, 'subagent run')}</span> : null}</td>
         <td className="num">{fmtN(m.turns)}</td><td className="num">{fmtN(m.toolCalls)}</td>
         {RATE_COLS.map((c, i) => <Rate key={c.key} v={rateOf(m, c)} max={mx[i]} unit={c.unit} />)}
-        <td className="num">{fmtPct(pct(m.verifyFails, m.verifyRuns), 0)}<span className="mr-sub">{fmtN(m.verifyFails)}/{fmtN(m.verifyRuns)} lần</span></td>
-        <td className="num">{fmtPct(pct(m.verifyGreen, m.verifySessions), 0)}<span className="mr-sub">{fmtN(m.verifyGreen)}/{fmtN(m.verifySessions)} phiên</span></td>
+        <td className="num">{fmtPct(pct(m.verifyFails, m.verifyRuns), 0)}<span className="mr-sub">{fmtN(m.verifyFails)}/{fmtN(m.verifyRuns)} runs</span></td>
+        <td className="num">{fmtPct(pct(m.verifyGreen, m.verifySessions), 0)}<span className="mr-sub">{fmtN(m.verifyGreen)}/{fmtN(m.verifySessions)} sessions</span></td>
       </tr>; })}</tbody>
     </table></div>
   </section>;
@@ -128,7 +128,7 @@ function TrendChart({ r, kind, title, sub, unit, vol, label }: { r: ModelReportR
   return <div className="mr-chart">
     <h3>{title}</h3><div className="muted">{sub}</div>
     <div className="mr-plot" ref={box}>
-      {empty ? <div className="muted mr-nodata">Chưa đủ dữ liệu theo tuần.</div> : w > 0 ? <svg width={w} height={CH} role="img" aria-label={`${title} theo tuần: ${t.series.map((s) => label(s.model)).join(', ')}`} tabIndex={0}
+      {empty ? <div className="muted mr-nodata">Not enough weekly data yet.</div> : w > 0 ? <svg width={w} height={CH} role="img" aria-label={`${title} by week: ${t.series.map((s) => label(s.model)).join(', ')}`} tabIndex={0}
         onPointerMove={(e) => { setKb(false); move(e); }} onPointerLeave={() => setHi(undefined)} onKeyDown={key} onBlur={() => setHi(undefined)}>
         <g className="mr-grid">{sc.ticks.map((v) => <line key={v} x1={CL} x2={x1} y1={y(v)} y2={y(v)} />)}</g>
         <g className="mr-axis">{sc.ticks.map((v) => <text key={v} x={CL - 6} y={y(v) + 3.5} textAnchor="end">{`${fmtTick(v)}${unit}`}</text>)}
@@ -138,11 +138,11 @@ function TrendChart({ r, kind, title, sub, unit, vol, label }: { r: ModelReportR
           {s.values.map((v, i) => v === null ? null : <circle key={i} cx={x(i)} cy={y(v)} r={i === h ? 5 : 4} />)}</g>)}
       </svg> : null}
       {h !== undefined && !empty ? <div className="mr-tip" ref={tip} style={{ left: tipLeft(x(h), tw, w) }}>
-        <div className="muted">Tuần từ {weekLabel(t.weeks[h])}</div>
-        {rows.length ? rows.map((s) => <div key={s.model}><Sw slot={s.slot} />{label(s.model)}: <b>{fmt(s.values[h])}</b> <span className="muted">({fmtN(s.volume[h])} {vol})</span></div>) : <div className="muted">Không có dữ liệu tuần này</div>}
+        <div className="muted">Week of {weekLabel(t.weeks[h])}</div>
+        {rows.length ? rows.map((s) => <div key={s.model}><Sw slot={s.slot} />{label(s.model)}: <b>{fmt(s.values[h])}</b> <span className="muted">({fmtN(s.volume[h])} {vol})</span></div>) : <div className="muted">No data this week</div>}
       </div> : null}
     </div>
-    <span className="mr-sr" aria-live="polite">{kb && h !== undefined ? `Tuần từ ${weekLabel(t.weeks[h])}: ${rows.length ? rows.map(line).join('; ') : 'không có dữ liệu'}` : ''}</span>
+    <span className="mr-sr" aria-live="polite">{kb && h !== undefined ? `Week of ${weekLabel(t.weeks[h])}: ${rows.length ? rows.map(line).join('; ') : 'no data'}` : ''}</span>
     {!empty ? <div className="mr-legend">{t.series.map((s) => <span key={s.model}><Sw slot={s.slot} />{label(s.model)}</span>)}</div> : null}
   </div>;
 }
@@ -150,10 +150,10 @@ function TrendChart({ r, kind, title, sub, unit, vol, label }: { r: ModelReportR
 function Speed({ r }: { r: ModelReportResponse }) {
   const ms = r.models.filter((m) => m.turns || m.toolCalls), mt = ms.some((m) => m.maxTokensStops), rf = ms.some((m) => m.refusals);
   return <section>
-    <h2>Tốc độ và chi phí</h2>
+    <h2>Speed and cost</h2>
     <div className="mr-tw"><table className="mr-t">
-      <thead><tr><th>Model</th><th className="num">Thời gian lượt (trung vị)</th><th className="num">p90</th><th className="num">Tool / lượt</th><th className="num">Token ra / lượt</th><th className="num">Chi phí</th><th className="num">$ / lượt</th><th className="num">Compact</th>
-        {mt ? <th className="num">Cắt vì max_tokens</th> : null}{rf ? <th className="num">Từ chối trả lời</th> : null}<th className="num">Dòng code sửa</th><th className="num">PR tạo</th><th>Effort hay dùng</th></tr></thead>
+      <thead><tr><th>Model</th><th className="num">Turn time (median)</th><th className="num">p90</th><th className="num">Tools / turn</th><th className="num">Output tokens / turn</th><th className="num">Cost</th><th className="num">$ / turn</th><th className="num">Compact</th>
+        {mt ? <th className="num">Cut at max_tokens</th> : null}{rf ? <th className="num">Refusals</th> : null}<th className="num">Lines changed</th><th className="num">PRs opened</th><th>Usual effort</th></tr></thead>
       <tbody>{ms.length ? ms.map((m) => { const ot = perTurn(m.outputTokens, m.turns), ct = perTurn(m.costUsd, m.turns); return <tr key={m.model}>
         <th scope="row"><Model m={m} order={r.modelOrder} /></th><td className="num">{fmtDur(m.turnMedianMs)}</td><td className="num">{fmtDur(m.turnP90Ms)}</td>
         <td className="num">{fmtNum(perTurn(m.toolCalls, m.turns))}</td><td className="num">{ot === null ? '–' : fmtN(ot)}</td><td className="num">{fmtUsd(m.costUsd)}</td><td className="num">{ct === null ? '–' : fmtUsd(ct)}</td>
@@ -161,16 +161,16 @@ function Speed({ r }: { r: ModelReportResponse }) {
         <td className="num">{fmtN(m.linesChanged)}</td><td className="num">{fmtN(m.prs)}</td><td className="nw">{effortTop(m.effort)}</td>
       </tr>; }) : none(11 + +mt + +rf)}</tbody>
     </table></div>
-    <p className="mr-note mr-after">Chi phí lấy theo model trong cost-state của từng phiên (gồm cả subagent và các lệnh phụ). Thời gian lượt tính từ lúc bạn gửi câu hỏi tới dòng cuối cùng trước câu hỏi tiếp theo, nên gồm cả lúc chờ bạn duyệt quyền.</p>
-    <p className="mr-note">Tổng chi phí ở trên còn gồm lệnh phụ của các model không có dòng ở đây (ví dụ Haiku đặt tiêu đề phiên), và một phiên được tính trọn chi phí khi hoạt động cuối của nó nằm trong khoảng đang xem.</p>
+    <p className="mr-note mr-after">Cost comes from each session's per-model cost-state (subagents and side calls included). Turn time runs from your prompt to the last line before the next prompt, so it includes time spent waiting for you to approve permissions.</p>
+    <p className="mr-note">The total cost above also includes side calls by models that have no row here (e.g. Haiku naming sessions), and a session's whole cost counts when its last activity falls in the range shown.</p>
   </section>;
 }
 
 function Causes({ r }: { r: ModelReportResponse }) {
   return <section>
-    <h2>Lỗi tool chia theo nguyên nhân</h2>
+    <h2>Tool errors by cause</h2>
     <div className="mr-tw"><table className="mr-t">
-      <thead><tr><th>Nguyên nhân</th>{r.models.map((m) => <th key={m.model} scope="col" className="num"><Sw slot={colorSlot(m.model, r.modelOrder)} />{m.label}</th>)}</tr></thead>
+      <thead><tr><th>Cause</th>{r.models.map((m) => <th key={m.model} scope="col" className="num"><Sw slot={colorSlot(m.model, r.modelOrder)} />{m.label}</th>)}</tr></thead>
       <tbody>{CATS.map((k) => <tr key={k}><th scope="row">{CAT_LABEL[k]}<span className="mr-hint">{CAT_HINT[k]}</span></th>
         {r.models.map((m) => <td key={m.model} className="num">{fmtN(m.errors[k])}<span className="mr-sub">{fmtPct(pct(m.errors[k], m.toolCalls), 2)}</span></td>)}</tr>)}</tbody>
     </table></div>
@@ -180,25 +180,25 @@ function Causes({ r }: { r: ModelReportResponse }) {
 function Patterns({ r, sel, label, onClear }: { r: ModelReportResponse; sel?: string; label: Lbl; onClear: () => void }) {
   const gs = useMemo(() => patternGroups(r, sel), [r, sel]);
   return <section data-testid="report-patterns">
-    <h2>Lỗi gặp nhiều nhất</h2>
-    {sel ? <p className="mr-filter">Chỉ hiện lỗi của <span className="nw"><Sw slot={colorSlot(sel, r.modelOrder)} /><b>{label(sel)}</b></span><button type="button" className="hist-btn" onClick={onClear}>Bỏ lọc</button></p>
-      : <p className="mr-note">Bấm vào một model trong bảng “Chất lượng theo model” để chỉ xem lỗi của model đó.</p>}
+    <h2>Most common errors</h2>
+    {sel ? <p className="mr-filter">Showing only errors from <span className="nw"><Sw slot={colorSlot(sel, r.modelOrder)} /><b>{label(sel)}</b></span><button type="button" className="hist-btn" onClick={onClear}>Clear filter</button></p>
+      : <p className="mr-note">Click a model in “Quality by model” to see only its errors.</p>}
     {gs.length ? gs.map((g) => <details key={g.cat} className="mr-pg" open={g.cat === 'misuse'}>
       <summary>{CAT_LABEL[g.cat]} <span className="muted">({fmtN(g.total)})</span></summary>
       <div className="mr-tw"><table className="mr-t mr-pat">
-        <thead><tr><th className="num">Lần</th><th>Thông báo lỗi (đã rút gọn, che secret)</th><th>Tool</th></tr></thead>
-        <tbody>{g.items.map((p, i) => <tr key={i} title={`Gần nhất ${fmtDayTime(p.lastAt)}`}><td className="num">{fmtN(p.count)}</td><td><code>{p.pattern}</code></td><td className="muted">{shortTool(p.tool)}</td></tr>)}</tbody>
+        <thead><tr><th className="num">Count</th><th>Error message (shortened, secrets masked)</th><th>Tool</th></tr></thead>
+        <tbody>{g.items.map((p, i) => <tr key={i} title={`Last seen ${fmtDayTime(p.lastAt)}`}><td className="num">{fmtN(p.count)}</td><td><code>{p.pattern}</code></td><td className="muted">{shortTool(p.tool)}</td></tr>)}</tbody>
       </table></div>
-    </details>) : <p className="muted">{sel ? 'Model này không có lỗi nào trong danh sách.' : 'Không có lỗi tool nào.'}</p>}
+    </details>) : <p className="muted">{sel ? 'No listed errors for this model.' : 'No tool errors.'}</p>}
   </section>;
 }
 
 function Tools({ r }: { r: ModelReportResponse }) {
   const ts = r.tools.filter((t) => t.errors > 0);
   return <div>
-    <h2>Tool hay lỗi nhất</h2>
+    <h2>Most error-prone tools</h2>
     <div className="mr-tw"><table className="mr-t">
-      <thead><tr><th>Tool</th><th className="num">Gọi</th><th className="num">Lỗi</th><th className="num">Tỉ lệ</th><th>Nguyên nhân chính</th></tr></thead>
+      <thead><tr><th>Tool</th><th className="num">Calls</th><th className="num">Errors</th><th className="num">Rate</th><th>Main cause</th></tr></thead>
       <tbody>{ts.length ? ts.map((t) => { const c = mainCause(t); return <tr key={t.tool}><td><code>{shortTool(t.tool)}</code></td><td className="num">{fmtN(t.calls)}</td><td className="num">{fmtN(t.errors)}</td>
         <td className="num">{fmtPct(pct(t.errors, t.calls))}</td><td>{c ? <>{CAT_LABEL[c.cat]} <span className="muted">{fmtPct(c.share, 0)}</span></> : '–'}</td></tr>; }) : none(5)}</tbody>
     </table></div>
@@ -207,13 +207,13 @@ function Tools({ r }: { r: ModelReportResponse }) {
 
 function Api({ r }: { r: ModelReportResponse }) {
   return <div>
-    <h2>Lỗi phía API</h2>
+    <h2>API errors</h2>
     <div className="mr-tw"><table className="mr-t">
-      <thead><tr><th>Phản hồi lỗi</th><th className="num">Lần</th><th>Gần nhất</th></tr></thead>
+      <thead><tr><th>Error response</th><th className="num">Count</th><th>Last seen</th></tr></thead>
       <tbody>{r.apiErrors.length ? r.apiErrors.map((a) => <tr key={a.kind}><td><code>{a.kind}</code></td><td className="num">{fmtN(a.count)}</td><td className="nw">{fmtDayTime(a.lastAt)}</td></tr>) : none(3)}</tbody>
     </table></div>
     <div className="mr-tw mr-gap"><table className="mr-t">
-      <thead><tr><th>Retry tự động</th><th className="num">Sự cố</th><th className="num">Lần retry</th></tr></thead>
+      <thead><tr><th>Automatic retry</th><th className="num">Incidents</th><th className="num">Retries</th></tr></thead>
       <tbody>{r.retries.length ? r.retries.map((x) => <tr key={x.kind}><td><code>{x.kind}</code></td><td className="num">{fmtN(x.incidents)}</td><td className="num">{fmtN(x.retries)}</td></tr>) : none(3)}</tbody>
     </table></div>
   </div>;
@@ -222,13 +222,13 @@ function Api({ r }: { r: ModelReportResponse }) {
 /** Rows open the session in the History tab (the button is the keyboard target; its click bubbles to the row). */
 function Review({ r, label, onOpen }: { r: ModelReportResponse; label: Lbl; onOpen: (sid: string) => void }) {
   return <section>
-    <h2>Phiên nên xem lại</h2>
-    <p className="mr-note">Xếp theo: dùng sai tool + 2×ngắt + 2×sửa + từ chối. Bấm vào một phiên để đọc transcript trong tab Lịch sử, hoặc chạy <code>claude --resume &lt;mã&gt;</code>.</p>
+    <h2>Sessions worth a review</h2>
+    <p className="mr-note">Ranked by tool misuse + 2×interrupts + 2×corrections + rejections. Click a session to read its transcript in the History tab, or run <code>claude --resume &lt;id&gt;</code>.</p>
     <div className="mr-tw"><table className="mr-t" data-testid="report-review">
-      <thead><tr><th>Ngày</th><th>Phiên</th><th>Model</th><th className="num">Lượt</th><th className="num">Tool</th><th className="num">Sai tool</th><th className="num">Ngắt</th><th className="num">Sửa</th><th className="num">Từ chối</th><th className="num">Chi phí</th></tr></thead>
+      <thead><tr><th>Date</th><th>Session</th><th>Model</th><th className="num">Turns</th><th className="num">Tools</th><th className="num">Misuse</th><th className="num">Interrupts</th><th className="num">Corrections</th><th className="num">Rejected</th><th className="num">Cost</th></tr></thead>
       <tbody>{r.review.length ? r.review.map((s) => <tr key={s.sid} className="mr-pick" onClick={() => onOpen(s.sid)}>
         <td className="nw">{fmtDay(s.lastAt)}</td>
-        <td className="mr-ses"><button type="button" className="mr-link" title="Mở trong tab Lịch sử" data-testid={`report-open-${s.sid}`}>{s.title || '(không tên)'}</button><span className="mr-sub" title={s.project}>{s.projectName} · <code>{shortSid(s.sid)}</code></span></td>
+        <td className="mr-ses"><button type="button" className="mr-link" title="Open in the History tab" data-testid={`report-open-${s.sid}`}>{s.title || '(untitled)'}</button><span className="mr-sub" title={s.project}>{s.projectName} · <code>{shortSid(s.sid)}</code></span></td>
         <td className="nw"><Sw slot={colorSlot(s.model, r.modelOrder)} />{label(s.model)}</td>
         <td className="num">{fmtN(s.turns)}</td><td className="num">{fmtN(s.toolCalls)}</td><td className="num">{fmtN(s.misuse)}</td><td className="num">{fmtN(s.interrupts)}</td><td className="num">{fmtN(s.corrections)}</td><td className="num">{fmtN(s.rejected)}</td><td className="num">{fmtUsd(s.costUsd)}</td>
       </tr>) : none(10)}</tbody>
@@ -238,13 +238,13 @@ function Review({ r, label, onOpen }: { r: ModelReportResponse; label: Lbl; onOp
 
 function Notes() {
   return <section>
-    <h2>Cách đọc</h2>
+    <h2>How to read this</h2>
     <ul className="mr-notes">
-      <li>Transcript không cho biết câu trả lời có <b>đúng</b> hay không. Báo cáo chỉ đo các dấu hiệu: model gọi tool sai, bạn phải ngắt hoặc sửa, test/build có xanh ở cuối phiên, lỗi API, thời gian và tiền.</li>
-      <li>“Dùng sai tool” là lỗi do model (sai tham số, Edit không khớp, query sai cú pháp, đoán sai đường dẫn). Lỗi kết nối DB/ES, VPN, 401/403, auto mode chặn được tách riêng vì không phải lỗi của model.</li>
-      <li>So sánh giữa các model chỉ công bằng khi chúng làm việc giống nhau. Model nhỏ thường được giao việc dễ hơn (subagent tra cứu), nên tỉ lệ lỗi thấp chưa chắc là giỏi hơn. Model có nhãn “ít dữ liệu” thì đừng kết luận.</li>
-      <li>“Bạn sửa” đếm theo từ khoá (cả có dấu lẫn không dấu), có thể bắt nhầm câu như “fix lỗi X vẫn còn” khi bạn nói về bug của sản phẩm.</li>
-      <li>Muốn chấm điểm chất lượng thật: cho một model đọc lại một mẫu phiên và chấm theo tiêu chí (LLM-as-judge), hoặc theo dõi kết quả sau phiên như commit bị revert hay PR bị sửa lại.</li>
+      <li>A transcript can't tell whether an answer was <b>right</b>. The report only measures signals: the model misusing tools, you having to interrupt or correct it, whether tests/builds end green, API errors, time and money.</li>
+      <li>“Tool misuse” is the model's fault (wrong parameters, Edit strings that don't match, bad query syntax, guessed paths). DB/ES connection errors, VPN, 401/403 and auto mode blocks are counted separately because they aren't the model's fault.</li>
+      <li>Comparing models is only fair when they do the same kind of work. Small models usually get easier jobs (lookup subagents), so a lower error rate doesn't mean they're better. Don't draw conclusions from models tagged “small sample”.</li>
+      <li>“You correct” is a keyword count (Vietnamese with or without diacritics, plus a few English phrases), so it can misfire on a prompt like “bug X is still broken” when you're talking about a product bug.</li>
+      <li>To grade real quality, have a model review a sample of sessions against a rubric (LLM-as-judge), or track what happens afterwards, such as reverted commits or reworked PRs.</li>
     </ul>
   </section>;
 }

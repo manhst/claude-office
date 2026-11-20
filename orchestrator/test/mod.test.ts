@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP, takeInboxToken, canPromptSubmit, fetchBody, jobPick, applyOverride } from '../../mod/office/hooks/register.js';
+import { register, toolDetail, titleFromJsonl, transcriptPath, usagePayload, turnSteps, turnBody, TURN_CAP, takeInboxToken, canPromptSubmit, fetchBody, jobPick, applyOverride } from '../../mod/deck/hooks/register.js';
 // Fake engine matching the API used by usage-esp: register(on, options); on(name, ($, e, next) => ...) returns { catch }.
 function fakeEngine(env: Record<string, string> = { USERPROFILE: 'C:/Users/m' }, files: Record<string, string> = {}) {
   const h: Record<string, (...a: any[]) => any> = {}; const posts: any[] = []; const beats: Array<() => any> = []; let everyCalls = 0; let sid = '3f2a9c1e-1111-2222-3333-444455556666';
@@ -47,7 +47,7 @@ export function bareDollarUses(src: string): string[] {
 }
 describe('mod static $ rule', () => {
   it('register.ts never stores/passes $ except as first param/arg', () => {
-    expect(bareDollarUses(readFileSync(new URL('../../mod/office/hooks/register.ts', import.meta.url), 'utf8'))).toEqual([]);
+    expect(bareDollarUses(readFileSync(new URL('../../mod/deck/hooks/register.ts', import.meta.url), 'utf8'))).toEqual([]);
   });
   it('checker catches banned shapes', () => {
     for (const bad of ['$s = $;', 'let $ = 1', 'x = $ ', 'a($?.b)', 'f({ $ })', 'f([$])', 'g(a, $)', 'return $', 'const {env} = $', 'f(...$)'])
@@ -55,7 +55,7 @@ describe('mod static $ rule', () => {
     expect(bareDollarUses("on('x', ($: Any, e) => { $.clock.every(1, () => void send($, st)); f($) })")).toEqual([]);
   });
 });
-describe('office mod (usage-esp API)', () => {
+describe('deck mod (usage-esp API)', () => {
   it('posts start/thinking/tool/permission/done/end with short details only, title from transcript', async () => {
     const tp = transcriptPath('C:/Users/m/.claude', 'C:/Users/m/proj', '3f2a9c1e-1111-2222-3333-444455556666');
     const f = fakeEngine(undefined, { [tp]: '{"type":"ai-title","aiTitle":"Fix login"}\n' });
@@ -66,7 +66,7 @@ describe('office mod (usage-esp API)', () => {
     await f.fire('turn.start', {}); await flush();
     await f.fire('tool.call', { tool: 'Write', file_path: 'C:/Users/m/proj/src/secret.ts', content: 'API_KEY=abc' });
     await f.fire('tool.call', { tool: 'Bash', command: 'npm test\nrm -rf /' });
-    const own: any = (e: any) => e; own.origin = { plugin: 'office' }; await f.fire('tool.call', { tool: 'Read', file_path: 'x' }, own); // mod's own call: ignored
+    const own: any = (e: any) => e; own.origin = { plugin: 'deck' }; await f.fire('tool.call', { tool: 'Read', file_path: 'x' }, own); // mod's own call: ignored
     await f.fire('tool.call', { tool: 'Read', file_path: 'y', agentId: 'sub1' }); // subagent call: subagent refresh only
     await f.fire('classic.PermissionRequest', { tool_name: 'Bash', tool_input: { command: 'git push' } }); await flush();
     f.setSub('completed'); await f.fire('turn.complete', { reason: 'answer' }); await flush(); // no busy subagent left: done
@@ -209,9 +209,9 @@ describe('same-session prompt submit', () => {
     await f.fire('session.start', { cwd: 'C:/Users/m/proj' }); await flush();
     expect(f.posts[0]).toMatchObject({ type: 'start', canSubmit: true, model: 'claude-opus' });
     expect(f.everyCalls()).toBe(2);
-    f.setInboxJob({ id: 'job1', text: 'from office UI' });
+    f.setInboxJob({ id: 'job1', text: 'from Claude Deck UI' });
     await f.beat(); await flush();
-    expect(calls).toEqual([{ text: 'from office UI', asUser: true }]);
+    expect(calls).toEqual([{ text: 'from Claude Deck UI', asUser: true }]);
     const ack = f.posts.filter((p) => p.url?.includes('/inbox/ack'));
     expect(ack).toHaveLength(1);
     expect(ack[0]).toMatchObject({ id: 'job1', state: 'rejected', reason: 'session is stopped' });
@@ -244,7 +244,7 @@ describe('same-session prompt submit', () => {
     expect(applyOverride({}, { turnId: 't1', model: 'opus' })).toEqual({ turnId: 't1', model: 'opus' });
     expect(applyOverride({ override: { turnId: 't1', effort: 'max' } }, { turnId: 't1', model: 'opus' })).toEqual({ turnId: 't1', model: 'opus', effort: 'max' });
   });
-  it('an office prompt with model/effort runs its own turn with them, then the session goes back to its own', async () => {
+  it('a Claude Deck prompt with model/effort runs its own turn with them, then the session goes back to its own', async () => {
     const f = fakeEngine();
     f.$.prompt = { submit: async () => ({}) };
     register(f.on, {});
@@ -256,10 +256,10 @@ describe('same-session prompt submit', () => {
     await f.fire('turn.start', { turnId: 'typed', text: 'something the person typed' });
     expect(await step({ turnId: 'typed', index: 0, model: 'opus' })).toMatchObject({ model: 'opus' });
     await f.fire('turn.complete', { turnId: 'typed', answer: 'a' }); await flush();
-    await f.fire('turn.start', { turnId: 'office', text: 'Review this diff' });
-    expect(await step({ turnId: 'office', index: 0, model: 'opus', effort: 'xhigh' })).toMatchObject({ model: 'haiku', effort: 'low' });
-    expect(await step({ turnId: 'office', index: 1, model: 'opus', agentId: 'sub1' })).toMatchObject({ model: 'opus' });
-    await f.fire('turn.complete', { turnId: 'office', answer: 'b' }); await flush();
+    await f.fire('turn.start', { turnId: 'deck', text: 'Review this diff' });
+    expect(await step({ turnId: 'deck', index: 0, model: 'opus', effort: 'xhigh' })).toMatchObject({ model: 'haiku', effort: 'low' });
+    expect(await step({ turnId: 'deck', index: 1, model: 'opus', agentId: 'sub1' })).toMatchObject({ model: 'opus' });
+    await f.fire('turn.complete', { turnId: 'deck', answer: 'b' }); await flush();
     await f.fire('turn.start', { turnId: 'later', text: 'Review this diff' });
     expect(await step({ turnId: 'later', index: 0, model: 'opus' })).toMatchObject({ model: 'opus' });
   });

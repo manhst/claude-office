@@ -342,7 +342,7 @@ export function readOnlyReason(cli: { error?: string }): { text: string; inSessi
   const text = cli.error || 'demo mode', inSession = /claude ?code session|CLAUDECODE|nested|inside (a )?claude/i.test(text);
   return { text, inSession };
 }
-export const IN_SESSION_FIX = 'The orchestrator was started inside a Claude Code session, where the claude CLI refuses to change its config. Restart it with the Văn phòng ảo app or from a normal terminal.';
+export const IN_SESSION_FIX = 'The orchestrator was started inside a Claude Code session, where the claude CLI refuses to change its config. Restart it with the Claude Deck app or from a normal terminal.';
 export const CHANGED_MSG = 'The file changed (Claude Code writes it often). Reloaded; check and save again.';
 export const APPLY_NOTE = 'Takes effect in NEW Claude Code sessions. Running sessions: /mcp → reconnect, or restart them.';
 /** User-facing text for a failed claude-config request ({error} body when the server sent one; status 0 = network, -1 = not JSON). */

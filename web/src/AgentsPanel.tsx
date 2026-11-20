@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import type { OfficeState } from './reducer';
+import type { DeckState } from './reducer';
 import { STATE_COLORS } from './layout';
 import { loadCollapse, setCollapse } from './collapse';
 import { TASK_UNAVAILABLE, countAgents, sessionAgentTree, type AgentRow } from './sessionAgents';
 import { IconBranch, IconTool, IconUser } from './icons';
 
 /** Collapsible Agents list for the selected session: desks plus current subagents. */
-export function AgentsPanel({ s, selected }: { s: OfficeState; selected?: string }) {
+export function AgentsPanel({ s, selected }: { s: DeckState; selected?: string }) {
   const rows = sessionAgentTree(s, selected);
   const n = countAgents(rows);
   const [collapsed, setCollapsed] = useState(() => loadCollapse().agents);

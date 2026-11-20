@@ -1,5 +1,5 @@
 /** Persist the map:info split as a map fraction (default 80:20). Client-only localStorage. */
-export const VP_SPLIT_KEY = 'vp-split';
+export const SPLIT_KEY = 'deck.split';
 export const DEFAULT_SPLIT = 0.8;
 export const MIN_MAP_PX = 320;
 export const MIN_SIDE_PX = 220;
@@ -25,7 +25,7 @@ export function splitFromPointer(clientX: number, left: number, width: number): 
 
 export function loadSplit(): number {
   try {
-    const raw = storage()?.getItem(VP_SPLIT_KEY);
+    const raw = storage()?.getItem(SPLIT_KEY);
     if (raw == null || raw === '') return DEFAULT_SPLIT;
     const n = Number(raw);
     return Number.isFinite(n) ? clampSplit(n, 0) : DEFAULT_SPLIT;
@@ -34,6 +34,6 @@ export function loadSplit(): number {
 
 export function saveSplit(ratio: number): number {
   const next = clampSplit(ratio, 0);
-  storage()?.setItem(VP_SPLIT_KEY, String(next));
+  storage()?.setItem(SPLIT_KEY, String(next));
   return next;
 }

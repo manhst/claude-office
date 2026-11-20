@@ -1,0 +1,690 @@
+// Ours (not from the reference): the town around the 3D office, in the reference's voxel style (block/material/buildPerson).
+// Roads, Crossian Cafe, the sidewalk iced tea stall, the crocodile pond, the IT Ops monitoring kiosk, and the side characters
+// (IT Ops indoors, NPCs, the dog Chos An, the cat Meow) driven by the pure town simulation (../town/sim.ts, plan px → world).
+import * as THREE from 'three';
+import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import type { ItOpsStatus } from '../types';
+import { ATM, BBQ, BBQ_SEATS, BEER_STALL, BEER_SEATS, CAFE, GATE, GARDEN, GYM, ITOPS_SPOT, MASSAGE, MASSAGE_BEDS, POD, POND, PRINT, PX, ROADS, ROMANCE_SPOTS, SMOKE, TOWN, TEA_STALL, pondCenter, toWorld, type Box } from '../town/map';
+import { forceCrash, forceFire, initialTraffic, stepTraffic, onRoad, type Traffic } from '../town/traffic';
+import { TrafficLayer } from './vehicles3d';
+import { agentPartnerId, forceBoss, forceDrama, forceLayoff, forceRomance, graspWorldFromCarrier, initialWorld, knockDown, step, throwIntoPond, type AgentPrey, type Ent, type LayoffEvent, type World } from '../town/sim';
+import { currentLook, currentName } from '../town/looks';
+import { buildPerson, block, material, glowMaterial, type Body, type Appearance } from './characters';
+import { canPov, eyePush, type Eye } from '../povCam';
+import { PRESETS } from './avatars';
+import { HeartFX } from './hearts';
+import { LABELS_EVENT, applyLabelVisibility, isLabelOn, loadLabels, monitorLabelVisible, type LabelKey } from '../officeLabels';
+
+export interface TownCtx {
+  group: THREE.Group; soft: boolean; own: <T extends { dispose(): void }>(m: T) => T;
+  lights: THREE.PointLight[]; shades: THREE.MeshLambertMaterial[];
+  plant: (parent: THREE.Object3D, x: number, z: number, size?: number) => void;
+}
+/** World bounds of the whole town (camera fit + pan limits). */
+const [TX0, TZ0] = toWorld({ x: 0, y: TOWN.y0 }), [TX1, TZ1] = toWorld({ x: TOWN.w, y: TOWN.h });
+export const TOWN_BOUNDS = { x0: TX0, x1: TX1, z0: TZ0, z1: TZ1 };
+export const presetLook = (id?: string): Appearance | undefined => (PRESETS as { id: string; appearance: Appearance }[]).find((p) => p.id === id)?.appearance;
+const ICON = {
+  coffee: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h8v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM11 7h1a2 2 0 0 1 0 4h-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+  glass: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3h8l-1.2 10H5.2zM4.4 6.5h7.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+  croc: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 9.5c2-2 5-2.5 8-2l4.5-1.5-1 2.5 1 1.5-4.5-.5c-3 1.5-6 1.5-8 0z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  spa: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2c2 2.5 2 5 0 7-2-2-2-4.5 0-7zM2 8c2.5 0 4.5 1.2 6 3.5C9.5 9.2 11.5 8 14 8c0 3.5-2.7 6-6 6S2 11.5 2 8z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  pulse: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.5-3 2 6 1.5-3h5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+  grill: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6h10v1.5H3zm1 2.5h8v5H4zm2-4.5h4v1.5H6z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 5.5V3.5M8 5.5V2.5M11 5.5V3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  flower: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="1.6" fill="currentColor"/><path d="M8 2.5c1.2 1.5 1.2 3.2 0 4.5-1.2-1.3-1.2-3 0-4.5zm0 6.5c1.2 1.5 1.2 3.2 0 4.5-1.2-1.3-1.2-3 0-4.5zM2.5 8c1.5-1.2 3.2-1.2 4.5 0-1.3 1.2-3 1.2-4.5 0zm6.5 0c1.5-1.2 3.2-1.2 4.5 0-1.3 1.2-3 1.2-4.5 0z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+  smoke: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12h8M5 10c1-2 2-3 3-3s2 1 3 3M6.5 7c.5-1.5 1.2-2.5 1.5-2.5S9.5 5.5 10 7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  gym: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h2v2H2zm10 0h2v2h-2zM5 8.5h6v1H5zM3.5 6.5v5M12.5 6.5v5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  atm: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h10v10H3zm2 2h6v3H5zm1 5h2v1H6zm3 0h2v1H9z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  gate: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13V4l6-2 6 2v9M5 13V7m3 6V6.5m3 6.5V7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  pod: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12V6l5-3 5 3v6H3zm2-1h6V7.2L8 5.5 5 7.2V11z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  print: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v3H4zm-1 4h10v5H3zm2 2h2v1H5zm6-5v8H5V3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+};
+const boxW = (b: Box) => { const [x0, z0] = toWorld(b), [x1, z1] = toWorld({ x: b.x + b.w, y: b.y + b.h }); return { x0, z0, x1, z1, cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 }; };
+function sign(ctx: TownCtx, html: string, text: string, sub: string, color: string, x: number, y: number, z: number, testid: string, labelKey?: LabelKey) {
+  const div = document.createElement('div'); div.className = 'room-label-3d street-label'; div.style.setProperty('--tint', color); div.dataset.testid = testid;
+  if (labelKey) div.dataset.label = labelKey;
+  div.innerHTML = html; div.append(document.createTextNode(text));
+  if (sub) { const s = document.createElement('small'); s.textContent = sub; div.append(s); }
+  if (labelKey && labelKey !== 'monitor') applyLabelVisibility(div, isLabelOn(labelKey));
+  const o = new CSS2DObject(div); o.center.set(0.5, 1); o.position.set(x, y, z); ctx.group.add(o); return div;
+}
+
+// ---------- static scenery ----------
+function ground(ctx: TownCtx) {
+  const { x0, x1, z0, z1 } = TOWN_BOUNDS, n = ctx.group;
+  block(n, x1 - x0 + 2, 0.2, z1 - z0 + 2, '#9ccc7e', (x0 + x1) / 2, -0.12, (z0 + z1) / 2, false);
+  for (const r of ROADS) {
+    const b = boxW(r), h = r.w > r.h;
+    block(n, b.w + (h ? 0 : 0.6), 0.06, b.d + (h ? 0.6 : 0), '#cfc8ba', b.cx, -0.03, b.cz, false); // sidewalk
+    block(n, b.w, 0.06, b.d, '#4b505c', b.cx, -0.0, b.cz, false);
+    const len = h ? b.w : b.d;
+    for (let s = 0.6; s < len - 0.6; s += 1.6) block(n, h ? 0.8 : 0.08, 0.01, h ? 0.08 : 0.8, '#f3ecd2', h ? b.x0 + s : b.cx, 0.035, h ? b.cz : b.z0 + s, false);
+  }
+  // zebra crossing in front of the office
+  const f = boxW(ROADS[1]); for (let i = 0; i < 6; i++) block(n, 0.32, 0.01, f.d - 0.3, '#f3ecd2', -1 + i * 0.42, 0.04, f.cz, false);
+  // trees along the streets
+  for (const [x, z] of [[-19.5, -8], [-12, 12.5], [0, 12.6], [9, 12.5], [16.5, 12.3], [21, 6]]) tree(n, x, z); // dropped [-19.5,9] + [-14.2,12.5] for the beer stall across from the gate
+}
+function tree(parent: THREE.Object3D, x: number, z: number) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); parent.add(g);
+  block(g, 0.26, 1.2, 0.26, '#8a5a3b', 0, 0.6, 0);
+  block(g, 1.3, 0.9, 1.3, '#4caf6a', 0, 1.55, 0); block(g, 0.95, 0.7, 0.95, '#5cc27a', 0.1, 2.25, -0.05).rotation.y = 0.5; block(g, 0.5, 0.45, 0.5, '#6fd08b', -0.05, 2.75, 0.05);
+}
+function cafe(ctx: TownCtx) {
+  const b = boxW(CAFE), n = ctx.group, g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); n.add(g);
+  const W = b.w, D = b.d, H = 2.5, wood = '#6b4a34';
+  block(g, W, 0.08, D, '#d9c4a5', 0, 0.04, 0, false);
+  for (let i = 0; i < 7; i++) block(g, W, 0.004, 0.02, '#c4ab88', 0, 0.082, -D / 2 + (i + 0.5) * D / 7, false);
+  block(g, W, H, 0.18, wood, 0, H / 2, -D / 2 + 0.09); // back wall
+  for (const s of [-1, 1]) block(g, 0.18, H, D, wood, s * (W / 2 - 0.09), H / 2, 0);
+  block(g, W + 0.3, 0.14, D + 0.3, '#4a3224', 0, H + 0.07, 0, false); // roof edge
+  // striped awning over the open front
+  const N = 8; for (let i = 0; i < N; i++) { const a = block(g, W / N, 0.06, 1.1, i % 2 ? '#2f7d6d' : '#efe7d4', -W / 2 + (i + 0.5) * W / N, H - 0.25, D / 2 + 0.35); a.rotation.x = 0.35; }
+  // counter + espresso machine + menu board
+  block(g, W - 1.2, 0.95, 0.6, '#a5774f', 0, 0.48, -D / 2 + 1); block(g, W - 1.1, 0.06, 0.7, '#3d2c22', 0, 0.98, -D / 2 + 1);
+  block(g, 0.5, 0.5, 0.4, '#2b2a30', -0.8, 1.26, -D / 2 + 0.95); block(g, 0.06, 0.06, 0.06, glowMaterial('#3bff7a'), -0.65, 1.4, -D / 2 + 1.16, false);
+  for (let i = 0; i < 4; i++) block(g, 0.12, 0.14, 0.12, ['#ffffff', '#f5efe6', '#ffffff', '#e9925f'][i], 0.2 + i * 0.25, 1.08, -D / 2 + 1);
+  block(g, 1.8, 0.9, 0.04, '#1f1712', 0.6, 1.9, -D / 2 + 0.2, false);
+  for (let i = 0; i < 3; i++) block(g, 1.3 - i * 0.2, 0.05, 0.01, '#f6d7a7', 0.5, 2.15 - i * 0.22, -D / 2 + 0.225, false);
+  // tables and stools
+  for (const [x, z] of [[-1.4, 0.6], [0.2, 1.4], [1.6, 0.4], [-0.6, 2.4]]) {
+    const t = new THREE.Group(); t.position.set(x, 0, z); g.add(t);
+    block(t, 0.06, 0.7, 0.06, '#3d2c22', 0, 0.35, 0); block(t, 0.7, 0.05, 0.7, '#d9b98f', 0, 0.72, 0); block(t, 0.12, 0.1, 0.12, '#ffffff', 0.12, 0.8, 0.05);
+    for (const [dx, dz] of [[-0.6, 0], [0.6, 0]]) { block(t, 0.36, 0.06, 0.36, '#2f7d6d', dx, 0.45, dz); block(t, 0.05, 0.42, 0.05, '#3d2c22', dx, 0.21, dz); }
+  }
+  ctx.plant(g, -W / 2 + 0.5, D / 2 - 0.4, 0.9); ctx.plant(g, W / 2 - 0.5, D / 2 - 0.4, 0.9);
+  const shade = ctx.own(new THREE.MeshLambertMaterial({ color: '#fff4d6', emissive: '#ffd27a', emissiveIntensity: 0 }));
+  for (const x of [-1, 1]) block(g, 0.3, 0.2, 0.3, shade, x, H - 0.25, 0, false); ctx.shades.push(shade);
+  if (!ctx.soft) { const l = new THREE.PointLight('#ffd9a0', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
+  sign(ctx, ICON.coffee, 'Crossian Cafe', 'coffee · iced milk coffee', '#2f7d6d', b.cx, H + 0.6, b.cz - D / 2 + 0.2, 'office3d-cafe', 'cafe');
+}
+/** Xuka Massage: across the back street from Crossian Cafe, open front facing the street. Beds + towels + lanterns, PG. */
+function massage(ctx: TownCtx) {
+  const b = boxW(MASSAGE), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  const W = b.w, D = b.d, H = 2.6, wall = '#f3d9e4', trim = '#b0476f';
+  block(g, W, 0.08, D, '#e9dcc7', 0, 0.04, 0, false);
+  for (let i = 0; i < 6; i++) block(g, W, 0.004, 0.02, '#d6c4a8', 0, 0.082, -D / 2 + (i + 0.5) * D / 6, false);
+  block(g, W, H, 0.18, wall, 0, H / 2, -D / 2 + 0.09);
+  for (const s of [-1, 1]) block(g, 0.18, H, D, wall, s * (W / 2 - 0.09), H / 2, 0);
+  block(g, W + 0.3, 0.14, D + 0.3, trim, 0, H + 0.07, 0, false);
+  const N = 8; for (let i = 0; i < N; i++) { const a = block(g, W / N, 0.06, 1.1, i % 2 ? trim : '#fbe7ef', -W / 2 + (i + 0.5) * W / N, H - 0.25, D / 2 + 0.35); a.rotation.x = 0.35; }
+  // massage beds with towels and pillows, curtains between them
+  for (const p of MASSAGE_BEDS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    block(g, 0.8, 0.5, 1.9, '#8d5a3b', lx, 0.3, lz); block(g, 0.82, 0.1, 1.92, '#ffffff', lx, 0.6, lz); block(g, 0.5, 0.1, 0.3, '#f8bbd0', lx, 0.7, lz - 0.7, false);
+    block(g, 0.84, 0.04, 0.5, '#b0476f', lx, 0.66, lz + 0.4, false);
+  }
+  for (const s of [-1, 1]) block(g, 0.04, 1.8, 1.8, material('#f8bbd0', { transparent: true, opacity: 0.55 }), s * 0.9, 1, -0.3, false);
+  // reception, towel shelf, aroma candles, lotus pots
+  block(g, 1.4, 0.9, 0.5, '#8d5a3b', -W / 2 + 1.1, 0.45, D / 2 - 0.9); block(g, 1.5, 0.06, 0.6, '#5d3a26', -W / 2 + 1.1, 0.93, D / 2 - 0.9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) block(g, 0.3, 0.14, 0.3, ['#ffffff', '#f8bbd0', '#b2dfdb'][j], W / 2 - 0.5, 0.4 + i * 0.4 + j * 0.13, -D / 2 + 0.6 + j * 0.02, false);
+  for (const x of [-0.6, 0.6]) { block(g, 0.08, 0.14, 0.08, '#fff3e0', x, 1.0, D / 2 - 0.9, false); block(g, 0.04, 0.06, 0.04, glowMaterial('#ffb74d'), x, 1.1, D / 2 - 0.9, false); }
+  ctx.plant(g, -W / 2 + 0.4, D / 2 - 0.3, 0.8); ctx.plant(g, W / 2 - 0.4, D / 2 - 0.3, 0.8);
+  const shade = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd6e6', emissive: '#ff8fb8', emissiveIntensity: 0 }));
+  for (const x of [-1.2, 0, 1.2]) block(g, 0.26, 0.34, 0.26, shade, x, H - 0.3, 0.6, false); ctx.shades.push(shade);
+  if (!ctx.soft) { const l = new THREE.PointLight('#ffc2da', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
+  sign(ctx, ICON.spa, 'Xuka Massage', 'neck & shoulders · foot soak', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'office3d-massage', 'massage');
+}
+/** BBQ grill: BBQ + crocodile-meat hotpot opposite the pond. Voxel like Crossian / Xuka. */
+function bbqGrill(ctx: TownCtx) {
+  const b = boxW(BBQ), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  const W = b.w, D = b.d, H = 2.55, wood = '#6b3a2a', accent = '#c45c26';
+  block(g, W, 0.08, D, '#c4a882', 0, 0.04, 0, false);
+  for (let i = 0; i < 6; i++) block(g, W, 0.004, 0.02, '#a88860', 0, 0.082, -D / 2 + (i + 0.5) * D / 6, false);
+  block(g, W, H, 0.18, wood, 0, H / 2, -D / 2 + 0.09);
+  for (const s of [-1, 1]) block(g, 0.18, H, D, wood, s * (W / 2 - 0.09), H / 2, 0);
+  block(g, W + 0.3, 0.14, D + 0.3, '#3d2418', 0, H + 0.07, 0, false);
+  const N = 8; for (let i = 0; i < N; i++) { const a = block(g, W / N, 0.06, 1.1, i % 2 ? accent : '#f3e0c8', -W / 2 + (i + 0.5) * W / N, H - 0.25, D / 2 + 0.35); a.rotation.x = 0.35; }
+  // grill + hotpot table
+  block(g, 1.6, 0.7, 0.7, '#3a3a44', -0.9, 0.4, -D / 2 + 1.1); block(g, 1.5, 0.08, 0.6, '#1f1f24', -0.9, 0.78, -D / 2 + 1.1);
+  for (let i = 0; i < 5; i++) block(g, 1.35, 0.02, 0.04, '#8a8f99', -0.9, 0.84, -D / 2 + 0.9 + i * 0.08, false);
+  block(g, 0.55, 0.2, 0.55, glowMaterial('#ff6a2a'), -0.9, 0.95, -D / 2 + 1.1, false);
+  block(g, 1.1, 0.55, 1.1, '#5d4037', 1.0, 0.35, -0.2); block(g, 0.7, 0.25, 0.7, '#b71c1c', 1.0, 0.75, -0.2);
+  block(g, 0.55, 0.18, 0.55, material('#ef5350', { transparent: true, opacity: 0.7 }), 1.0, 0.95, -0.2, false);
+  // tables + stools at BBQ_SEATS
+  for (const p of BBQ_SEATS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    block(g, 0.7, 0.05, 0.7, '#8d6e4c', lx, 0.72, lz); block(g, 0.06, 0.7, 0.06, '#4e342e', lx, 0.35, lz);
+    block(g, 0.14, 0.1, 0.14, '#ffffff', lx + 0.15, 0.8, lz + 0.1);
+    for (const [dx, dz] of [[-0.55, 0.1], [0.55, 0.1]]) { block(g, 0.34, 0.06, 0.34, accent, lx + dx, 0.45, lz + dz); block(g, 0.05, 0.42, 0.05, '#4e342e', lx + dx, 0.21, lz + dz); }
+  }
+  // croc-themed menu board + smoke lanterns
+  block(g, 1.6, 0.9, 0.04, '#2b1a12', 0.2, 1.85, -D / 2 + 0.2, false);
+  for (let i = 0; i < 3; i++) block(g, 1.1 - i * 0.15, 0.05, 0.01, '#f6d7a7', 0.15, 2.1 - i * 0.2, -D / 2 + 0.225, false);
+  ctx.plant(g, -W / 2 + 0.45, D / 2 - 0.35, 0.85); ctx.plant(g, W / 2 - 0.45, D / 2 - 0.35, 0.85);
+  const shade = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd4a8', emissive: '#ff8a3d', emissiveIntensity: 0 }));
+  for (const x of [-1.1, 0.2, 1.3]) block(g, 0.28, 0.28, 0.28, shade, x, H - 0.3, 0.4, false); ctx.shades.push(shade);
+  if (!ctx.soft) { const l = new THREE.PointLight('#ffb070', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.4); g.add(l); ctx.lights.push(l); }
+  sign(ctx, ICON.grill, 'BBQ Grill', 'BBQ · croc hotpot', accent, b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'office3d-bbq', 'bbq');
+}
+/** Flower garden between Xuka and the BBQ grill — secret-affair hangout. */
+function garden(ctx: TownCtx) {
+  const b = boxW(GARDEN), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.06, b.d, '#7cbc5a', 0, 0.02, 0, false);
+  // gravel path through the middle
+  block(g, b.w * 0.9, 0.04, 0.7, '#d5c4a1', 0, 0.04, 0, false);
+  const petals = ['#f48fb1', '#ce93d8', '#fff59d', '#ef9a9a', '#80cbc4', '#ffcc80'];
+  for (let i = 0; i < 28; i++) {
+    const lx = -b.w / 2 + 0.6 + (i % 14) * (b.w - 1.2) / 13, lz = (i < 14 ? -1 : 1) * (0.7 + (i % 5) * 0.22);
+    block(g, 0.08, 0.35, 0.08, '#2e7d32', lx, 0.2, lz);
+    block(g, 0.28, 0.1, 0.28, petals[i % petals.length], lx, 0.42, lz, false);
+    block(g, 0.1, 0.1, 0.1, '#ffe082', lx, 0.5, lz, false);
+  }
+  // benches at romance spots
+  for (const p of ROMANCE_SPOTS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    block(g, 1.1, 0.08, 0.4, '#8d6e4c', lx, 0.42, lz + 0.35); block(g, 1.1, 0.45, 0.08, '#6d4c35', lx, 0.55, lz + 0.55);
+    for (const s of [-1, 1]) block(g, 0.08, 0.4, 0.08, '#5d4037', lx + s * 0.45, 0.2, lz + 0.35);
+  }
+  // low hedges at the edges
+  for (const s of [-1, 1]) block(g, b.w - 0.4, 0.45, 0.22, '#4caf50', 0, 0.25, s * (b.d / 2 - 0.2));
+  sign(ctx, ICON.flower, 'Flower Garden', 'strolls · dates…?', '#ad1457', b.cx, 1.6, b.cz - b.d / 2 + 0.3, 'office3d-garden', 'garden');
+}
+/** Sidewalk iced tea stall: plastic stools, a tea jug, a beer crate. */
+function teaStall(ctx: TownCtx) {
+  const b = boxW(TEA_STALL), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.03, b.d, '#bdb6a8', 0, 0.015, 0, false);
+  // low blue plastic table, red/blue stools
+  block(g, 1.8, 0.05, 0.8, '#2f6fe0', 0, 0.42, 0.15); for (const [x, z] of [[-0.8, -0.2], [0.8, -0.2], [-0.8, 0.5], [0.8, 0.5]]) block(g, 0.05, 0.4, 0.05, '#2457b8', x, 0.2, z);
+  const cup = material('#f4e9b8', { transparent: true, opacity: 0.8 });
+  for (let i = 0; i < 4; i++) block(g, 0.1, 0.16, 0.1, cup, -0.6 + i * 0.4, 0.53, 0.1 + (i % 2) * 0.15);
+  for (let i = 0; i < 4; i++) { const x = -1.3 + i * 0.85, z = 1.05 + (i % 2) * 0.08, c = i % 2 ? '#2563eb' : '#e23d3d'; block(g, 0.36, 0.05, 0.36, c, x, 0.3, z); for (const s of [-1, 1]) block(g, 0.04, 0.28, 0.32, c, x + s * 0.15, 0.14, z); }
+  // cart with the big tea jug, beer crate, umbrella
+  block(g, 0.9, 0.6, 0.6, '#c9a46a', -1.6, 0.4, -0.9); for (const s of [-1, 1]) block(g, 0.08, 0.3, 0.3, '#3a3a44', -1.6 + s * 0.4, 0.15, -0.9);
+  block(g, 0.42, 0.5, 0.42, '#f2c14e', -1.65, 0.95, -0.9); block(g, 0.46, 0.06, 0.46, '#d89a2b', -1.65, 1.22, -0.9); block(g, 0.08, 0.06, 0.08, '#e23d3d', -1.4, 0.82, -0.68, false);
+  block(g, 0.6, 0.35, 0.42, '#2e7d32', 1.7, 0.18, -0.7); for (let i = 0; i < 6; i++) block(g, 0.07, 0.18, 0.07, '#8bc34a', 1.5 + (i % 3) * 0.2, 0.44, -0.8 + Math.floor(i / 3) * 0.2, false);
+  block(g, 0.06, 2.3, 0.06, '#5d5f6b', 0.1, 1.15, -0.3);
+  for (let i = 0; i < 4; i++) block(g, 0.6, 0.06, 2.4, i % 2 ? '#f5d547' : '#e23d3d', -0.8 + i * 0.6, 2.32, -0.2, false);
+  sign(ctx, ICON.glass, 'Iced Tea Stall', '3k a glass', '#d89a2b', b.cx, 2.75, b.cz, 'office3d-iced-tea', 'iced-tea');
+}
+export interface Croc { g: THREE.Group; jaw: THREE.Group; a: number; r: number; v: number }
+function crocMesh(parent: THREE.Object3D): Croc {
+  const g = new THREE.Group(); parent.add(g); const green = '#3f7d3a', dark = '#2f6a2c';
+  block(g, 0.5, 0.22, 1.5, green, 0, 0.11, 0); block(g, 0.34, 0.16, 0.7, dark, 0, 0.08, -1.05); block(g, 0.2, 0.12, 0.5, dark, 0, 0.06, -1.6);
+  for (let i = 0; i < 4; i++) block(g, 0.1, 0.08, 0.1, dark, 0, 0.26, -0.5 + i * 0.32, false);
+  for (const s of [-1, 1]) for (const z of [-0.45, 0.45]) block(g, 0.14, 0.1, 0.2, dark, s * 0.32, 0.03, z, false);
+  block(g, 0.4, 0.1, 0.62, green, 0, 0.06, 1.04); // lower jaw
+  const jaw = new THREE.Group(); jaw.position.set(0, 0.16, 0.74); g.add(jaw); // upper jaw, hinged at the back
+  block(jaw, 0.42, 0.12, 0.66, green, 0, 0.02, 0.32); for (const s of [-1, 1]) { block(jaw, 0.1, 0.1, 0.1, '#f2e36b', s * 0.13, 0.12, 0.02, false); block(jaw, 0.04, 0.06, 0.04, '#1d1a22', s * 0.13, 0.14, 0.07, false); }
+  for (let i = 0; i < 4; i++) for (const s of [-1, 1]) block(jaw, 0.04, 0.06, 0.04, '#ffffff', s * 0.17, -0.06, 0.12 + i * 0.14, false);
+  return { g, jaw, a: 0, r: 0.6, v: 0.3 };
+}
+function pond(ctx: TownCtx) {
+  const [cx, cz] = toWorld(pondCenter()), rx = POND.rx / PX, rz = POND.ry / PX;
+  const cyl = ctx.own(new THREE.CylinderGeometry(1, 1, 1, 40));
+  const trim = new THREE.Mesh(cyl, material('#9b8a6b')); trim.scale.set(rx + 0.45, 0.16, rz + 0.45); trim.position.set(cx, 0.06, cz); ctx.group.add(trim);
+  const water = new THREE.Mesh(cyl, material('#3f95b3', { emissive: '#1d5f78', emissiveIntensity: 0.25 })); water.scale.set(rx, 0.05, rz); water.position.set(cx, 0.15, cz); water.receiveShadow = !ctx.soft; ctx.group.add(water);
+  for (let i = 0; i < 10; i++) { const a = i * 0.63 + 0.3, x = cx + Math.cos(a) * (rx + 0.25), z = cz + Math.sin(a) * (rz + 0.25); block(ctx.group, 0.08, 0.5 + (i % 3) * 0.2, 0.08, '#4f8f3a', x, 0.35, z, false); }
+  for (const [dx, dz] of [[-0.6, 1.6], [0.5, -2.2]]) block(ctx.group, 0.6, 0.02, 0.5, '#5fae4f', cx + dx, 0.18, cz + dz, false); // lily pads
+  // warning sign
+  block(ctx.group, 0.08, 1.2, 0.08, '#6b5544', cx + rx + 0.7, 0.6, cz - rz * 0.6); block(ctx.group, 0.7, 0.45, 0.05, '#f5d547', cx + rx + 0.7, 1.25, cz - rz * 0.6);
+  sign(ctx, ICON.croc, 'Crocodile Pond', 'do not feed', '#3f7d3a', cx, 1.4, cz - rz - 0.3, 'office3d-pond', 'pond');
+  const crocs = [0, 1, 2].map((i) => { const c = crocMesh(ctx.group); c.a = i * 2.1; c.r = 0.45 + i * 0.12; c.v = 0.25 + i * 0.07; return c; });
+  const splash = new THREE.Mesh(ctx.own(new THREE.RingGeometry(0.7, 0.9, 32)), ctx.own(new THREE.MeshBasicMaterial({ color: '#e8f8ff', transparent: true, side: THREE.DoubleSide })));
+  splash.rotation.x = -Math.PI / 2; splash.position.set(cx, 0.2, cz); splash.visible = false; ctx.group.add(splash);
+  return { cx, cz, rx, rz, crocs, splash };
+}
+/** Small indoor status panel next to IT Ops (no outdoor street kiosk). */
+function noc(ctx: TownCtx) {
+  const [x, z] = toWorld(ITOPS_SPOT), g = new THREE.Group(); g.position.set(x + 0.85, 0, z - 0.1); g.rotation.y = 0.3; ctx.group.add(g);
+  block(g, 1.1, 0.7, 0.5, '#5d5f6b', 0, 0.35, 0); block(g, 1.15, 0.05, 0.55, '#3a3a44', 0, 0.72, 0);
+  const screen = ctx.own(new THREE.MeshLambertMaterial({ color: '#1c2030', emissive: '#94a3b8', emissiveIntensity: 0.4 }));
+  block(g, 0.9, 0.5, 0.04, '#2a2833', 0, 1.05, -0.1); block(g, 0.82, 0.42, 0.01, screen, 0, 1.05, -0.07, false);
+  block(g, 0.12, 1.1, 0.12, '#3a3a44', 0.55, 0.55, -0.15); const lamp = ctx.own(new THREE.MeshLambertMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.3 })); block(g, 0.2, 0.2, 0.2, lamp, 0.55, 1.2, -0.15);
+  const el = sign(ctx, ICON.pulse, 'Monitor', '', '#64748b', x + 0.85, 2.05, z - 0.1, 'noc', 'monitor');
+  const b = document.createElement('b'); el.append(document.createTextNode(': '), b);
+  return { screen, lamp, el, b };
+}
+
+
+/** Smoking / cooler corner west of the pond. */
+function smokeCorner(ctx: TownCtx) {
+  const b = boxW(SMOKE), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.04, b.d, '#8a9a7a', 0, 0.02, 0, false);
+  // cooler
+  block(g, 0.42, 1.0, 0.42, '#e8edf2', -1.2, 0.5, -0.2); block(g, 0.34, 0.4, 0.34, material('#8fc9ff', { transparent: true, opacity: 0.7 }), -1.2, 1.2, -0.2, false);
+  for (const [dz, c] of [[-0.08, '#3b82f6'], [0.08, '#ef4444']] as const) block(g, 0.05, 0.05, 0.05, c, -1.0, 0.8, dz, false);
+  // ashtray stand + benches
+  block(g, 0.12, 0.9, 0.12, '#5d5f6b', 0.4, 0.45, 0.3); block(g, 0.28, 0.06, 0.28, '#3a3a44', 0.4, 0.92, 0.3);
+  for (const lx of [-0.3, 1.1]) { block(g, 1.0, 0.08, 0.36, '#6d4c35', lx, 0.4, 0.9); for (const s of [-1, 1]) block(g, 0.06, 0.38, 0.06, '#4e342e', lx + s * 0.4, 0.19, 0.9); }
+  // cigarette butt tray hint
+  block(g, 0.2, 0.04, 0.2, '#c4cad3', 0.4, 0.96, 0.3, false);
+  ctx.plant(g, b.w / 2 - 0.3, -b.d / 2 + 0.3, 0.7);
+  sign(ctx, ICON.smoke, 'Smoking Corner', 'cooler · rumors', '#64748b', b.cx, 1.8, b.cz, 'office3d-smoke', 'smoke');
+}
+/** Outdoor gym + table tennis in the south yard. */
+function gymYard(ctx: TownCtx) {
+  const b = boxW(GYM), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.05, b.d, '#c4b89a', 0, 0.02, 0, false);
+  // table tennis
+  block(g, 2.4, 0.06, 1.3, '#1e88e5', -2.2, 0.76, 0); block(g, 0.06, 0.72, 0.06, '#5d5f6b', -3.2, 0.36, -0.5); block(g, 0.06, 0.72, 0.06, '#5d5f6b', -1.2, 0.36, -0.5);
+  block(g, 0.06, 0.72, 0.06, '#5d5f6b', -3.2, 0.36, 0.5); block(g, 0.06, 0.72, 0.06, '#5d5f6b', -1.2, 0.36, 0.5);
+  block(g, 0.04, 0.28, 1.28, '#ffffff', -2.2, 0.92, 0, false);
+  // rack of dumbbells
+  block(g, 1.4, 0.5, 0.4, '#3a3a44', 1.8, 0.25, -0.6);
+  for (let i = 0; i < 4; i++) { block(g, 0.08, 0.08, 0.55, '#8a8f99', 1.3 + i * 0.3, 0.55, -0.6); block(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.85); block(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.35); }
+  // mat
+  block(g, 1.6, 0.03, 1.0, '#ef5350', 2.0, 0.04, 0.8, false);
+  sign(ctx, ICON.gym, 'Outdoor Gym', 'ping pong · weights', '#1565c0', b.cx, 1.7, b.cz - b.d / 2 + 0.2, 'office3d-gym', 'gym');
+}
+/** ATM + snack machine near the iced tea stall. */
+function atmSnack(ctx: TownCtx) {
+  const b = boxW(ATM), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.03, b.d, '#b0b8c0', 0, 0.015, 0, false);
+  // ATM
+  block(g, 0.7, 1.5, 0.45, '#2a2f3a', -0.9, 0.75, -0.2); block(g, 0.5, 0.35, 0.04, glowMaterial('#4fc3f7'), -0.9, 1.15, 0.04, false);
+  block(g, 0.35, 0.08, 0.08, '#1a1f28', -0.9, 0.7, 0.05, false); block(g, 0.2, 0.05, 0.05, '#66bb6a', -0.9, 0.55, 0.05, false);
+  // snack machine
+  block(g, 0.85, 1.7, 0.55, '#e53935', 0.7, 0.85, -0.15); block(g, 0.7, 1.2, 0.04, material('#81d4fa', { transparent: true, opacity: 0.55 }), 0.7, 0.95, 0.14, false);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) block(g, 0.14, 0.14, 0.1, ['#ffeb3b', '#8bc34a', '#ff9800', '#e91e63', '#fff', '#2196f3'][(r * 3 + c) % 6], 0.4 + c * 0.22, 1.35 - r * 0.3, 0.1, false);
+  block(g, 0.35, 0.08, 0.12, '#1a1a1a', 0.7, 0.25, 0.15, false);
+  sign(ctx, ICON.atm, 'ATM · Snack', 'cash · instant noodles', '#c62828', b.cx, 2.1, b.cz, 'office3d-atm', 'atm');
+}
+/** Parking / security gate SW. */
+function securityGate(ctx: TownCtx) {
+  const b = boxW(GATE), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.03, b.d, '#9e9e9e', 0, 0.015, 0, false);
+  // booth
+  block(g, 1.2, 2.0, 1.2, '#eceff1', -1.3, 1.0, 0); block(g, 1.3, 0.1, 1.3, '#37474f', -1.3, 2.05, 0, false);
+  block(g, 0.7, 0.5, 0.05, material('#81d4fa', { transparent: true, opacity: 0.5 }), -1.3, 1.3, 0.6, false);
+  block(g, 0.3, 0.08, 0.08, '#fdd835', -1.3, 1.7, 0.62, false);
+  // barrier arm
+  block(g, 0.15, 0.9, 0.15, '#455a64', 0.2, 0.45, 0); block(g, 2.4, 0.1, 0.12, '#fdd835', 1.4, 0.95, 0); block(g, 2.4, 0.1, 0.04, '#212121', 1.4, 0.95, 0.02, false);
+  // parking lines
+  for (let i = 0; i < 3; i++) block(g, 0.08, 0.02, 1.0, '#ffffff', 0.6 + i * 0.9, 0.03, 0.3, false);
+  sign(ctx, ICON.gate, 'Security Gate', 'parking · sign in', '#455a64', b.cx, 2.4, b.cz, 'office3d-gate', 'gate');
+}
+/** Glass outdoor meeting pod — fake meetings / naps. */
+function meetingPod(ctx: TownCtx) {
+  const b = boxW(POD), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  const glass = material('#b3e5fc', { transparent: true, opacity: 0.35 });
+  block(g, b.w, 0.06, b.d, '#cfd8dc', 0, 0.03, 0, false);
+  // glass walls
+  block(g, b.w, 2.2, 0.08, glass, 0, 1.1, -b.d / 2 + 0.04, false);
+  block(g, b.w, 2.2, 0.08, glass, 0, 1.1, b.d / 2 - 0.04, false);
+  for (const s of [-1, 1]) block(g, 0.08, 2.2, b.d, glass, s * (b.w / 2 - 0.04), 1.1, 0, false);
+  block(g, b.w + 0.2, 0.1, b.d + 0.2, '#90a4ae', 0, 2.25, 0, false);
+  // table + chairs
+  block(g, 1.4, 0.06, 0.8, '#eceff1', 0, 0.72, 0); block(g, 0.08, 0.7, 0.08, '#78909c', 0, 0.35, 0);
+  for (const [dx, dz] of [[-0.7, 0.55], [0.7, 0.55], [-0.7, -0.55], [0.7, -0.55]]) {
+    block(g, 0.4, 0.06, 0.4, '#42a5f5', dx, 0.45, dz); block(g, 0.05, 0.42, 0.05, '#546e7a', dx, 0.21, dz);
+  }
+  // laptop decoy
+  block(g, 0.35, 0.02, 0.25, '#263238', 0.15, 0.78, 0.1, false); block(g, 0.35, 0.22, 0.02, glowMaterial('#4fc3f7'), 0.15, 0.9, -0.02, false);
+  sign(ctx, ICON.pod, 'Meeting Pod', 'fake meetings · naps', '#0288d1', b.cx, 2.6, b.cz, 'office3d-pod', 'pod');
+}
+
+/** Beer stall opposite parking/gate across the front street. */
+function beerStall(ctx: TownCtx) {
+  const b = boxW(BEER_STALL), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  const accent = '#c62828';
+  block(g, b.w, 0.06, b.d, '#d7ccc8', 0, 0.03, 0, false);
+  // open stall counter + roof
+  block(g, b.w * 0.9, 1.1, 0.18, '#efebe9', 0, 0.7, -b.d / 2 + 0.2);
+  block(g, b.w * 0.95, 0.08, b.d * 0.7, accent, 0, 2.05, 0, false);
+  block(g, 0.08, 2.0, 0.08, '#5d4037', -b.w / 2 + 0.2, 1.0, -b.d / 2 + 0.25);
+  block(g, 0.08, 2.0, 0.08, '#5d4037', b.w / 2 - 0.2, 1.0, -b.d / 2 + 0.25);
+  block(g, 0.08, 2.0, 0.08, '#5d4037', -b.w / 2 + 0.2, 1.0, b.d / 2 - 0.3);
+  block(g, 0.08, 2.0, 0.08, '#5d4037', b.w / 2 - 0.2, 1.0, b.d / 2 - 0.3);
+  // beer taps / kegs
+  block(g, 0.55, 0.9, 0.55, '#90a4ae', -1.3, 0.5, -0.5); block(g, 0.55, 0.9, 0.55, '#78909c', -0.5, 0.5, -0.5);
+  block(g, 0.08, 0.35, 0.08, '#eceff1', -1.3, 1.05, -0.2); block(g, 0.08, 0.35, 0.08, '#eceff1', -0.5, 1.05, -0.2);
+  // plastic stools + low tables at seats
+  for (const p of BEER_SEATS) {
+    const [x, z] = toWorld(p), lx = x - b.cx, lz = z - b.cz;
+    block(g, 0.55, 0.06, 0.55, '#fff59d', lx, 0.42, lz);
+    block(g, 0.08, 0.4, 0.08, '#f9a825', lx, 0.2, lz);
+    block(g, 0.32, 0.05, 0.32, ['#42a5f5', '#66bb6a', '#ef5350', '#ab47bc', '#29b6f6'][Math.abs(Math.round(lx * 3 + lz)) % 5], lx + 0.55, 0.38, lz + 0.15);
+    block(g, 0.05, 0.36, 0.05, '#546e7a', lx + 0.55, 0.18, lz + 0.15);
+  }
+  // signboard
+  block(g, 1.8, 0.45, 0.06, accent, 0, 2.35, -b.d / 2 + 0.15, false);
+  sign(ctx, ICON.glass, 'Beer Stall', 'draft beer · roasted peanuts', accent, b.cx, 2.9, b.cz - b.d / 2 + 0.2, 'office3d-beer-stall', 'beer-stall');
+}
+
+/** Printer + photocopier inside the office: back/north wall, by the window right of the back door; fronts face into the room. */
+function printKiosk(ctx: TownCtx) {
+  const b = boxW(PRINT), g = new THREE.Group(); g.position.set(b.cx, 0, b.cz); ctx.group.add(g);
+  block(g, b.w, 0.012, b.d, '#bdbdbd', 0, 0.012, 0, false);
+  // printer
+  block(g, 1.1, 0.85, 0.7, '#eceff1', -0.6, 0.45, 0); block(g, 0.9, 0.08, 0.5, '#90a4ae', -0.6, 0.92, 0);
+  block(g, 0.5, 0.05, 0.35, '#ffffff', -0.6, 0.98, 0.05, false); // paper out
+  block(g, 0.2, 0.08, 0.08, '#66bb6a', -0.2, 0.7, 0.36, false);
+  // photocopy stand
+  block(g, 0.9, 1.1, 0.65, '#78909c', 1.0, 0.55, 0); block(g, 0.7, 0.5, 0.04, material('#81d4fa', { transparent: true, opacity: 0.45 }), 1.0, 0.9, 0.34, false);
+  block(g, 0.5, 0.02, 0.4, '#fafafa', 1.0, 1.12, 0.05, false);
+  // paper stack mess
+  for (let i = 0; i < 3; i++) block(g, 0.35, 0.02, 0.28, '#fff', -0.1 + i * 0.05, 0.2 + i * 0.03, 0.5, false);
+  sign(ctx, ICON.print, 'Printer · Copier', 'paper jams · the boss\'s payslip?', '#546e7a', b.cx, 1.9, b.cz, 'office3d-print', 'print');
+}
+
+// ---------- side characters ----------
+interface Pet { root: THREE.Group; head: THREE.Group; tail: THREE.Group; legs: THREE.Group[]; eyes: THREE.Object3D[] }
+function petMesh(cat: boolean): Pet {
+  const root = new THREE.Group(), fur = cat ? '#9aa3ad' : '#c58b4e', dark = cat ? '#6b737d' : '#8a5a3b', s = cat ? 0.8 : 1;
+  const torso = new THREE.Group(); torso.scale.setScalar(s); root.add(torso);
+  block(torso, 0.34, 0.3, 0.72, fur, 0, 0.42, 0);
+  if (cat) for (let i = 0; i < 3; i++) block(torso, 0.35, 0.06, 0.08, dark, 0, 0.55, -0.2 + i * 0.2, false); else block(torso, 0.35, 0.12, 0.3, '#f1e4d0', 0, 0.36, 0.1, false);
+  const legs = [[-0.11, 0.26], [0.11, 0.26], [-0.11, -0.26], [0.11, -0.26]].map(([x, z]) => { const p = new THREE.Group(); p.position.set(x, 0.3, z); torso.add(p); block(p, 0.1, 0.3, 0.1, dark, 0, -0.15, 0); return p; });
+  const head = new THREE.Group(); head.position.set(0, 0.62, 0.42); torso.add(head);
+  block(head, 0.34, 0.3, 0.3, fur, 0, 0, 0);
+  block(head, cat ? 0.16 : 0.2, cat ? 0.1 : 0.14, cat ? 0.08 : 0.2, cat ? '#c4cad3' : '#e7c9a0', 0, -0.06, 0.18); block(head, 0.07, 0.05, 0.04, '#1d1a22', 0, -0.02, cat ? 0.22 : 0.29, false);
+  const eyes: THREE.Object3D[] = [];
+  for (const b of [-1, 1]) { eyes.push(block(head, 0.05, 0.06, 0.02, '#1d1a22', b * 0.08, 0.05, 0.155, false)); block(head, cat ? 0.08 : 0.08, cat ? 0.12 : 0.18, 0.06, dark, b * 0.12, cat ? 0.2 : 0.08, -0.04, false).rotation.z = b * (cat ? 0.15 : -0.3); }
+  const tail = new THREE.Group(); tail.position.set(0, 0.52, -0.36); torso.add(tail);
+  block(tail, 0.07, cat ? 0.5 : 0.08, cat ? 0.07 : 0.34, dark, 0, cat ? 0.25 : 0.04, cat ? -0.02 : -0.17);
+  return { root, head, tail, legs, eyes };
+}
+type Trex = { root: THREE.Group; head: THREE.Group; tail: THREE.Group; legs: THREE.Group[]; arms: THREE.Group[]; eyes: THREE.Object3D[] };
+function trexMesh(): Trex {
+  const root = new THREE.Group(), skin = '#5a8f3c', dark = '#3f6a28', belly = '#c5d98a';
+  const torso = new THREE.Group(); root.add(torso);
+  block(torso, 0.55, 0.55, 0.9, skin, 0, 0.85, -0.05); // torso
+  block(torso, 0.45, 0.35, 0.55, belly, 0, 0.7, 0.05, false); // belly
+  const head = new THREE.Group(); head.position.set(0, 1.25, 0.55); torso.add(head);
+  block(head, 0.48, 0.38, 0.55, skin, 0, 0, 0); // head
+  block(head, 0.42, 0.16, 0.4, '#2a3d1f', 0, -0.12, 0.12, false); // jaw
+  const eyes: THREE.Object3D[] = [];
+  for (const b of [-1, 1]) {
+    eyes.push(block(head, 0.06, 0.06, 0.04, '#1d1a22', b * 0.12, 0.08, 0.26, false)); // eyes
+    block(head, 0.05, 0.1, 0.04, '#e8eecf', b * 0.1, -0.08, 0.28, false); // teeth hint
+  }
+  const arms = [-1, 1].map((s) => {
+    const p = new THREE.Group(); p.position.set(s * 0.32, 0.85, 0.2); torso.add(p);
+    block(p, 0.08, 0.22, 0.08, dark, 0, -0.05, 0); return p;
+  });
+  const legs = [-1, 1].map((s) => {
+    const p = new THREE.Group(); p.position.set(s * 0.18, 0.55, -0.05); torso.add(p);
+    block(p, 0.16, 0.55, 0.22, dark, 0, -0.25, 0); block(p, 0.22, 0.08, 0.28, '#2f4a1c', 0, -0.52, 0.04, false); return p;
+  });
+  const tail = new THREE.Group(); tail.position.set(0, 0.85, -0.55); torso.add(tail);
+  block(tail, 0.22, 0.22, 0.7, skin, 0, 0, -0.3); block(tail, 0.12, 0.12, 0.35, dark, 0, 0.02, -0.7);
+  root.scale.setScalar(1.15);
+  return { root, head, tail, legs, arms, eyes };
+}
+/** Midpoint of the two eye voxels, facing the head's local +Z, then pushed past the snout. */
+export function liveEye(head: THREE.Object3D, eyes: THREE.Object3D[], push: number): Eye | undefined {
+  if (eyes.length < 2) return;
+  head.updateWorldMatrix(true, true);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), q = new THREE.Quaternion();
+  eyes[0].getWorldPosition(a); eyes[1].getWorldPosition(b); head.getWorldQuaternion(q);
+  const p = a.add(b).multiplyScalar(0.5), fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+  if (!Number.isFinite(p.x + p.y + p.z) || fwd.lengthSq() < 1e-8) return;
+  fwd.normalize(); p.addScaledVector(fwd, push);
+  return { x: p.x, y: p.y, z: p.z, fx: fwd.x, fy: fwd.y, fz: fwd.z };
+}
+interface Fig { e: Ent; g: THREE.Group; body?: Body; pet?: Pet; trex?: Trex; el: HTMLDivElement; bb: HTMLSpanElement; nameEl: HTMLElement; subEl: HTMLElement; label: CSS2DObject;
+  lookId: string; cycle: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
+/** Short act bit under the name — only when it adds info beyond the name. */
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'coffee', tea: 'iced tea', bark: 'barking', fight: 'arguing', report: 'alert', massage: 'massage', knocked: 'knocked down', bbq: 'BBQ', romance: 'dating', smoke: 'smoking', gym: 'gym', atm: 'ATM', gate: 'gate', pod: 'meeting pod', print: 'printer', drama: 'drama', beer: 'beer stall', wobble: 'tipsy', shipper: 'shipper', hunt: 'hunting', chomp: 'eating', carry: 'carrying', carried: 'carried off' };
+const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'dog', cat: 'cat', trex: 'T-Rex', boss: 'boss', shipper: 'shipper' };
+
+export class TownLayer {
+  private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
+  private agentPrey: AgentPrey[] = []; private pendingLayoff?: LayoffEvent;
+  private p: ReturnType<typeof pond>; private traffic: Traffic; private cars: TrafficLayer; private k: ReturnType<typeof noc>; private nocKey = '';
+  private hearts: HeartFX; private heartCd = 0;
+  private rainG = new THREE.Group(); private rainDrops: THREE.Mesh[] = []; private flood?: THREE.Mesh; private rainOn = false;
+  constructor(private ctx: TownCtx, now = Date.now()) {
+    ground(ctx); cafe(ctx); massage(ctx); bbqGrill(ctx); garden(ctx); teaStall(ctx); smokeCorner(ctx); gymYard(ctx); atmSnack(ctx); securityGate(ctx);
+    beerStall(ctx); meetingPod(ctx); printKiosk(ctx); this.p = pond(ctx); this.k = noc(ctx);
+    this.hearts = new HeartFX(ctx.group);
+    // Soft rain streaks + a wet patch by the crocodile pond (readable, not a particle storm).
+    ctx.group.add(this.rainG); this.rainG.visible = false;
+    for (let i = 0; i < 48; i++) {
+      const d = block(this.rainG, 0.02, 0.35 + Math.random() * 0.25, 0.02, '#90caf9', (Math.random() - 0.5) * 36, 4 + Math.random() * 5, (Math.random() - 0.5) * 28, false);
+      d.material = material('#90caf9', { transparent: true, opacity: 0.45 });
+      this.rainDrops.push(d);
+    }
+    const [pcx, pcz] = toWorld(pondCenter());
+    this.flood = block(ctx.group, 6.5, 0.02, 4.2, material('#5b8fa8', { transparent: true, opacity: 0.35 }), pcx + 1.2, 0.04, pcz + 0.4, false);
+    this.flood.visible = false;
+    this.world = initialWorld(now); this.lastStep = now; this.traffic = initialTraffic(now); this.cars = new TrafficLayer(ctx.group);
+    // Screenshot/debug hook, opt-in via localStorage 'deck.debug' = '1': trigger a crash/fire or a garden affair.
+    try { if (localStorage.getItem('deck.debug') === '1') {
+      const w = window as unknown as Record<string, unknown>;
+      w.__deckTraffic = { crash: (x = 700) => { this.traffic = forceCrash(this.traffic, Date.now(), x); }, fire: (x = 1000) => { this.traffic = forceFire(this.traffic, Date.now(), x); } };
+      w.__deckTown = {
+        romance: () => { this.world = forceRomance(this.world, Date.now(), Math.random); },
+        drama: (kind: 'smoke' | 'gym' | 'atm' | 'print' | 'pod' | 'gate' = 'smoke') => { this.world = forceDrama(this.world, Date.now(), kind, Math.random); },
+        hearts: (x = 0, z = -14.5) => { this.hearts.burst(x, z, Date.now(), true); },
+        layoff: (mode: 'eat' | 'pond' | 'hunt' = 'hunt') => { this.world = forceLayoff(this.world, Date.now(), mode, Math.random); },
+        layoffEat: () => { this.world = forceLayoff(this.world, Date.now(), 'eat', Math.random); },
+        layoffPond: () => { this.world = forceLayoff(this.world, Date.now(), 'pond', Math.random); },
+        boss: () => { this.world = forceBoss(this.world, Date.now()); },
+      };
+    }; } catch { /* no storage */ }
+    for (const e of this.world.ents) this.figs.set(e.id, this.fig(e));
+    this.setItops(undefined);
+    try { window.addEventListener(LABELS_EVENT, this.onLabelsChanged); } catch { /* no window */ }
+  }
+  private onLabelsChanged = () => { this.refreshLabels(); };
+  disposeLabelsListener() { try { window.removeEventListener(LABELS_EVENT, this.onLabelsChanged); } catch { /* */ } }
+  /** Pond centre in world units (thrown agents fly here). */
+  get pondAt(): THREE.Vector3 { return new THREE.Vector3(this.p.cx, 0.2, this.p.cz); }
+  /** Crocodiles chomp + splash for a while (an agent was thrown in). */
+  eat(nowMs: number, ms = 2600) { this.eatUntil = Math.max(this.eatUntil, nowMs + ms); }
+  throwEnt(id: string, nowMs = Date.now()) { this.world = throwIntoPond(this.world, id, nowMs); }
+  /** Free office agents (plan px) Layoff may hunt. */
+  setAgentPrey(list: AgentPrey[]) { this.agentPrey = list; }
+  consumeLayoffEvent(): LayoffEvent | undefined { const e = this.pendingLayoff; this.pendingLayoff = undefined; return e; }
+  /** Rendered grasp pose while Layoff is carrying an office agent. Scene attaches the walker here. */
+  carryPose(): { agentId: string; x: number; y: number; z: number; heading: number } | undefined {
+    const e = this.world.ents.find((z) => z.kind === 'trex');
+    const aid = agentPartnerId(e?.partner);
+    if (!e || e.act !== 'carry' || !aid) return undefined;
+    const f = this.figs.get('layoff');
+    const [sx, sz] = toWorld(e);
+    const g = graspWorldFromCarrier(f?.x ?? sx, f?.z ?? sz);
+    return { agentId: aid, ...g, heading: f?.heading ?? 0 };
+  }
+  /** Boss walkthrough active: office agents sit up / whisper. */
+  get bossActive(): boolean { return !!(this.world.bossUntil && this.world.bossUntil > Date.now()); }
+  isRaining(): boolean { return this.world.weather === 'rain'; }
+  get payday(): boolean { return !!this.world.payday; }
+  /** Traffic state (screenshots / debugging can inject incidents). */
+  get road() { return this.traffic; }
+  set road(t: Traffic) { this.traffic = t; }
+  ent(id: string) { return this.world.ents.find((e) => e.id === id); }
+  hasPovEnt(id: string) {
+    const e = this.ent(id);
+    return !!e && canPov('ent', e.kind) && e.act !== 'eaten' && e.act !== 'gone';
+  }
+  hideFig(id: string, hidden: boolean) {
+    const f = this.figs.get(id); if (!f) return;
+    const gone = f.e.act === 'eaten' || f.e.act === 'gone';
+    f.g.visible = !hidden && !gone; f.el.style.visibility = hidden || gone ? 'hidden' : '';
+  }
+  /** Live eye pose from that model's own eyes (human / pet / T-Rex), not a shared human offset. */
+  eyeOf(id: string): Eye | undefined {
+    const f = this.figs.get(id); if (!f) return;
+    const push = eyePush(f.e.kind);
+    if (f.body) return liveEye(f.body.head, f.body.eyes, push);
+    if (f.pet) return liveEye(f.pet.head, f.pet.eyes, push);
+    if (f.trex) return liveEye(f.trex.head, f.trex.eyes, push);
+  }
+  setItops(s?: ItOpsStatus) {
+    this.itops = s;
+    const un = !s || s.mode === 'unconfigured', st = un ? 'idle' : s!.state;
+    const label = un ? 'not configured' : st === 'alert' ? `${s!.alerts.length} ${s!.alerts.length === 1 ? 'alert' : 'alerts'}` : st === 'error' ? 'can\'t read metrics' : st === 'checking' ? 'checking…' : 'all good';
+    const mode = s?.mode === 'demo' ? 'Monitor (demo)' : s?.mode === 'prometheus' ? 'Monitor · Prometheus' : 'Monitor';
+    const show = monitorLabelVisible(s);
+    const key = `${st}|${label}|${mode}|${s?.endpoint ?? ''}|${show}`; if (key === this.nocKey) return; this.nocKey = key;
+    const el = this.k.el; el.className = `room-label-3d street-label noc-${st}`; (el.childNodes[1] as Text).textContent = mode; this.k.b.textContent = label;
+    el.title = s?.endpoint ? `${s.endpoint} · ${s.query ?? ''}` : 'Set DECK_PROMETHEUS_URL';
+    applyLabelVisibility(el, show);
+    const c = st === 'ok' ? '#22c55e' : st === 'alert' || st === 'error' ? '#ef4444' : st === 'checking' ? '#f59e0b' : '#94a3b8';
+    this.k.screen.emissive.set(c); this.k.lamp.emissive.set(c); this.k.lamp.color.set(c); this.k.lamp.emissiveIntensity = st === 'idle' ? 0.3 : 0.9;
+  }
+  /** Re-apply every structure label from current prefs (Settings toggle / localStorage). */
+  refreshLabels() {
+    const prefs = loadLabels();
+    for (const el of document.querySelectorAll<HTMLElement>('[data-label]')) {
+      const key = el.dataset.label as LabelKey | undefined;
+      if (!key) continue;
+      if (key === 'monitor') applyLabelVisibility(el, monitorLabelVisible(this.itops, prefs));
+      else applyLabelVisibility(el, isLabelOn(key, prefs));
+    }
+  }
+  private lookOf(e: Ent) { return currentLook(`npc:${e.id}`) ?? e.look ?? ''; }
+  private fig(e: Ent): Fig {
+    const g = new THREE.Group(); this.ctx.group.add(g);
+    const animal = e.kind === 'dog' || e.kind === 'cat', dino = e.kind === 'trex', lookId = this.lookOf(e);
+    let body: Body | undefined, pet: Pet | undefined, trex: Trex | undefined;
+    if (dino) { trex = trexMesh(); g.add(trex.root); }
+    else if (animal) { pet = petMesh(e.kind === 'cat'); g.add(pet.root); }
+    else { body = buildPerson(presetLook(lookId), false); g.add(body.root); }
+    const el = document.createElement('div'); el.className = `person-3d ent-3d ent-${e.kind}`; el.dataset.ent = e.id; el.dataset.testid = `ent-${e.id}`;
+    el.innerHTML = '<div class="bubble-3d"><span class="bb"></span></div><div class="name-3d"><i class="dot-3d"></i><b></b><small></small></div>';
+    const label = new CSS2DObject(el); label.center.set(0.5, 1); label.position.set(0, dino ? 2.2 : animal ? 1.05 : 2.05, 0); g.add(label);
+    const [x, z] = toWorld(e);
+    const f: Fig = { e, g, body, pet, trex, el, bb: el.querySelector('.bb')!, nameEl: el.querySelector('.name-3d b')!, subEl: el.querySelector('.name-3d small')!, label, lookId, cycle: Math.random() * 10, x, z, heading: 0, bubble: '\u0000' };
+    g.position.set(x, 0, z); return f;
+  }
+  /** Rebuild a side character's body when its chosen preset changed. */
+  private relook(f: Fig) {
+    if (!f.body) return; const id = this.lookOf(f.e); if (id === f.lookId) return;
+    f.g.remove(f.body.root); f.body = buildPerson(presetLook(id), false); f.g.add(f.body.root); f.lookId = id;
+  }
+  /** Advance the simulation (every 200 ms) and animate every frame. */
+  tick(t: number, dt: number, nowMs: number) {
+    if (nowMs - this.lastStep >= 200) {
+      this.world = step(this.world, nowMs, Math.random, this.itops, this.agentPrey); this.lastStep = nowMs;
+      if (this.world.layoffEvent) { this.pendingLayoff = this.world.layoffEvent; this.world = { ...this.world, layoffEvent: undefined }; }
+      // Chomp on-spot: splash-less hide; pond carry triggers eat splash when victim falls.
+      if (this.world.ents.some((e) => e.act === 'chomp' || (e.kind === 'trex' && e.act === 'idle' && e.partner))) { /* noop */ }
+      const peds = this.world.ents.filter((e) => (e.act === 'walk' || e.act === 'idle') && onRoad(e));
+      const o = stepTraffic(this.traffic, nowMs, Math.random, peds); this.traffic = o.traffic;
+      for (const id of o.hits) this.world = knockDown(this.world, id, nowMs, Math.random);
+    }
+    this.cars.update(this.traffic, t, dt);
+    let eating = nowMs < this.eatUntil;
+    // Sync rain / flooded pond path.
+    const raining = this.world.weather === 'rain';
+    if (raining !== this.rainOn) {
+      this.rainOn = raining; this.rainG.visible = raining;
+      if (this.flood) this.flood.visible = raining;
+      try { this.ctx.group.parent; } catch { /* */ }
+    }
+    if (raining) {
+      for (const d of this.rainDrops) {
+        d.position.y -= dt * (6 + (d.position.x % 3 + 3));
+        if (d.position.y < 0.2) d.position.y = 5 + Math.random() * 4;
+      }
+    }
+    // Drop figs for removed ents (boss/shipper left).
+    for (const id of [...this.figs.keys()]) {
+      if (!this.world.ents.some((e) => e.id === id)) {
+        const f = this.figs.get(id)!; this.ctx.group.remove(f.g); this.figs.delete(id);
+      }
+    }
+    for (const e of this.world.ents) {
+      let f = this.figs.get(e.id);
+      if (!f) { f = this.fig(e); this.figs.set(e.id, f); }
+      const prev = f.e.act; f.e = e; this.relook(f);
+      if (e.act === 'eaten') eating = true;
+      if (e.act === 'chomp' && e.kind === 'trex') { /* jaw anim via pose */ }
+      if (e.act === 'fall' && prev !== 'fall') f.fallFrom = [f.x, f.z];
+      const hidden = e.act === 'eaten' || e.act === 'gone'; f.g.visible = !hidden; f.el.style.display = hidden ? 'none' : '';
+      if (hidden) continue;
+      if (e.act === 'carried') {
+        // Independent lerp fights the carry; snap onto Layoff after this loop.
+        this.pose(f, t, dt, false);
+      } else {
+        const [tx, tz] = toWorld(e), dx = tx - f.x, dz = tz - f.z, kk = Math.min(1, dt * 6);
+        if (Math.abs(dx) + Math.abs(dz) > 6 && e.act !== 'fall') { f.x = tx; f.z = tz; } else { f.x += dx * kk; f.z += dz * kk; } // respawn: jump
+        const moving = Math.hypot(dx, dz) > 0.05;
+        if (moving) f.heading = Math.atan2(dx, dz);
+        else if (e.act === 'fight') { const o = this.world.ents.find((z) => z.kind === (e.kind === 'cat' ? 'dog' : 'cat')); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); } }
+        else if (e.kind === 'itops' && e.act === 'report') f.heading = Math.PI * 0.15;
+        f.g.rotation.y = THREE.MathUtils.lerp(f.g.rotation.y, f.heading, Math.min(1, dt * 8));
+        let y = 0;
+        if (e.act === 'fall' && f.fallFrom) { const [cx, cz] = toWorld(pondCenter()), tot = Math.hypot(cx - f.fallFrom[0], cz - f.fallFrom[1]) || 1, p = 1 - Math.hypot(cx - f.x, cz - f.z) / tot; y = Math.sin(Math.max(0, Math.min(1, p)) * Math.PI) * Math.min(4, 1 + tot * 0.3); f.g.rotation.x = p * 8; } else f.g.rotation.x = 0;
+        if (e.act === 'knocked') { f.g.rotation.x = THREE.MathUtils.lerp(f.g.rotation.x, -Math.PI / 2, 1); y = 0.15; }
+        if (e.act === 'massage') { f.g.rotation.x = -Math.PI / 2; y = 0.72; f.heading = 0; }
+        if (e.act === 'romance' && e.partner) {
+          const o = this.world.ents.find((z) => z.id === e.partner); if (o) { const [ox, oz] = toWorld(o); f.heading = Math.atan2(ox - f.x, oz - f.z); }
+          if (nowMs > this.heartCd) { this.hearts.burst(f.x, f.z, nowMs); this.heartCd = nowMs + 900; }
+        }
+        f.g.position.set(f.x, y, f.z);
+        this.pose(f, t, dt, moving);
+      }
+      const name = currentName(`npc:${e.id}`) ?? e.name; if (f.nameEl.textContent !== name) f.nameEl.textContent = name;
+      const sub = ROLE[e.kind] ?? ACT_LABEL[e.act] ?? '';
+      if (f.subEl.textContent !== sub) f.subEl.textContent = sub;
+      const alert = e.kind === 'itops' && e.act === 'report';
+      const key = `${e.say ?? ''}|${alert}`;
+      if (key !== f.bubble) { f.bubble = key; f.bb.textContent = e.say ?? ''; f.el.classList.toggle('has-bubble', !!e.say); f.el.classList.toggle('alarm', alert); }
+      if (f.el.dataset.act !== e.act) f.el.dataset.act = e.act;
+    }
+    const Lf = this.figs.get('layoff');
+    if (Lf && Lf.e.act === 'carry') {
+      const g = graspWorldFromCarrier(Lf.x, Lf.z);
+      for (const e of this.world.ents) {
+        if (e.act !== 'carried') continue;
+        const f = this.figs.get(e.id); if (!f || !f.g.visible) continue;
+        f.x = g.x; f.z = g.z; f.heading = Lf.heading;
+        f.g.position.set(g.x, g.y, g.z);
+        f.g.rotation.set(0.4, Lf.g.rotation.y, 0);
+      }
+    }
+    this.animatePond(t, dt, eating);
+  }
+  private pose(f: Fig, t: number, dt: number, moving: boolean) {
+    const w = t + f.cycle, a = f.e.act, k = Math.min(1, dt * 10);
+    if (f.trex) {
+      const T = f.trex, sw = moving || a === 'hunt' || a === 'carry' ? Math.sin(w * 10) * 0.45 : 0;
+      T.legs.forEach((c, i) => { c.rotation.x = (i === 0 ? 1 : -1) * sw; });
+      T.tail.rotation.y = Math.sin(w * 6) * 0.25;
+      T.arms.forEach((c, i) => { c.rotation.x = Math.sin(w * 8 + i) * 0.15; });
+      T.head.rotation.x = a === 'chomp' ? -0.45 * Math.abs(Math.sin(w * 14)) : a === 'hunt' ? -0.15 : 0;
+      T.root.position.y = a === 'chomp' ? Math.abs(Math.sin(w * 14)) * 0.12 : moving ? Math.abs(Math.sin(w * 10)) * 0.06 : 0;
+      T.root.scale.setScalar(a === 'chomp' ? 1.15 + 0.05 * Math.sin(w * 14) : 1.15);
+      return;
+    }
+    if (f.pet) {
+      const P = f.pet, sw = moving ? Math.sin(w * 16) * 0.7 : 0;
+      P.legs.forEach((c, i) => { c.rotation.x = (i === 0 || i === 3 ? 1 : -1) * sw; });
+      P.tail.rotation.y = Math.sin(w * (f.e.kind === 'dog' ? 18 : 4)) * 0.5;
+      P.root.position.y = a === 'fight' ? Math.abs(Math.sin(w * 14)) * 0.25 : a === 'bark' ? Math.abs(Math.sin(w * 10)) * 0.08 : moving ? Math.abs(Math.sin(w * 16)) * 0.04 : 0;
+      P.root.rotation.z = a === 'fight' ? Math.sin(w * 22) * 0.25 : 0;
+      P.head.rotation.x = a === 'bark' ? -0.3 * Math.abs(Math.sin(w * 10)) : 0;
+      return;
+    }
+    const h = f.body!; let torso = 0, armL = 0.05, armR = 0.05, leg = 0, head = 0, talk = !!f.e.say;
+    if (moving) { const s = Math.sin(w * (f.e.speed > 160 ? 11 : 7)); leg = 0.8 * s; armL = -0.8 * s; armR = 0.8 * s; torso = 0.12; }
+    else if (a === 'drink' || a === 'tea') { armR = -1.9 + 0.35 * Math.max(0, Math.sin(w * 0.9)); head = -0.08 * Math.max(0, Math.sin(w * 0.9)); }
+    else if (a === 'report' && f.e.kind === 'itops') { armR = -2.4 + 0.3 * Math.sin(w * 9); armL = -0.6 + 0.3 * Math.sin(w * 7); } // waving the alert
+    else if (a === 'chat') { armR = -0.7 + 0.35 * Math.sin(w * 3); armL = -0.25 + 0.2 * Math.sin(w * 2.3); }
+    else if (a === 'fall') { armL = armR = -2.9; }
+    else if (a === 'massage') { armL = armR = -0.2; }
+    else if (a === 'bbq' || a === 'atm' || a === 'print') { armR = -1.7 + 0.25 * Math.max(0, Math.sin(w * 0.8)); armL = -0.3; head = -0.05; }
+    else if (a === 'gym') { armL = -1.4 + 0.4 * Math.sin(w * 5); armR = -1.4 + 0.4 * Math.sin(w * 5 + Math.PI); }
+    else if (a === 'smoke' || a === 'gate' || a === 'pod' || a === 'drama') { armR = -0.9 + 0.2 * Math.sin(w * 2); armL = -0.35; head = -0.05; }
+    else if (a === 'romance') { armR = -0.9; armL = -0.9; torso = 0.15; head = -0.12; }
+    else if (f.e.kind === 'itops') { armL = armR = -1.1; head = 0.15; } // typing at the indoor panel
+    h.legs[0].rotation.x = THREE.MathUtils.lerp(h.legs[0].rotation.x, leg, k); h.legs[1].rotation.x = THREE.MathUtils.lerp(h.legs[1].rotation.x, -leg, k);
+    h.torso.rotation.x = THREE.MathUtils.lerp(h.torso.rotation.x, torso, k); h.head.rotation.x = THREE.MathUtils.lerp(h.head.rotation.x, head, k);
+    h.arms[0].rotation.x = THREE.MathUtils.lerp(h.arms[0].rotation.x, armL, k); h.arms[1].rotation.x = THREE.MathUtils.lerp(h.arms[1].rotation.x, armR, k);
+    h.mouth.scale.y = talk ? 1 + 2.4 * Math.abs(Math.sin(w * 13)) : 1;
+    const blink = ((w * 0.27) % 1) < 0.035; for (const m of h.eyes) m.scale.y = blink ? 0.15 : 1;
+    h.sweat.visible = a === 'fall' || (f.e.kind === 'itops' && a === 'report');
+  }
+  private animatePond(t: number, dt: number, eating: boolean) {
+    const { cx, cz, rx, rz, crocs, splash } = this.p;
+    crocs.forEach((c, i) => {
+      const chomp = eating && i === 0;
+      let x: number, z: number, hd: number;
+      if (chomp) { x = cx; z = cz - 0.6; hd = 0; } else {
+        c.a += dt * c.v; x = cx + Math.cos(c.a) * rx * c.r; z = cz + Math.sin(c.a) * rz * c.r;
+        hd = Math.atan2(-Math.sin(c.a) * rx, Math.cos(c.a) * rz); // tangent
+      }
+      c.g.position.x = THREE.MathUtils.lerp(c.g.position.x || x, x, Math.min(1, dt * 3)); c.g.position.z = THREE.MathUtils.lerp(c.g.position.z || z, z, Math.min(1, dt * 3));
+      c.g.position.y = 0.1 + Math.sin(t * 1.5 + i) * 0.03; c.g.rotation.y = THREE.MathUtils.lerp(c.g.rotation.y, hd, Math.min(1, dt * 4));
+      c.jaw.rotation.x = chomp ? -0.2 - 0.5 * Math.abs(Math.sin(t * 9)) : -0.05 - 0.08 * Math.max(0, Math.sin(t * 0.7 + i * 2));
+    });
+    splash.visible = eating;
+    if (eating) { const p = (t * 1.3) % 1; splash.scale.setScalar(0.4 + p * 1.6); (splash.material as THREE.MeshBasicMaterial).opacity = 1 - p; }
+  }
+  dispose() { this.disposeLabelsListener(); for (const f of this.figs.values()) f.el.remove(); this.cars.dispose(); }
+}

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { reduce, initialState, MAX_LOG, BUBBLE_MAX, type OfficeState } from '../src/reducer';
+import { reduce, initialState, MAX_LOG, BUBBLE_MAX, type DeckState } from '../src/reducer';
 import { backoffMs } from '../src/connection';
-import type { OfficeEvent } from '../src/types';
-const ev = (s: OfficeState, ...es: OfficeEvent[]) => es.reduce((st, e) => reduce(st, { type: 'event', e }), s);
-const spawned = (id: string, role = 'coder', x = 0): OfficeEvent => ({ t: 'agent.spawned', id, role, name: role, desk: { x, y: 0 }, tools: ['Read'], ts: 1 });
+import type { DeckEvent } from '../src/types';
+const ev = (s: DeckState, ...es: DeckEvent[]) => es.reduce((st, e) => reduce(st, { type: 'event', e }), s);
+const spawned = (id: string, role = 'coder', x = 0): DeckEvent => ({ t: 'agent.spawned', id, role, name: role, desk: { x, y: 0 }, tools: ['Read'], ts: 1 });
 describe('reducer', () => {
   it('is pure (does not mutate input)', () => {
     const s0 = initialState(); const frozen = JSON.stringify(s0);
@@ -30,13 +30,13 @@ describe('reducer', () => {
   it('records messages and notices', () => {
     const s = ev(initialState(), spawned('a'), spawned('b', 'reviewer', 1),
       { t: 'agent.message', from: 'a', to: 'b', text: 'safe?', kind: 'ask', ts: 3 }, { t: 'agent.message', from: 'b', to: 'a', text: 'yes', ts: 4 },
-      { t: 'office.notice', level: 'warn', text: 'ASK ceo rejected: unknown_role', ts: 5 });
+      { t: 'deck.notice', level: 'warn', text: 'ASK ceo rejected: unknown_role', ts: 5 });
     expect(s.messages).toEqual([{ from: 'a', to: 'b', text: 'safe?', kind: 'ask', ts: 3 }, { from: 'b', to: 'a', text: 'yes', kind: 'ask', ts: 4 }]);
     expect(s.notices).toHaveLength(1);
   });
   it('snapshot replaces the roster but keeps bubbles for known agents (reconnect)', () => {
     let s = ev(initialState(), spawned('a'), spawned('gone', 'reviewer'), { t: 'agent.text', id: 'a', text: 'hi', ts: 2 });
-    s = ev(s, { t: 'office.snapshot', agents: [{ id: 'a', role: 'coder', name: 'Coder', state: 'working', desk: { x: 0, y: 0 } }, { id: 'n', role: 'researcher', name: 'R', state: 'idle', desk: { x: 1, y: 0 } }], ts: 9 });
+    s = ev(s, { t: 'deck.snapshot', agents: [{ id: 'a', role: 'coder', name: 'Coder', state: 'working', desk: { x: 0, y: 0 } }, { id: 'n', role: 'researcher', name: 'R', state: 'idle', desk: { x: 1, y: 0 } }], ts: 9 });
     expect(s.order).toEqual(['a', 'n']); expect(s.agents.gone).toBeUndefined();
     expect(s.agents.a).toMatchObject({ state: 'working', text: 'hi', tools: ['Read'] }); expect(s.agents.n.tools).toEqual([]);
   });

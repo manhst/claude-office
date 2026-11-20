@@ -1,5 +1,5 @@
 /** Authenticated GET /history, /history/session and POST /history/bookmark (same Bearer run token as /settings; never in the query string). */
-import { officeHttpBase } from './settingsApi';
+import { deckHttpBase } from './settingsApi';
 import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, HistoryOpenRequest, HistoryOpenResponse } from './types';
 import { appendPage } from './history';
 
@@ -28,7 +28,7 @@ async function request<T>(token: string, path: string, signal?: AbortSignal, bod
   let r: Response;
   const init: RequestInit = body === undefined ? { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, cache: 'no-store', signal }
     : { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body), signal };
-  try { r = await fetch(`${officeHttpBase()}${path}`, init); }
+  try { r = await fetch(`${deckHttpBase()}${path}`, init); }
   catch (e) { if (signal?.aborted) throw e; throw new HistoryHttpError(0); }
   if (!r.ok) { let j: Record<string, unknown> | null = null; try { j = await r.json() as Record<string, unknown> | null; } catch { /* no JSON body */ } throw new HistoryHttpError(r.status, str(j?.error), str(j?.reason)); }
   try { return (await r.json()) as T; } catch (e) { if (signal?.aborted) throw e; throw new HistoryHttpError(-1); }

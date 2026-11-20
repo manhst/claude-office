@@ -2,16 +2,16 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { reduce, initialState } from '../src/reducer';
 import { pickSelected, activeSubagents, agoLabel, sessionDumpRows, formatSubagent } from '../src/sessionView';
 import { DEFAULT_COLLAPSE, loadCollapse, saveCollapse, setCollapse } from '../src/collapse';
-import type { OfficeEvent, SessionView } from '../src/types';
+import type { DeckEvent, SessionView } from '../src/types';
 const sess = (sid: string, agentIds: string[] = [], extra: Partial<SessionView> = {}): SessionView => ({ sid, project: sid, cwd: '/p', state: 'idle', subagents: [], startedAt: 0, lastSeen: 0, source: 'default', profiles: [], agentIds, ...extra });
-const ev = (s = initialState(), ...es: OfficeEvent[]) => es.reduce((x, e) => reduce(x, { type: 'event', e }), s);
+const ev = (s = initialState(), ...es: DeckEvent[]) => es.reduce((x, e) => reduce(x, { type: 'event', e }), s);
 describe('reducer: sessions', () => {
   it('stores sessions from sessions.update without logging them', () => {
     const s = ev(undefined, { t: 'sessions.update', sessions: [sess('a'), sess('b')], ts: 1 });
     expect(s.sessions.map((x) => x.sid)).toEqual(['a', 'b']); expect(s.log).toHaveLength(0);
   });
   it('snapshot carries sessions and tags agents with their session', () => {
-    const s = ev(undefined, { t: 'office.snapshot', agents: [{ id: 'x', role: 'coder', name: 'coder', state: 'working', desk: { x: 0, y: 0 } }], sessions: [sess('a', ['x'])], ts: 1 });
+    const s = ev(undefined, { t: 'deck.snapshot', agents: [{ id: 'x', role: 'coder', name: 'coder', state: 'working', desk: { x: 0, y: 0 } }], sessions: [sess('a', ['x'])], ts: 1 });
     expect(s.agents.x.sessionId).toBe('a'); expect(s.sessions).toHaveLength(1);
   });
   it('agent.left removes the desk; unknown ids ignored', () => {
@@ -116,7 +116,7 @@ describe('collapse prefs', () => {
     expect(loadCollapse()).toEqual({ session: true, responses: true, agents: true });
   });
   it('ignores a legacy events collapse key', () => {
-    localStorage.setItem('vp-collapse', JSON.stringify({ session: false, responses: false, events: true }));
+    localStorage.setItem('deck.collapse', JSON.stringify({ session: false, responses: false, events: true }));
     expect(loadCollapse()).toEqual(DEFAULT_COLLAPSE);
     expect(loadCollapse().agents).toBe(false);
   });

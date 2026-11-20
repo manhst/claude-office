@@ -6,7 +6,7 @@ export interface AgentView { id: string; role: string; name: string; state: Agen
 export type ProfileSource = 'agents' | 'claude-md' | 'default';
 export interface AgentProfile { name: string; description: string; tools: string[]; model?: string; body: string; file?: string; scope?: 'project' | 'user' }
 
-/** Session state as reported by the `office` mod. */
+/** Session state as reported by the `deck` mod. */
 export type SessionState = 'idle' | 'thinking' | 'tool' | 'waiting-permission' | 'done';
 export interface SubagentInfo { id?: string; name?: string; type?: string; description?: string; status: string }
 export interface SessionView {
@@ -17,7 +17,7 @@ export interface SessionView {
   agentIds: string[];
   /** Current Claude Code model string from `$.session.model()` when the mod could read one. */
   model?: string;
-  /** True when this session's office mod reported `typeof $.prompt.submit === 'function'`. */
+  /** True when this session's deck mod reported `typeof $.prompt.submit === 'function'`. */
   canSubmit?: boolean;
 }
 /** Composer ack: queued for the live session, not a finished turn. Never carries prompt text. */
@@ -86,7 +86,7 @@ export interface HistoryDetailResponse { session: HistorySession; items: History
 /** POST /history/bookmark body: on=true adds/updates (note replaces the old one), on=false removes. Reply: HistoryBookmarkResponse. */
 export interface HistoryBookmarkRequest { sid: string; on: boolean; note?: string }
 export interface HistoryBookmarkResponse { sid: string; bookmark: HistoryBookmark | null }
-/** History tab "Mở lại": apps on this machine that can resume a past session (GET /history/openers, cached ~60 s).
+/** History tab "Reopen": apps on this machine that can resume a past session (GET /history/openers, cached ~60 s).
  *  kind terminal = runs `cd <project> && claude --resume <sid>` in a new window; editor = opens the project folder, then the Claude Code
  *  extension's `<scheme>://anthropic.claude-code/open?session=<sid>` link (resumes: false when that extension isn't installed: folder only). */
 export type HistoryOpenerId = 'iterm' | 'terminal' | 'cursor' | 'vscode' | 'windows-terminal';
@@ -94,9 +94,9 @@ export interface HistoryOpener { id: HistoryOpenerId; label: string; kind: 'term
 /** reason: why the list is empty (demo mode, unsupported OS) */
 export interface HistoryOpenersResponse { openers: HistoryOpener[]; reason?: string }
 /** POST /history/open. sid must be in the History index (lookup key only); the project dir comes from the index and must still exist.
- *  confirm: needed when the session is live in the office right now, else 409 {error:'confirm-required', reason}. Errors: McpErrorResponse shape {error, reason?}. */
+ *  confirm: needed when the session is live in Claude Deck right now, else 409 {error:'confirm-required', reason}. Errors: McpErrorResponse shape {error, reason?}. */
 export interface HistoryOpenRequest { sid: string; app: HistoryOpenerId; confirm?: boolean }
-/** resumed: false when an editor only opened the folder; note: e.g. "macOS may ask once to let the office control iTerm" */
+/** resumed: false when an editor only opened the folder; note: e.g. "macOS may ask once to let Claude Deck control iTerm" */
 export interface HistoryOpenResponse { ok: true; app: HistoryOpenerId; project: string; resumed: boolean; note?: string }
 
 /** Claude config tab (GET /claude-config). Where an MCP server entry lives: user = ~/.claude.json mcpServers; local = ~/.claude.json
@@ -173,7 +173,7 @@ export interface ModelStats {
   errors: ModelErrorCounts;
   /** edit-tool calls that failed with a misuse error (string not found, file not read…) */
   editFails: number;
-  /** Esc presses ("[Request interrupted by user…]"), and correction prompts ("sai rồi", "vẫn lỗi", "that's wrong"…) charged to the model of the previous turn */
+  /** Esc presses ("[Request interrupted by user…]"), and correction prompts (folded Vietnamese "sai roi", "van loi", or "that's wrong"…) charged to the model of the previous turn */
   interrupts: number; corrections: number;
   /** test/build/typecheck commands run by this model, and failures (exit ≠ 0 or failure text in the output, e.g. `npm test | tail`) */
   verifyRuns: number; verifyFails: number;
@@ -206,7 +206,7 @@ export interface ModelReviewSession { sid: string; title: string; project: strin
 export interface ModelReportResponse {
   /** window = last `days` days (0 = all history), since = its start; the trend covers max(12, ceil(days/7)) weeks, at most 52 (days 0 → 52) */
   days: number; since: number; generatedAt: number;
-  /** when the transcripts behind this answer were last scanned; refreshing = a rescan is running (the UI refetches once it ends). GET ?fresh=1 waits for a rescan first ("Làm mới"). */
+  /** when the transcripts behind this answer were last scanned; refreshing = a rescan is running (the UI refetches once it ends). GET ?fresh=1 waits for a rescan first ("Refresh"). */
   scannedAt: number; refreshing: boolean;
   /** auto=false skips automation sessions (entrypoint sdk-cli: claude -p from scripts/plugins); autoSkipped = how many were skipped */
   auto: boolean; autoSkipped: number;
@@ -229,14 +229,14 @@ export interface ModelReportResponse {
 }
 
 type Base = { ts: number };
-export type OfficeEvent = Base & (
+export type DeckEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }
   | { t: 'agent.state'; id: string; state: AgentState }
   | { t: 'agent.text'; id: string; text: string; partial?: boolean }
   | { t: 'tool.call'; id: string; callId: string; tool: string; inputSummary: string }
   | { t: 'tool.result'; id: string; callId: string; ok: boolean; summary: string }
   | { t: 'agent.message'; from: string; to: string; text: string; kind?: 'ask' | 'reply'; hops?: number; qid?: string }
-  | { t: 'office.notice'; level: 'info' | 'warn'; text: string; id?: string }
+  | { t: 'deck.notice'; level: 'info' | 'warn'; text: string; id?: string }
   | { t: 'agent.done'; id: string; result: string; costUsd?: number; durationMs: number }
   | { t: 'agent.error'; id: string; error: string }
   | { t: 'agent.left'; id: string }
@@ -246,5 +246,5 @@ export type OfficeEvent = Base & (
   /** a turn started, gained steps or ended; upsert by sid+turnId+agentRunId; each event is the full merged view */
   | { t: 'session.turn'; turn: TurnView }
   | PromptAck
-  | { t: 'office.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus; usage?: UsageReading | null; turns?: TurnView[]; prompts?: PromptAck[] }
+  | { t: 'deck.snapshot'; agents: AgentView[]; sessions?: SessionView[]; itops?: ItOpsStatus; usage?: UsageReading | null; turns?: TurnView[]; prompts?: PromptAck[] }
 );

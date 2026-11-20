@@ -23,7 +23,7 @@ const SECRET = 'sk-abcdefghijklmnop1234';
 
 /** s1 (shop, opus-led, two models, subagent), s2 (sdk-cli automation, haiku 4.5), s3 (blog, sonnet, 20 days ago) */
 function world() {
-  const root = mkdtempSync(join(tmpdir(), 'office-mr-'));
+  const root = mkdtempSync(join(tmpdir(), 'deck-mr-'));
   write(root, '-w-shop/s1.jsonl', [
     { type: 'queue-operation', operation: 'enqueue', timestamp: at(-1), sessionId: 's1' },
     prompt('fix the cart total PROMPTTEXT', at(-1, 0)),
@@ -92,7 +92,7 @@ describe('error classification and patterns', () => {
     expect(errorPattern('Exit code 1\nok\nnpm ERR! failed at /Users/me/proj/src/a.ts line 12345\ndone')).toBe('Exit code 1 · npm ERR! failed at <path> line N');
     expect(errorPattern('<tool_use_error>Error: column "foo_bar" does not exist</tool_use_error>')).toBe('Error: column "…" does not exist');
     expect(errorPattern('connect 10.0.0.12:5432 failed for manh@example.com')).toBe('connect <ip> failed for <email>');
-    expect(errorPattern('\n<system>x</system>\n   ')).toBe('(trống)');
+    expect(errorPattern('\n<system>x</system>\n   ')).toBe('(empty)');
     const p = errorPattern(`Invalid key ${SECRET} password=hunter2hunter2 Bearer abcdefgh12345678 at C:\\Users\\someone\\repo\\file.ts`);
     for (const s of [SECRET, 'hunter2', 'abcdefgh12345678', 'someone']) expect(p).not.toContain(s);
     expect(p).toContain('<path>');
@@ -171,7 +171,7 @@ describe('ModelReport', () => {
     expect((await s.report()).refreshing).toBe(false); expect((await s.report()).refreshing).toBe(true); await s.refresh();
   });
   it('modelOrder: API calls in the last 52 weeks first, then older models', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-mr-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-mr-'));
     write(root, '-w-x/o1.jsonl', [prompt('old', at(-60 * 7)), ...Array.from({ length: 30 }, (_, i) => asst('claude-opus-4-1', at(-60 * 7, i + 1), [{ type: 'text', text: 'ok' }]))]);
     write(root, '-w-x/o2.jsonl', [prompt('new', at(-1)), asst(SONNET, at(-1, 1), []), asst(OPUS, at(-1, 2), []), asst(OPUS, at(-1, 3), [])]);
     const a = await new ModelReport(root, { now: () => NOW }).report({ days: 0 });
@@ -199,7 +199,7 @@ describe('ModelReport', () => {
     expect(all).toMatchObject({ days: 0, since: new Date(2026, 9, 31).getTime(), sessions: 2 }); expect(all.trend).toHaveLength(52);
     const d1 = await r.report({ days: 1 });
     expect(d1).toMatchObject({ since: new Date(2026, 10, 20).getTime(), sessions: 0, autoSkipped: 1, models: [], review: [] });
-    const root = mkdtempSync(join(tmpdir(), 'office-mr-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-mr-'));
     write(root, '-w-x/b1.jsonl', [prompt('go', new Date(2026, 10, 19, 23, 0).toISOString()), tool(OPUS, new Date(2026, 10, 19, 23, 30).toISOString(), 'x1', 'Read', {}), tool(OPUS, new Date(2026, 10, 20, 0, 30).toISOString(), 'x2', 'Read', {})]);
     const b = new ModelReport(root, { now: () => NOW });
     expect(by(await b.report({ days: 1 }), OPUS)).toMatchObject({ toolCalls: 1, turns: 0, sessions: 1 }); // the turn started yesterday
@@ -225,7 +225,7 @@ describe('ModelReport', () => {
     expect((await s.report()).totals.toolCalls).toBe(9);
   });
   it('subagent transcripts: no prompts, turns or cost; skipped with their automation parent', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-mr-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-mr-'));
     write(root, '-w-x/p1.jsonl', [prompt('go', at(-1), { entrypoint: 'sdk-cli' }), asst(OPUS, at(-1, 1), [{ type: 'text', text: 'ok' }], {}, { entrypoint: 'sdk-cli' })]);
     write(root, '-w-x/p1/subagents/agent-1.jsonl', [prompt('sai rồi', at(-1, 2), { entrypoint: 'sdk-cli', isSidechain: true }), tool(HAIKU, at(-1, 3), 'k1', 'Read', {}, {}, { entrypoint: 'sdk-cli', isSidechain: true })]);
     const r = new ModelReport(root, { now: () => NOW });
@@ -235,10 +235,10 @@ describe('ModelReport', () => {
     expect(by(a, OPUS)).toMatchObject({ sessions: 1, turns: 1, prompts: 1 });
   });
   it('kept lines over 8 MB are dropped unparsed; the entrypoint peek reads non-kept lines within the first 60 only', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-mr-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-mr-'));
     write(root, '-w-x/big.jsonl', [prompt('go', at(-1)), tool(OPUS, at(-1, 1), 'b1', 'Read', {}), tool(OPUS, at(-1, 2), 'b2', 'Write', { content: 'x'.repeat(9 << 20) }), tool(OPUS, at(-1, 3), 'b3', 'Read', {})]);
     expect(by(await new ModelReport(root, { now: () => NOW }).report(), OPUS)).toMatchObject({ toolCalls: 2, edits: 0, apiCalls: 2, turns: 1 });
-    const r2 = mkdtempSync(join(tmpdir(), 'office-mr-')), none = { entrypoint: undefined };
+    const r2 = mkdtempSync(join(tmpdir(), 'deck-mr-')), none = { entrypoint: undefined };
     const att = { parentUuid: null, isSidechain: false, attachment: { type: 'hook_success' }, type: 'attachment', uuid: 'att', timestamp: at(-1), entrypoint: 'sdk-cli', cwd: '/w/x', sessionId: 'p1' };
     write(r2, '-w-x/p1.jsonl', [att, prompt('/esp-sync', at(-1, 1), none), asst(OPUS, at(-1, 2), [], {}, none)]); // only the attachment says sdk-cli
     const q = { type: 'queue-operation', operation: 'enqueue', timestamp: at(-1), sessionId: 'p2' };
@@ -246,8 +246,8 @@ describe('ModelReport', () => {
     expect(await new ModelReport(r2, { now: () => NOW }).report()).toMatchObject({ autoSkipped: 1, sessions: 1, review: [] });
   });
   it('missing root, unreadable lines and huge lines are tolerated', async () => {
-    expect(await new ModelReport(join(tmpdir(), 'office-mr-nope-x'), { now: () => NOW }).report()).toMatchObject({ sessions: 0, models: [], trend: expect.any(Array) });
-    const root = mkdtempSync(join(tmpdir(), 'office-mr-'));
+    expect(await new ModelReport(join(tmpdir(), 'deck-mr-nope-x'), { now: () => NOW }).report()).toMatchObject({ sessions: 0, models: [], trend: expect.any(Array) });
+    const root = mkdtempSync(join(tmpdir(), 'deck-mr-'));
     write(root, '-w-x/q1.jsonl', ['{not json', JSON.stringify({ type: 'api-request-blob', body: 'x'.repeat(3 << 20) }), prompt('go', at(-1)), tool(OPUS, at(-1, 1), 'q', 'Read', {}), '{"type":"assistant","trunc']);
     expect(by(await new ModelReport(root, { now: () => NOW }).report(), OPUS)).toMatchObject({ toolCalls: 1, turns: 1 });
   });

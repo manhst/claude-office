@@ -1,0 +1,172 @@
+/* Ported from VanphongAI (Phuc) public/style.css. See ./NOTICE. Rules copied verbatim; ':root' became '.office3d-ref', every
+   selector is scoped under .office3d-ref so nothing leaks into the app shell (header, sessions, log). The Google Fonts link is not used (CSP). Custom properties and class names were translated to English.
+   The 'Be Vietnam Pro' family stays first in the stack and falls back to system fonts. */
+.office3d-ref {
+  --bg: #f4efe7;
+  --floor: #ebe2d4;
+  --floor-tile: rgba(90, 70, 40, .06);
+  --surface: #fffdf9;
+  --surface-2: #f8f3ec;
+  --border: #e2d7c8;
+  --text: #2b2622;
+  --text-dim: #74695f;
+  --accent: #7b6cf6;
+  --accent-text: #fff;
+  --green: #2a9d63;
+  --yellow: #e0a030;
+  --red: #d24b4b;
+  --desk-top: #cba582;
+  --desk-body: #b88f6a;
+  --laptop: #d8dce5;
+  --laptop-logo: #aab1c2;
+  --counter: #6d64b8;
+  --counter-top: #8a81d6;
+  --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 6px 18px rgba(60, 40, 20, .08);
+  --code-bg: #1f2030;
+  --code-text: #e9e8f2;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  .office3d-ref {
+    --bg: #15161d;
+    --floor: #1b1d28;
+    --floor-tile: rgba(255, 255, 255, .035);
+    --surface: #222431;
+    --surface-2: #282b3a;
+    --border: #363a4d;
+    --text: #eceaf4;
+    --text-dim: #a4a7ba;
+    --accent: #9488ff;
+    --accent-text: #14121f;
+    --green: #4cc98b;
+    --yellow: #f0b54a;
+    --red: #f07070;
+    --desk-top: #6e5647;
+    --desk-body: #5a463b;
+    --laptop: #3b4152;
+    --laptop-logo: #5d6580;
+    --counter: #4a4490;
+    --counter-top: #5d56a8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 22px rgba(0, 0, 0, .28);
+    --code-bg: #12131b;
+    color-scheme: dark;
+  }
+}
+
+.office3d-ref, .office3d-ref * { box-sizing: border-box; }
+.office3d-ref { font-family: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--text);
+  border-radius: 16px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); background: #dfe9f1; }
+.office3d-ref .dots { display: inline-flex; gap: 3px; margin-left: 4px; vertical-align: middle; }
+.office3d-ref .dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .3; animation: dots 1.2s infinite; }
+.office3d-ref .dots i:nth-child(2) { animation-delay: .2s; }
+.office3d-ref .dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes dots { 30% { opacity: 1; transform: translateY(-2px); } }
+@keyframes pulse-mic { 50% { transform: scale(1.2); } }
+.office3d-ref .office3d-scene { position: absolute; inset: 0; }
+.office3d-ref .office3d-scene canvas { display: block; touch-action: none; outline: none; }
+.office3d-ref .office3d-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.office3d-ref .office3d-tools { position: absolute; top: 10px; left: 10px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+.office3d-ref .office3d-tools.right { left: auto; right: 10px; }
+.office3d-ref .btn-3d {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; min-width: 34px; padding: 0 10px;
+  border-radius: 10px; border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(6px); box-shadow: var(--shadow); font-size: 13px; font-weight: 700; color: var(--text);
+}
+.office3d-ref .btn-3d svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+.office3d-ref .btn-3d:hover { border-color: var(--accent); }
+.office3d-ref .btn-3d:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.office3d-ref.is-pov canvas { cursor: grab; }
+.office3d-ref.is-pov.is-dragging canvas { cursor: grabbing; }
+.office3d-ref .btn-3d[data-3d="exit-pov"] { display: none; }
+.office3d-ref.is-pov .btn-3d[data-3d="exit-pov"] { display: inline-flex; }
+.office3d-ref.is-pov .btn-3d[data-3d="zoom-in"], .office3d-ref.is-pov .btn-3d[data-3d="zoom-out"], .office3d-ref.is-pov .btn-3d[data-3d="reset"] { display: none; }
+.office3d-ref .office3d-hint {
+  position: absolute; left: 12px; bottom: 10px; z-index: 2; margin: 0; max-width: calc(100% - 24px); pointer-events: none;
+  padding: 4px 11px; border-radius: 999px; font-size: 12px; color: var(--text-dim); background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+.office3d-ref .office3d-loading { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; font-weight: 700; color: #5a6475; background: #dfe9f1; }
+/* Name tags + speech bubbles above each worker */
+.office3d-ref .person-3d { display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+.office3d-ref .name-3d {
+  pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  padding: 2px 6px 2px 5px; border-radius: 999px; font-size: 8.5px; color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--border); border-bottom: 1.5px solid var(--tint, var(--accent));
+  box-shadow: 0 1px 5px rgba(30, 20, 10, .12);
+}
+.office3d-ref .name-3d:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.office3d-ref .name-3d b { font-weight: 800; }
+.office3d-ref .name-3d small { font-size: 7.5px; color: var(--text-dim); }
+.office3d-ref .name-3d small:empty { display: none; }
+.office3d-ref .name-3d small.warn { color: color-mix(in srgb, var(--yellow) 75%, var(--text)); font-weight: 700; }
+.office3d-ref .wait-3d:not(:empty) { display: none; } /* dropped: tool badge cluttered labels */
+.office3d-ref .dot-3d { width: 5.5px; height: 5.5px; border-radius: 50%; flex: none; background: var(--green); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--green) 25%, transparent); }
+.office3d-ref .person-3d.st-working .dot-3d { background: var(--tint, var(--accent)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint, var(--accent)) 30%, transparent); animation: pulse-mic 1.2s ease-in-out infinite; }
+.office3d-ref .person-3d.st-error .dot-3d { background: var(--red); box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 25%, transparent); }
+.office3d-ref .person-3d.st-sleeping .dot-3d { background: var(--text-dim); box-shadow: none; }
+.office3d-ref .person-3d.st-waiting .dot-3d, .office3d-ref .person-3d.st-approval .dot-3d { background: var(--yellow); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yellow) 25%, transparent); }
+.office3d-ref .person-3d.st-sleeping .name-3d { opacity: .82; }
+.office3d-ref .person-3d.hover .name-3d { border-color: var(--tint, var(--accent)); }
+.office3d-ref .bubble-3d {
+  display: none; pointer-events: auto; position: relative; max-width: 180px; padding: 4px 8px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: 0 3px 12px rgba(30, 20, 10, .16);
+  font-size: 10px; line-height: 1.35; color: var(--text); text-align: center;
+}
+.office3d-ref .bubble-3d::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: var(--surface);
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transform: translateX(-50%) rotate(45deg);
+}
+.office3d-ref .bubble-3d .bb { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.office3d-ref .bubble-3d a { color: var(--accent); font-weight: 700; }
+.office3d-ref .person-3d.has-bubble .bubble-3d, .office3d-ref .person-3d.hover .bubble-3d, .office3d-ref .person-3d:hover .bubble-3d { display: block; }
+.office3d-ref .person-3d.st-working .bubble-3d, .office3d-ref .person-3d.st-thinking .bubble-3d { border-color: color-mix(in srgb, var(--tint, var(--accent)) 55%, var(--border)); }
+.office3d-ref .person-3d.st-error .bubble-3d { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); }
+.office3d-ref .person-3d.st-done .bubble-3d { border-color: color-mix(in srgb, var(--green) 55%, var(--border)); }
+/* ours: idle scuffle in the pantry / game room */
+.office3d-ref .person-3d.scuffle .bubble-3d { border-color: var(--red); color: var(--red); font-weight: 800; }
+.office3d-ref .person-3d.assistant .bubble-3d { max-width: 280px; font-size: 12.5px; }
+.office3d-ref .person-3d.assistant .bubble-3d .bb { -webkit-line-clamp: 4; }
+.office3d-ref .person-3d.assistant .name-3d { font-size: 9px; padding: 2px 7px 2px 5px; }
+.office3d-ref .zzz-3d {
+  display: none; align-items: flex-end; gap: 1px; padding: 1px 9px 3px; border-radius: 999px; font-weight: 900; line-height: 1;
+  color: #6b78f0; background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(30, 20, 10, .14);
+}
+.office3d-ref .person-3d.st-sleeping .zzz-3d { display: inline-flex; }
+.office3d-ref .zzz-3d span { font-size: 16px; animation: zzz-3d 1.8s ease-in-out infinite; }
+.office3d-ref .zzz-3d span:nth-child(2) { font-size: 13px; animation-delay: .3s; }
+.office3d-ref .zzz-3d span:nth-child(3) { font-size: 10px; animation-delay: .6s; }
+@keyframes zzz-3d { 50% { transform: translateY(-4px); opacity: .55; } }
+/* Zoomed out: compact name tags to cut the clutter */
+.office3d-ref .office3d-labels.far .name-3d small, .office3d-ref .office3d-labels.far .wait-3d { display: none; }
+.office3d-ref .office3d-labels.far .person-3d:not(.assistant):not(.hover) .bubble-3d { display: none; }
+.office3d-ref .office3d-labels.far .name-3d { font-size: 11px; padding: 2px 7px 2px 6px; }
+/* ours: structure-label prefs (Settings → Map labels); !important beats CSS2DRenderer clearing inline display */
+.office3d-ref .room-label-3d.label-hidden, .office3d-ref .label-hidden { display: none !important; }
+
+.office3d-ref .room-label-3d {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; pointer-events: none;
+  padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 13px;
+  color: color-mix(in srgb, var(--tint, var(--text-dim)) 75%, var(--text));
+  background: color-mix(in srgb, var(--tint, var(--text-dim)) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--tint, var(--text-dim)) 40%, var(--border)); box-shadow: 0 2px 8px rgba(30, 20, 10, .12);
+}
+.office3d-ref .room-label-3d i { width: 9px; height: 9px; border-radius: 2px; background: var(--tint, var(--text-dim)); transform: rotate(45deg); }
+
+/* ours: names are not clickable here (the reference used them for voice call-by-name) */
+.office3d-ref .name-3d { cursor: default; }
+.stage-office3d > .office3d-stage { position: absolute; inset: 0; }
+
+/* ours: garden-affair heart pops (SVG particles, not emoji chrome) */
+.office3d-ref .office3d-heart {
+  pointer-events: none; line-height: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18));
+  animation: office3d-heart-pop 1.45s ease-out forwards; animation-delay: var(--delay, 0ms);
+  transform: translate(calc(-50% + var(--dx, 0px)), 0) scale(0.4); opacity: 0;
+}
+@keyframes office3d-heart-pop {
+  0% { transform: translate(calc(-50% + var(--dx, 0px)), 0) scale(0.35); opacity: 0; }
+  18% { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), -6px) scale(1); }
+  100% { transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.25); opacity: 0; }
+}
+
+/* Boss walkthrough: sit up / hide-the-phone vibe */
+.office3d-ref .person-3d.boss-here .name-3d { border-color: #f59e0b; }
+.office3d-ref .person-3d.boss-here.has-bubble .bubble-3d { border-color: #f59e0b; font-weight: 800; }

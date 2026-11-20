@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { reduce, initialState, upsertTurn, turnKey, MAX_TURNS, type OfficeState } from '../src/reducer';
+import { reduce, initialState, upsertTurn, turnKey, MAX_TURNS, type DeckState } from '../src/reducer';
 import { turnLines, fmtDuration, multiSession, turnsSig, isLongPrompt, type TurnLine } from '../src/turnLines';
 import { DEFAULT_COLLAPSE, loadCollapse, setCollapse } from '../src/collapse';
-import type { OfficeEvent, TurnView } from '../src/types';
+import type { DeckEvent, TurnView } from '../src/types';
 
-const ev = (s: OfficeState, ...es: OfficeEvent[]) => es.reduce((st, e) => reduce(st, { type: 'event', e }), s);
+const ev = (s: DeckState, ...es: DeckEvent[]) => es.reduce((st, e) => reduce(st, { type: 'event', e }), s);
 const turn = (p: Partial<TurnView> = {}): TurnView => ({ sid: 's1', turnId: 't1', project: 'shop-api', steps: [], status: 'running', startedAt: 1000, ...p });
-const T = (t: TurnView, ts = 5): OfficeEvent => ({ t: 'session.turn', turn: t, ts });
+const T = (t: TurnView, ts = 5): DeckEvent => ({ t: 'session.turn', turn: t, ts });
 const kinds = (ls: TurnLine[]) => ls.map((l) => l.k);
 
 describe('reducer: session.turn', () => {
@@ -29,9 +29,9 @@ describe('reducer: session.turn', () => {
   });
   it('snapshot replaces turns (missing → empty, duplicates folded, junk dropped); bad session.turn ignored', () => {
     let s = ev(initialState(), T(turn({ turnId: 'old' })));
-    s = ev(s, { t: 'office.snapshot', agents: [], turns: [turn({ turnId: 'b', startedAt: 9 }), turn({ turnId: 'a', startedAt: 2 }), turn({ turnId: 'a', startedAt: 2, status: 'answer' }), { nope: 1 } as any], ts: 9 });
+    s = ev(s, { t: 'deck.snapshot', agents: [], turns: [turn({ turnId: 'b', startedAt: 9 }), turn({ turnId: 'a', startedAt: 2 }), turn({ turnId: 'a', startedAt: 2, status: 'answer' }), { nope: 1 } as any], ts: 9 });
     expect(s.turns.map((t) => t.turnId)).toEqual(['a', 'b']); expect(s.turns[0].status).toBe('answer');
-    s = ev(s, { t: 'office.snapshot', agents: [], ts: 10 });
+    s = ev(s, { t: 'deck.snapshot', agents: [], ts: 10 });
     expect(s.turns).toEqual([]);
     const before = s; s = ev(s, { t: 'session.turn', turn: { sid: 's1' } as any, ts: 11 });
     expect(s).toBe(before);

@@ -1,0 +1,14 @@
+{
+  "name": "deck",
+  "version": "0.2.0",
+  "description": "Shows this Claude Code session in Claude Deck: state, current tool, subagents, and each turn (prompt, assistant text, tool summaries, answer). Posts only to a loopback endpoint.",
+  "author": { "name": "Manh" },
+  "userConfig": {
+    "endpoint": {
+      "type": "string",
+      "title": "Claude Deck endpoint",
+      "description": "Where to POST session events. Must be a loopback URL (the Claude Deck server only accepts 127.0.0.1).",
+      "default": "http://127.0.0.1:7777/event"
+    }
+  }
+}

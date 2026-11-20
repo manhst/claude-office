@@ -2,10 +2,10 @@
 // and Layoff the T-Rex (occasional headcount "optimization"). Pure step function, rnd injected.
 import type { ItOpsStatus } from '../types';
 import { LINES, PAIRS } from './dialogue';
-import { ATM_SPOTS, BBQ_SEATS, BIA_SEATS, CAFE_SEATS, GATE_SPOTS, GYM_SPOTS, ITOPS_SPOT, MASSAGE_BEDS, POD_SPOTS, POND_EDGE, PRINT_SPOTS, PX, ROMANCE_SPOTS, SHIPPER_SPOTS, SMOKE_SPOTS, STREET, TRADA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
-import { townRunSpeed } from '../vpRunSpeed';
+import { ATM_SPOTS, BBQ_SEATS, BEER_SEATS, CAFE_SEATS, GATE_SPOTS, GYM_SPOTS, ITOPS_SPOT, MASSAGE_BEDS, POD_SPOTS, POND_EDGE, PRINT_SPOTS, PX, ROMANCE_SPOTS, SHIPPER_SPOTS, SMOKE_SPOTS, STREET, TEA_STOOLS, YARD, pondCenter, waypoint, type Pt } from './map';
+import { townRunSpeed } from '../officeRunSpeed';
 export type Kind = 'itops' | 'npc' | 'dog' | 'cat' | 'trex' | 'boss' | 'shipper';
-export type Act = 'idle' | 'walk' | 'drink' | 'beer' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'drama' | 'bia' | 'wobble' | 'shipper' | 'hunt' | 'chomp' | 'carry' | 'carried';
+export type Act = 'idle' | 'walk' | 'drink' | 'tea' | 'chat' | 'run' | 'bark' | 'fight' | 'report' | 'fall' | 'eaten' | 'gone' | 'massage' | 'knocked' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'drama' | 'beer' | 'wobble' | 'shipper' | 'hunt' | 'chomp' | 'carry' | 'carried';
 export interface Ent {
   id: string; kind: Kind; name: string; look?: string; x: number; y: number; tx: number; ty: number; speed: number;
   act: Act; next?: Act; until: number; say?: string; sayUntil?: number; reported?: string; partner?: string;
@@ -37,16 +37,16 @@ export const pick = <T,>(a: readonly T[], r: () => number): T => a[Math.floor(r(
 const jitter = (p: Pt, r: () => number, d = 14): Pt => ({ x: p.x + (r() - 0.5) * d, y: p.y + (r() - 0.5) * d });
 /** Bubble display defaults — paced so a human can finish reading before the next line. */
 export const SAY_MS = 6000;
-/** Periodic payday beat (~every 7.5 min wall, 90s window) — reads as ngày lương without a calendar. */
+/** Periodic payday beat (~every 7.5 min wall, 90s window) — reads as payday without a calendar. */
 export const PAYDAY_CYCLE_MS = 90_000;
 export function isPayday(now: number): boolean { return Math.floor(now / PAYDAY_CYCLE_MS) % 5 === 4; }
 /** NPC acts that count as idle/useless (not working a Claude session task). */
-export const USELESS_ACTS: ReadonlySet<Act> = new Set(['idle', 'drink', 'beer', 'chat', 'run', 'massage', 'bbq', 'romance', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'drama', 'bia', 'wobble', 'shipper']);
+export const USELESS_ACTS: ReadonlySet<Act> = new Set(['idle', 'drink', 'tea', 'chat', 'run', 'massage', 'bbq', 'romance', 'smoke', 'gym', 'atm', 'gate', 'pod', 'print', 'drama', 'beer', 'wobble', 'shipper']);
 export function initialWorld(now: number): World {
   const e = (id: string, kind: Kind, name: string, p: Pt, look?: string, speed = 45): Ent => ({ id, kind, name, look, x: p.x, y: p.y, tx: p.x, ty: p.y, speed, act: 'idle', until: now + 1500 });
   return { t: now, ents: [
-    e('itops', 'itops', 'IT Ops', ITOPS_SPOT, 'nam_01', 90),
-    e('npc-1', 'npc', 'Tèo', YARD[0], 'nam_04'), e('npc-2', 'npc', 'Tý', CAFE_SEATS[0], 'nu_04'), e('npc-3', 'npc', 'Bờm', TRADA_STOOLS[1], 'nam_06'), e('npc-4', 'npc', 'Mít', STREET[1], 'nu_07'),
+    e('itops', 'itops', 'IT Ops', ITOPS_SPOT, 'male_01', 90),
+    e('npc-1', 'npc', 'Tèo', YARD[0], 'male_04'), e('npc-2', 'npc', 'Tý', CAFE_SEATS[0], 'female_04'), e('npc-3', 'npc', 'Bờm', TEA_STOOLS[1], 'male_06'), e('npc-4', 'npc', 'Mít', STREET[1], 'female_07'),
     e('dog', 'dog', 'Chos An', YARD[1], undefined, 170), e('cat', 'cat', 'Meow', YARD[2], undefined, 130),
     // Layoff starts off-map (gone) and appears occasionally to hunt.
     { ...e('layoff', 'trex', 'Layoff', STREET[0], undefined, 140), act: 'gone', until: now + 18_000 },
@@ -64,14 +64,14 @@ export function problemKey(s?: ItOpsStatus): string | undefined {
   return undefined;
 }
 export function problemText(s: ItOpsStatus): string {
-  if (s.state === 'error') return `Không đọc được metrics: ${s.error ?? 'lỗi'}`;
+  if (s.state === 'error') return `Can't read metrics: ${s.error ?? 'error'}`;
   const a = s.alerts[0]; const more = s.alerts.length > 1 ? ` (+${s.alerts.length - 1})` : '';
   return `${LINES.itopsReport[0]} ${a.name}${a.detail ? ` · ${a.detail}` : ''}${more}`;
 }
-/** Visiting sếp — spawned for a short walkthrough, not in initialWorld. */
+/** Visiting boss — spawned for a short walkthrough, not in initialWorld. */
 export const BOSS_ID = 'boss-walk';
-export const BOSS_NAME = 'Sếp';
-export const BOSS_LOOK = 'nam_02';
+export const BOSS_NAME = 'Boss';
+export const BOSS_LOOK = 'male_02';
 const POND_ACTS: ReadonlySet<Act> = new Set(['fall', 'eaten', 'gone']);
 export function menuEnt(id: string): { name: string; look?: string } | undefined {
   if (id === BOSS_ID) return { name: BOSS_NAME, look: BOSS_LOOK };
@@ -81,7 +81,7 @@ export function menuEnt(id: string): { name: string; look?: string } | undefined
 function makeBoss(now: number, until: number): Ent {
   return { id: BOSS_ID, kind: 'boss', name: BOSS_NAME, look: BOSS_LOOK, x: 400, y: 200, tx: 900, ty: 500, speed: 100, act: 'walk', next: 'idle', until };
 }
-/** Force the visiting sếp onto the map (tests / vp-debug). */
+/** Force the visiting boss onto the map (tests / deck.debug). */
 export function forceBoss(w: World, now: number): World {
   const until = now + 16_000, b = makeBoss(now, until);
   const ents = w.ents.some((e) => e.kind === 'boss') ? w.ents.map((e) => e.kind === 'boss' ? b : e) : [...w.ents, b];
@@ -106,7 +106,7 @@ export function forceRomance(w: World, now: number, r: () => number = Math.rando
     return e;
   }) };
 }
-/** Force a two-sided office-drama exchange at a spot (screenshots / vp-debug). */
+/** Force a two-sided office-drama exchange at a spot (screenshots / deck.debug). */
 export function forceDrama(w: World, now: number, kind: 'smoke' | 'gym' | 'atm' | 'print' | 'pod' | 'gate' = 'smoke', r: () => number = Math.random): World {
   const free = w.ents.filter((e) => e.kind === 'npc' && e.act !== 'gone' && e.act !== 'eaten' && e.act !== 'fall' && e.act !== 'carried' && e.act !== 'chomp');
   if (free.length < 2) return w;
@@ -123,7 +123,7 @@ export function forceDrama(w: World, now: number, kind: 'smoke' | 'gym' | 'atm' 
 export function isUselessNpc(e: Ent): boolean {
   return e.kind === 'npc' && USELESS_ACTS.has(e.act);
 }
-/** Force Layoff to hunt a useless NPC (or first NPC) and resolve eat-on-spot or pond drop. For screenshots / vp-debug. */
+/** Force Layoff to hunt a useless NPC (or first NPC) and resolve eat-on-spot or pond drop. For screenshots / deck.debug. */
 export function forceLayoff(w: World, now: number, outcome: 'eat' | 'pond' | 'hunt', r: () => number = Math.random): World {
   const layoff0 = w.ents.find((e) => e.kind === 'trex');
   const victims = w.ents.filter((e) => e.kind === 'npc' && e.act !== 'gone' && e.act !== 'eaten' && e.act !== 'fall' && e.act !== 'carried');
@@ -185,13 +185,13 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
       if (e.act === 'carried') return e;
       const x = r();
       // Keep cafe <0.18 / beer <0.34 / massage <0.46 / bbq <0.58 so existing tests (0.3 beer, 0.45 massage, 0.50 bbq) still hit.
-      // Payday bias: ATM queue / BBQ treat / bia.
+      // Payday bias: ATM queue / BBQ treat / beer stall.
       if (w.payday && x < 0.12) return say(go(e, jitter(pick(ATM_SPOTS, r), r, 6), 'atm'), pick(LINES.payday, r), now);
       if (w.payday && x < 0.22) return say(go(e, jitter(pick(BBQ_SEATS, r), r, 8), 'bbq'), pick(LINES.payday, r), now);
-      if (w.payday && x < 0.30) return say(go(e, jitter(pick(BIA_SEATS, r), r, 8), 'bia'), pick(LINES.biaGo, r), now);
+      if (w.payday && x < 0.30) return say(go(e, jitter(pick(BEER_SEATS, r), r, 8), 'beer'), pick(LINES.beerGo, r), now);
       // Keep cafe <0.18 / beer <0.34 / massage <0.46 / bbq <0.58 so existing tests (0.3 beer, 0.45 massage, 0.50 bbq) still hit when not payday-skewed.
       if (x < 0.18) return say(go(e, jitter(pick(CAFE_SEATS, r), r), 'drink'), pick(LINES.coffee, r), now);
-      if (x < 0.34) return say(go(e, jitter(pick(TRADA_STOOLS, r), r), 'beer'), pick(LINES.beer, r), now);
+      if (x < 0.34) return say(go(e, jitter(pick(TEA_STOOLS, r), r), 'tea'), pick(LINES.tea, r), now);
       if (x < 0.46) return say(go(e, jitter(pick(MASSAGE_BEDS, r), r, 6), 'massage'), pick(r() < 0.18 ? LINES.fakeSick : LINES.massageGo, r), now);
       if (x < 0.58) return say(go(e, jitter(pick(BBQ_SEATS, r), r, 8), 'bbq'), pick(r() < 0.18 ? LINES.fakeSick : LINES.bbqGo, r), now);
       if (x < 0.64) return say(go(e, jitter(pick(SMOKE_SPOTS, r), r, 8), 'smoke'), pick(LINES.smokeGo, r), now);
@@ -200,7 +200,7 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
       if (x < 0.79) return say(go(e, jitter(pick(GATE_SPOTS, r), r, 6), 'gate'), pick(LINES.gateGo, r), now);
       if (x < 0.83) return say(go(e, jitter(pick(POD_SPOTS, r), r, 6), 'pod'), pick(LINES.podGo, r), now);
       if (x < 0.86) return say(go(e, jitter(pick(PRINT_SPOTS, r), r, 6), 'print'), pick(LINES.printGo, r), now);
-      if (x < 0.89) return say(go(e, jitter(pick(BIA_SEATS, r), r, 8), 'bia'), pick(LINES.biaGo, r), now);
+      if (x < 0.89) return say(go(e, jitter(pick(BEER_SEATS, r), r, 8), 'beer'), pick(LINES.beerGo, r), now);
       if (x < 0.91) return say(go(e, jitter(pick(SHIPPER_SPOTS, r), r, 6), 'shipper'), pick(LINES.shipperGo, r), now);
       if (x < 0.94) return say(go(e, pick(STREET, r), 'idle', Math.round(townRunSpeed() / 2)), pick(w.weather === 'rain' ? LINES.rainReact : LINES.run, r), now);
       if (x < 0.96) { const o = pick(w.ents.filter((z) => z.kind === 'npc' && z.id !== e.id && z.act !== 'gone' && z.act !== 'carried'), r); return o ? go(e, jitter({ x: o.x + 28, y: o.y }, r, 6), 'chat') : e; }
@@ -214,7 +214,7 @@ function decide(e: Ent, w: World, now: number, r: () => number, prey: AgentPrey[
     case 'cat': {
       const dog = w.ents.find((z) => z.kind === 'dog');
       if (dog && dog.act !== 'gone' && dog.act !== 'eaten' && dog.act !== 'fall' && r() < 0.14) return say(go(e, { x: dog.x + 18, y: dog.y }, 'fight', 100), pick(LINES.catFight, r), now);
-      return go(e, jitter(pick([...YARD, ...CAFE_SEATS, ...TRADA_STOOLS], r), r, 30), 'idle');
+      return go(e, jitter(pick([...YARD, ...CAFE_SEATS, ...TEA_STOOLS], r), r, 30), 'idle');
     }
     case 'trex': {
       if (e.act === 'gone') return e;
@@ -245,10 +245,10 @@ function arrive(e: Ent, now: number, r: () => number): Ent {
   const n = e.next ?? 'idle';
   switch (n) {
     case 'drink': return say({ ...e, act: 'drink', until: now + 8000 + r() * 5000 }, pick(LINES.coffee, r), now);
-    case 'beer': return say({ ...e, act: 'beer', until: now + 8000 + r() * 5000 }, pick(LINES.beer, r), now);
+    case 'tea': return say({ ...e, act: 'tea', until: now + 8000 + r() * 5000 }, pick(LINES.tea, r), now);
     case 'chat': return say({ ...e, act: 'chat', until: now + 7500 }, pick(r() < 0.15 ? LINES.gossipBoss : r() < 0.28 ? LINES.trollPR : r() < 0.4 ? LINES.ghostWork : r() < 0.5 ? LINES.remoteWar : LINES.chat, r), now, 7500);
-    case 'massage': return say({ ...e, act: 'massage', until: now + 10000 + r() * 6000 }, pick(e.say && /ốm|nghỉ|sốt|cúm|leave/i.test(e.say) ? LINES.sickCaught : LINES.massageTalk, r), now, 6500);
-    case 'bbq': return say({ ...e, act: 'bbq', until: now + 10000 + r() * 6000 }, pick(e.say && /ốm|nghỉ|sốt|cúm|leave/i.test(e.say) ? LINES.sickCaught : LINES.bbqTalk, r), now, 6500);
+    case 'massage': return say({ ...e, act: 'massage', until: now + 10000 + r() * 6000 }, pick(e.say && /sick|fever|flu|leave|day off/i.test(e.say) ? LINES.sickCaught : LINES.massageTalk, r), now, 6500);
+    case 'bbq': return say({ ...e, act: 'bbq', until: now + 10000 + r() * 6000 }, pick(e.say && /sick|fever|flu|leave|day off/i.test(e.say) ? LINES.sickCaught : LINES.bbqTalk, r), now, 6500);
     case 'romance': return say({ ...e, act: 'romance', until: now + 14000 + r() * 6000 }, pick(LINES.romance, r), now, 7000);
     case 'smoke': return say({ ...e, act: 'smoke', until: now + 9000 + r() * 5000 }, pick(r() < 0.45 ? LINES.gossipBoss : LINES.smokeTalk, r), now, 6500);
     case 'gym': return say({ ...e, act: 'gym', until: now + 9000 + r() * 5000 }, pick(LINES.gymTalk, r), now, 6500);
@@ -257,7 +257,7 @@ function arrive(e: Ent, now: number, r: () => number): Ent {
     case 'pod': return say({ ...e, act: 'pod', until: now + 11000 + r() * 6000 }, pick(r() < 0.35 ? LINES.gossipBoss : LINES.podTalk, r), now, 6500);
     case 'print': return say({ ...e, act: 'print', until: now + 8000 + r() * 4000 }, pick(LINES.printTalk, r), now, 6000);
     case 'drama': return say({ ...e, act: 'drama', until: now + 10000 + r() * 5000 }, pick(LINES.gossipColleague, r), now, 6500);
-    case 'bia': { const line = r() < 0.35 ? pick(LINES.biaTalk, r) : pick(PAIRS.whoPays, r)[0]; return say({ ...e, act: 'bia', until: now + 12000 + r() * 6000 }, line, now, 7000); }
+    case 'beer': { const line = r() < 0.35 ? pick(LINES.beerTalk, r) : pick(PAIRS.whoPays, r)[0]; return say({ ...e, act: 'beer', until: now + 12000 + r() * 6000 }, line, now, 7000); }
     case 'shipper': return say({ ...e, act: 'shipper', until: now + 9000 + r() * 5000 }, pick(LINES.shipperTalk, r), now, 6500);
     case 'wobble': return say({ ...e, act: 'wobble', until: now + 7000 + r() * 3000, speed: 55 }, pick(LINES.drunkWalk, r), now, 6500);
     case 'fall': return say({ ...e, tx: pondCenter().x, ty: pondCenter().y, act: 'fall', speed: 300, until: now + 4000 }, pick(LINES.slipPond, r), now, 2800);
@@ -332,14 +332,14 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     if (e.act === 'pod' && now <= e.until && !e.say && r() < 0.035) return say(e, pick(r() < 0.4 ? LINES.gossipBoss : LINES.podTalk, r), now, 6000);
     if (e.act === 'print' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.printTalk, r), now, 5500);
     if (e.act === 'drama' && now <= e.until && !e.say && r() < 0.04) return say(e, pick(r() < 0.5 ? LINES.gossipCaught : LINES.gossipColleague, r), now, 6000);
-    if (e.act === 'bia' && now <= e.until && !e.say && r() < 0.03) {
+    if (e.act === 'beer' && now <= e.until && !e.say && r() < 0.03) {
       const pair = pick(PAIRS.whoPays, r);
       return say(e, r() < 0.5 ? pair[0] : pair[1], now, 6500);
     }
     if (e.act === 'shipper' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.shipperTalk, r), now, 5500);
     if (e.act === 'wobble' && now <= e.until && !e.say && r() < 0.04) return say(e, pick(LINES.drunkWalk, r), now, 5500);
-    if (e.act === 'bia' && now > e.until) {
-      // Wobbly walk back toward the yard / street after nhậu.
+    if (e.act === 'beer' && now > e.until) {
+      // Wobbly walk back toward the yard / street after the beer stall.
       const dest = pick(YARD, r);
       return say(go({ ...e, partner: undefined, topic: undefined }, dest, 'wobble', 55), pick(LINES.drunkWalk, r), now, 6500);
     }
@@ -432,9 +432,9 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
       return e;
     });
   }
-  // Pair at smoke/trada/garden sometimes continues gossip / gets caught.
+  // Pair at smoke/iced tea/garden sometimes continues gossip / gets caught.
   ents = ents.map((e) => {
-    if ((e.act === 'smoke' || e.act === 'beer' || e.act === 'pod') && e.partner && !e.say && r() < 0.02) {
+    if ((e.act === 'smoke' || e.act === 'tea' || e.act === 'pod') && e.partner && !e.say && r() < 0.02) {
       return say(e, pick(r() < 0.35 ? LINES.gossipCaught : r() < 0.6 ? LINES.gossipBoss : LINES.gossipColleague, r), now, 6500);
     }
     if (e.act === 'gym' && e.partner && !e.say && r() < 0.025) {
@@ -456,7 +456,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     }
   }
 
-  // Boss walkthrough: rare temporary sếp NPC (not Architect, not a session agent).
+  // Boss walkthrough: rare temporary boss NPC (not Architect, not a session agent).
   if (!bossUntil && !ents.some((e) => e.kind === 'boss') && r() < 0.004) {
     bossUntil = now + 16_000;
     ents = [...ents, makeBoss(now, bossUntil)];
@@ -479,7 +479,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   // Shipper visit at the gate (occasional).
   if (!ents.some((e) => e.kind === 'shipper') && r() < 0.006) {
     const s = pick(SHIPPER_SPOTS, r);
-    ents = [...ents, { id: 'shipper-1', kind: 'shipper', name: 'Shipper', look: 'nam_05', x: s.x - 40, y: s.y, tx: s.x, ty: s.y, speed: 75, act: 'walk', next: 'shipper', until: now + 14_000 }];
+    ents = [...ents, { id: 'shipper-1', kind: 'shipper', name: 'Shipper', look: 'male_05', x: s.x - 40, y: s.y, tx: s.x, ty: s.y, speed: 75, act: 'walk', next: 'shipper', until: now + 14_000 }];
     // Pull one idle NPC to argue over the order.
     const n = ents.find((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner);
     if (n) {

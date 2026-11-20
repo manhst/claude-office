@@ -23,7 +23,7 @@ main{display:flex;gap:14px;padding:14px;align-items:stretch;--map-frac:0.8}
 .rl-tool>i{color:var(--rl-ok)}.rl-tool-err>i{color:var(--rl-err)}.rl-tool b{font-weight:700}.rl-err{color:var(--rl-err)}.rl-dim{color:var(--rl-dim)}
 .rl-working{color:var(--rl-work)}.rl-working>i{width:1ch;text-align:center;animation:rl-spin 1.8s linear infinite}
 @keyframes rl-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.rl-working>i{animation:none}}
-.ev-agent-message span{color:#7dd3fc}.ev-office-notice span{color:#fbbf24}.ev-agent-done span{color:#86efac}.ev-agent-error span{color:#fca5a5}.ev-tool-call span{color:#fde68a}
+.ev-agent-message span{color:#7dd3fc}.ev-deck-notice span{color:#fbbf24}.ev-agent-done span{color:#86efac}.ev-agent-error span{color:#fca5a5}.ev-tool-call span{color:#fde68a}
 .icon{flex:none;vertical-align:-2px}
 .conn{display:flex;align-items:center;gap:6px}
 .ev i{flex:none;width:14px;color:#94a3b8;padding-top:1px}
@@ -33,7 +33,7 @@ main{display:flex;gap:14px;padding:14px;align-items:stretch;--map-frac:0.8}
 .split:hover i,.split:focus-visible i,.split.is-drag i{background:#3b82f6}
 .split:focus-visible{outline:2px solid #3b82f6;outline-offset:1px}
 .split.is-drag{cursor:col-resize}
-/* sessions (office mod) */
+/* sessions (deck mod) */
 .side{flex:calc(1 - var(--map-frac,0.8)) 1 0;min-width:220px;display:flex;flex-direction:column;gap:10px;height:calc(100vh - 80px);overflow:auto}.side .log{height:auto;flex:1;min-height:120px}.side .responses{flex:2 1 0;min-height:300px;display:flex;flex-direction:column;overflow:hidden}.side .responses.collapsed{flex:none;min-height:0}.side .agents{display:flex;flex-direction:column;min-height:160px;overflow:hidden}.side .agents .alist{flex:1;overflow:auto;min-height:0}.side .agents.collapsed{flex:none;min-height:0}.side .composer{flex:none}
 .alist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 .alist-sub{margin:4px 0 0 12px;padding:0;border-left:2px solid #23314f;padding-left:8px}
@@ -59,7 +59,7 @@ main{display:flex;gap:14px;padding:14px;align-items:stretch;--map-frac:0.8}
 .muted{color:#64748b;font-size:11.5px}.mono{font-family:ui-monospace,Consolas,monospace}
 @media (max-width:900px){header{flex-wrap:wrap;gap:8px}.usage{margin-left:0;width:100%;gap:6px 10px;flex-wrap:wrap}.ubar-track{width:64px}main{flex-direction:column}.stage3d{flex:none;width:100%;height:78vh;min-height:420px}.split{display:none}.side{width:100%;min-width:0;height:auto}.sessions{max-height:none}.side .log{max-height:300px}}
 .chibi{display:inline-block;border-radius:50%;overflow:hidden;line-height:0}.chibi svg{width:100%;height:100%}
-.svg-nv .mieng-mo,.svg-nv .mieng-met{display:none}.svg-nv .lap-lanh,.svg-nv .choang,.svg-nv .mo-hoi,.svg-nv .hon,.svg-nv .zzz,.svg-nv .quang-tham{opacity:0}
+.svg-avatar .mouth-open,.svg-avatar .mouth-tired{display:none}.svg-avatar .sparkle,.svg-avatar .dizzy,.svg-avatar .sweat,.svg-avatar .soul,.svg-avatar .zzz,.svg-avatar .eye-bags{opacity:0}
 .ctx{position:fixed;z-index:10;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:2px;min-width:170px;box-shadow:0 10px 30px #0008}
 .ctx b{font-size:12px;padding:2px 6px 4px;color:#e2e8f0}.ctx button{display:flex;gap:6px;align-items:center;background:none;border:0;color:#cbd5e1;padding:5px 6px;border-radius:5px;cursor:pointer;text-align:left;font:inherit}.ctx button:hover{background:#1e293b}.ctx .danger{color:#fca5a5}
 .editor-back{position:fixed;inset:0;background:#0009;display:grid;place-items:center;z-index:20}
@@ -69,12 +69,12 @@ main{display:flex;gap:14px;padding:14px;align-items:stretch;--map-frac:0.8}
 .editor .tabs{display:flex;gap:6px}.editor button{background:#1e293b;border:1px solid #334155;color:#cbd5e1;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit}.editor button[aria-pressed=true]{border-color:#3b82f6;color:#fff;background:#1d3a6b}
 .preset-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.preset{display:flex!important;flex-direction:column;align-items:center;gap:3px;padding:6px 2px!important;font-size:10px!important}.preset span{line-height:1.2;text-align:center}
 .editor-foot{display:flex;justify-content:flex-end;gap:8px}.editor .primary{background:#2563eb;border-color:#2563eb;color:#fff}.icon-btn{padding:4px!important;line-height:0}
-/* town around the office (Vanphong view, ref-vanphong/town3d.ts) */
-.vp-ref .nhan-pho{font-weight:800;white-space:nowrap}
-.vp-ref .noc-ok b{color:#16a34a}.vp-ref .noc-alert b,.vp-ref .noc-error b{color:#dc2626}.vp-ref .noc-alert{border-color:#ef4444;animation:pulse 1s infinite}.vp-ref .noc-idle b{color:#64748b}
+/* town around the office (Office view, office3d/town3d.ts) */
+.office3d-ref .street-label{font-weight:800;white-space:nowrap}
+.office3d-ref .noc-ok b{color:#16a34a}.office3d-ref .noc-alert b,.office3d-ref .noc-error b{color:#dc2626}.office3d-ref .noc-alert{border-color:#ef4444;animation:pulse 1s infinite}.office3d-ref .noc-idle b{color:#64748b}
 @keyframes pulse{50%{box-shadow:0 0 0 6px #ef444466}} /* not transform: CSS2DRenderer owns it */
-.vp-ref .ent-3d.bao-dong .bong-3d{background:#fee2e2;color:#7f1d1d;border:1px solid #ef4444;font-weight:700}
-.vp-ref .ten-3d,.vp-ref .bong-3d{cursor:pointer}
+.office3d-ref .ent-3d.alarm .bubble-3d{background:#fee2e2;color:#7f1d1d;border:1px solid #ef4444;font-weight:700}
+.office3d-ref .name-3d,.office3d-ref .bubble-3d{cursor:pointer}
 
 /* Settings panel */
 .settings-btn{margin-left:8px;background:#1e293b;border:1px solid #334155;border-radius:8px;color:#cbd5e1;cursor:pointer;padding:6px!important;line-height:0}
@@ -203,7 +203,7 @@ main[hidden]{display:none}
 .cc-fs{position:relative}.cc-showsec{position:absolute;top:-6px;right:8px;font-size:11px;padding:1px 8px}.cc-fixname{align-self:flex-start;margin-top:4px;font-size:11.5px;padding:2px 8px}
 .cc-confirm small.cc-reason,.cc-confirm code.cc-reason{display:block;margin-top:8px;padding:6px 8px;border-radius:6px;background:#0b1222;color:#cbd5e1;font:11.5px/1.45 ui-monospace,Consolas,monospace;overflow-wrap:anywhere;white-space:pre-wrap}
 .cc-confirm p{margin:0;color:#cbd5e1;font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}.editor .cc-danger-b{background:#b91c1c;border-color:#b91c1c;color:#fff}
-/* History "Mở lại" (OpenSession.tsx): split button + menu button pattern, status line; resume command row with "Sao chép" */
+/* History "Reopen" (OpenSession.tsx): split button + menu button pattern, status line; resume command row with "Copy" */
 .hopen{position:relative;flex:none;display:inline-flex;margin-top:1px}.hopen>.hist-btn{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .hopen-main{border-radius:6px 0 0 6px}.hopen-main small{color:#94a3b8;font-size:11.5px}.hopen-more{border-radius:0 6px 6px 0;margin-left:-1px;padding:4px 7px}
 .hopen-list{position:absolute;right:0;top:calc(100% + 4px);z-index:6;min-width:230px;display:flex;flex-direction:column;gap:2px;padding:4px;background:#0f172a;border:1px solid #334155;border-radius:8px;box-shadow:0 10px 30px #0008}
@@ -217,7 +217,7 @@ main[hidden]{display:none}
 .hd-cmdrow{display:flex;align-items:flex-start;gap:6px}.hd-cmdrow .hd-cmd{flex:1;min-width:0}.hd-cmdrow .hist-btn{flex:none}
 @media (max-width:900px){.cc-pair{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 24px 24px}}
 @media (max-width:900px){.hist{grid-template-columns:1fr;height:auto;min-height:0}.hist-list{max-height:75vh}.hist-detail{overflow:visible}.hist-detail>.hx-scroll{max-height:70vh}}
-/* "Hiệu suất" tab (ModelReportView.tsx, modelReport.ts). Series colors are fixed slots by modelOrder (--mr-s1..8, s0 = neutral); data bars use slot 1.
+/* "Performance" tab (ModelReportView.tsx, modelReport.ts). Series colors are fixed slots by modelOrder (--mr-s1..8, s0 = neutral); data bars use slot 1.
    The app shell is dark-only, so the dark palette is the default and the light one applies under :root[data-theme=light]. */
 .mr{--mr-bg:#0f172a;--mr-surface:#111c33;--mr-line:#23314f;--mr-grid:#1e293b;--mr-text:#e2e8f0;--mr-text2:#94a3b8;--mr-muted:#64748b;--mr-hover:#132447;--mr-sel:#172b52;
   --mr-s0:#64748b;--mr-s1:#3987e5;--mr-s2:#d95926;--mr-s3:#199e70;--mr-s4:#c98500;--mr-s5:#d55181;--mr-s6:#0ca30c;--mr-s7:#9085e9;--mr-s8:#e66767;

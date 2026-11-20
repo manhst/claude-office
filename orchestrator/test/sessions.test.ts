@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { SessionTracker, parseModEvent } from '../src/sessions.js';
 import { loadProfiles, parseFrontmatter } from '../src/profiles.js';
 import { turnLogGate } from '../src/log.js';
-import type { OfficeEvent } from '../src/types.js';
-const tmp = () => mkdtempSync(join(tmpdir(), 'office-prof-'));
+import type { DeckEvent } from '../src/types.js';
+const tmp = () => mkdtempSync(join(tmpdir(), 'deck-prof-'));
 const agent = (dir: string, file: string, md: string) => { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, file), md); };
 describe('frontmatter', () => {
   it('parses scalars, inline lists, comma lists and dash lists', () => {
@@ -41,7 +41,7 @@ describe('profile priority A > B > C', () => {
 });
 describe('session tracking', () => {
   const setup = (o = {}) => {
-    let now = 1000; const ev: OfficeEvent[] = [];
+    let now = 1000; const ev: DeckEvent[] = [];
     const root = tmp(); agent(join(root, '.claude/agents'), 'a-planner.md', '---\nname: planner\n---\n'); agent(join(root, '.claude/agents'), 'b-coder.md', '---\nname: coder\n---\n');
     const t = new SessionTracker({ now: () => now, ...o }); t.on((e) => ev.push(e));
     return { t, ev, root, tick: (ms: number) => { now += ms; } };
@@ -68,7 +68,7 @@ describe('session tracking', () => {
   it('maps 4 parallel busy subagents onto 4 distinct desks', () => {
     const root = tmp();
     for (const n of ['alpha', 'beta', 'gamma', 'delta']) agent(join(root, '.claude/agents'), `${n}.md`, `---\nname: ${n}\n---\n`);
-    let now = 1000; const ev: OfficeEvent[] = [];
+    let now = 1000; const ev: DeckEvent[] = [];
     const t = new SessionTracker({ now: () => now, desks: 6 }); t.on((e) => ev.push(e));
     t.ingest({ type: 'start', sid: 's4', cwd: root, title: 'parallel' });
     const [s] = t.list(); expect(s.agentIds).toHaveLength(4);
@@ -105,7 +105,7 @@ describe('session tracking', () => {
     const root = tmp();
     agent(join(root, '.claude/agents'), 'only.md', '---\nname: only\n---\n');
     const t = new SessionTracker({ now: () => 1000, desks: 1, perSession: 1 });
-    const ev: OfficeEvent[] = []; t.on((e) => ev.push(e));
+    const ev: DeckEvent[] = []; t.on((e) => ev.push(e));
     t.ingest({ type: 'start', sid: 's1', cwd: root });
     const [s] = t.list(); expect(s.agentIds).toHaveLength(1);
     t.ingest({ type: 'subagents', sid: 's1', state: 'idle', subagents: [
@@ -153,7 +153,7 @@ describe('session tracking', () => {
     const { t, ev } = setup({ desks: 3 });
     t.ingest({ type: 'start', sid: 'a', cwd: '' }); t.ingest({ type: 'start', sid: 'b', cwd: '' });
     expect(t.list()[1].agentIds).toHaveLength(1);
-    expect(ev.some((e) => e.t === 'office.notice' && /No free desk/.test(e.text))).toBe(true);
+    expect(ev.some((e) => e.t === 'deck.notice' && /No free desk/.test(e.text))).toBe(true);
   });
   it('sanitizes payloads: bad type/sid rejected, strings capped and secrets redacted', () => {
     expect(parseModEvent({ type: 'start' })).toBeNull(); expect(parseModEvent({ type: 'x', sid: 'a' })).toBeNull(); expect(parseModEvent(null)).toBeNull();

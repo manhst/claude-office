@@ -1,4 +1,4 @@
-// office mod: reports this Claude Code session to the local virtual office server (POST <endpoint>, loopback only).
+// deck mod: reports this Claude Code session to the local Claude Deck server (POST <endpoint>, loopback only).
 // API as used by the owner's working usage-esp mod. Every handler observes only and always calls next(e).
 import type { Register } from 'claude-code';
 type Any = any;
@@ -92,7 +92,7 @@ export function jobPick(job: Any): { model?: string; effort?: string } {
   const effort = typeof job?.effort === 'string' && EFFORTS.includes(job.effort) ? job.effort : undefined;
   return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
 }
-/** The turn.step input with the office's model/effort applied, or the input as it was. */
+/** The turn.step input with Claude Deck's model/effort applied, or the input as it was. */
 export function applyOverride(st: { override?: { turnId: string; model?: string; effort?: string } }, e: Any): Any {
   const o = st.override;
   if (!o || e?.agentId !== undefined || !e?.turnId || e.turnId !== o.turnId) return e;
@@ -102,9 +102,9 @@ type State = {
   endpoint: string; inbox: string; ack: string; loopback: boolean; quiet: boolean; ended: boolean; sid: string; cwd: string; root: string; transcript: string;
   title?: string; sessionTitle?: string; state: string; tool: { name: string; detail?: string } | null; prompt?: string; queue: Promise<void>;
   inboxToken?: string; canSubmit: boolean; model?: string; submitting: boolean;
-  /** Model/effort the office UI picked for a prompt it submitted, waiting for that prompt's main turn to start. */
+  /** Model/effort the Claude Deck UI picked for a prompt it submitted, waiting for that prompt's main turn to start. */
   pick?: Pick;
-  /** The main turn running with the office's pick: its turn.step requests get this model/effort. */
+  /** The main turn running with Claude Deck's pick: its turn.step requests get this model/effort. */
   override?: { turnId: string; model?: string; effort?: string };
   /** Main turn answered but $.agent.list() still has busy subagents — keep posting working until clear (esp pendingDone). */
   pendingDone: boolean;
@@ -182,7 +182,7 @@ async function readModel($: Any): Promise<string | undefined> {
     if (m && typeof m === 'object') for (const k of ['id', 'name', 'model']) { const v = m[k]; if (typeof v === 'string' && v.trim()) return v.trim().slice(0, 80); }
   } catch { /* getter missing or unknown shape — no live setter is documented */ }
 }
-function officePaths(endpoint: string) {
+function deckPaths(endpoint: string) {
   try { const u = new URL(endpoint); const origin = `${u.protocol}//${u.host}`; return { inbox: `${origin}/inbox`, ack: `${origin}/inbox/ack` }; }
   catch { return { inbox: '', ack: '' }; }
 }
@@ -193,7 +193,7 @@ async function post($: Any, st: State, type: string, body: Any) {
   try {
     const r = await $.http.fetch(st.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const tok = takeInboxToken(await fetchBody(r)); if (tok) st.inboxToken = tok;
-  } catch { /* office not running */ }
+  } catch { /* Claude Deck not running */ }
 }
 /** Posts go out one at a time, in event order; the body is snapshotted now. */
 function send($: Any, st: State, type: string): Promise<void> {
@@ -204,7 +204,7 @@ function send($: Any, st: State, type: string): Promise<void> {
   return st.queue;
 }
 async function postRaw($: Any, st: State, body: string) {
-  try { await $.http.fetch(st.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body }); } catch { /* office not running */ }
+  try { await $.http.fetch(st.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body }); } catch { /* Claude Deck not running */ }
 }
 /** Usage goes on the same ordered queue; only when there is a reading. u = { rateLimits, context, cost } (session.measure event or $.session.usage()). */
 function sendUsage($: Any, st: State, u: Any, ts: number): Promise<void> {
@@ -256,7 +256,7 @@ async function ackInbox($: Any, st: State, id: string, state: string, reason?: s
   if (!st.inboxToken || !st.ack) return;
   try {
     await $.http.fetch(st.ack, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${st.inboxToken}` }, body: JSON.stringify({ sid: st.sid, id, state, reason }) });
-  } catch { /* office not running */ }
+  } catch { /* Claude Deck not running */ }
 }
 /** Claim at most one queued prompt for this sid and hand it to the live session. Never auto-retries after Esc/drop. */
 async function pullInbox($: Any, st: State) {
@@ -306,7 +306,7 @@ function classicInfo(st: State, e: Any) {
 
 export const register: Register = (on: Any, options: Any) => {
   const endpoint = String(options?.endpoint || DEFAULT_ENDPOINT);
-  const paths = officePaths(endpoint);
+  const paths = deckPaths(endpoint);
   const st: State = {
     endpoint, inbox: paths.inbox, ack: paths.ack, loopback: /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\//.test(endpoint), // by design: never post off this PC
     quiet: false, ended: false, sid: '', cwd: '', root: '', transcript: '', state: 'idle', tool: null, queue: Promise.resolve(), pendingDone: false, turnId: '', progressAt: 0, msgBase: -1, localN: 0, subTurns: new Map(),
@@ -343,7 +343,7 @@ export const register: Register = (on: Any, options: Any) => {
     } catch { /* never break the session */ }
     return next(e);
   });
-  // The office UI's model/effort pick, for the main turn of the prompt it submitted only (subagents keep theirs).
+  // The Claude Deck UI's model/effort pick, for the main turn of the prompt it submitted only (subagents keep theirs).
   on('turn.step', async function* ($: Any, e: Any, next: Any) { return yield* next(applyOverride(st, e)); });
   on('tool.call', async ($: Any, e: Any, next: Any) => {
     if (next?.origin?.plugin === 'engine') {

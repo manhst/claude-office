@@ -6,7 +6,7 @@ import {
   applyLook, cameraFromEye, canPov, clampLook, enterPovView, exitPovView, eyePush, lookDelta, PITCH_LIM, POV_FOV, POV_NEAR,
   snapsEqual, subjectGone, type CamSnap, type Eye,
 } from '../src/povCam';
-import { liveEye } from '../src/ref-vanphong/town3d';
+import { liveEye } from '../src/office3d/town3d';
 import { TownMenu, type Menu } from '../src/town/Editor';
 
 const OVER: CamSnap = { px: 4, py: 12, pz: 18, tx: 0, ty: 0.5, tz: 1, fov: 38, near: 0.1 };
@@ -133,26 +133,26 @@ describe('view enter / exit / removal', () => {
   });
 });
 
-describe('Nhìn từ nhân vật menu', () => {
+describe('See-through-their-eyes menu', () => {
   const m: Menu = { key: 'npc:npc-1', label: 'Tèo', x: 10, y: 20, kind: 'ent', id: 'npc-1' };
   it('adds the look action when onLook is provided and keeps rename/throw', () => {
     const html = renderToStaticMarkup(createElement(TownMenu, { m, onEdit: () => {}, onThrow: () => {}, onLook: () => {} }));
-    expect(html).toMatch(/Nhìn từ nhân vật/);
+    expect(html).toMatch(/See through their eyes/);
     expect(html).toMatch(/ctx-look/);
-    expect(html).toMatch(/Đặt tên/);
-    expect(html).toMatch(/Ném cho cá sấu/);
+    expect(html).toMatch(/Name &amp; avatar/);
+    expect(html).toMatch(/Throw to the crocodiles/);
     expect(html).not.toMatch(/emoji|😀/);
   });
   it('shows the look action for dog, cat, and T-Rex when onLook is provided', () => {
     for (const [id, label] of [['dog', 'Chos An'], ['cat', 'Meow'], ['layoff', 'Layoff']] as const) {
       const html = renderToStaticMarkup(createElement(TownMenu, { m: { ...m, id, key: `npc:${id}`, label }, onEdit: () => {}, onThrow: () => {}, onLook: () => {} }));
-      expect(html).toMatch(/Nhìn từ nhân vật/);
-      expect(html).toMatch(/Đặt tên/);
+      expect(html).toMatch(/See through their eyes/);
+      expect(html).toMatch(/Name &amp; avatar/);
     }
   });
   it('omits the look action only when onLook is withheld', () => {
     const html = renderToStaticMarkup(createElement(TownMenu, { m: { ...m, id: 'dog', key: 'npc:dog' }, onEdit: () => {}, onThrow: () => {} }));
-    expect(html).not.toMatch(/Nhìn từ nhân vật/);
-    expect(html).toMatch(/Đặt tên/);
+    expect(html).not.toMatch(/See through their eyes/);
+    expect(html).toMatch(/Name &amp; avatar/);
   });
 });

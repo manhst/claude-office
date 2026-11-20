@@ -1,17 +1,19 @@
 // Screenshot: Agents panel (replaces Events) + draggable 80:20 split.
 import { spawn } from 'node:child_process';
-import { readFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, copyFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 mkdirSync(resolve(root, 'docs/screens'), { recursive: true });
 const out = resolve(root, 'docs/screens/session-agents.png');
 const outDrag = resolve(root, 'docs/screens/session-split.png');
-const env = { ...process.env }; delete env.OFFICE_PROMETHEUS_URL;
+const runDir = mkdtempSync(join(tmpdir(), 'deck-screens-')); // temp DECK_RUN_DIR: never overwrite the live orchestrator/.run/ui-url.txt
+const env = { ...process.env, DECK_RUN_DIR: runDir }; for (const k of ['DECK_PROMETHEUS_URL', 'OFFICE_PROMETHEUS_URL', 'OFFICE_RUN_DIR']) delete env[k];
 const p = spawn(resolve(root, 'orchestrator/node_modules/.bin/tsx'), ['orchestrator/src/cli.ts', 'start', '--demo', '--port', '0', '--step-ms', '800'], { cwd: root, env, stdio: ['ignore', 'ignore', 'pipe'] });
 const url = await new Promise((res, rej) => {
-  p.stderr.on('data', (d) => { if (/\[office\] UI:/.test(String(d))) res(readFileSync(resolve(root, 'orchestrator/.run/ui-url.txt'), 'utf8').trim()); });
+  p.stderr.on('data', (d) => { if (/\[deck\] UI:/.test(String(d))) res(readFileSync(join(runDir, 'ui-url.txt'), 'utf8').trim()); });
   setTimeout(() => rej(new Error('no start')), 20000);
 });
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -19,9 +21,9 @@ const errors = [];
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   await ctx.addInitScript(() => {
-    localStorage.removeItem('vp-collapse');
-    localStorage.removeItem('vp-split');
-    localStorage.removeItem('vp-debug');
+    localStorage.removeItem('deck.collapse');
+    localStorage.removeItem('deck.split');
+    localStorage.removeItem('deck.debug');
   });
   const pg = await ctx.newPage(); pg.on('pageerror', (e) => errors.push(e.message));
   await pg.goto(url); await pg.waitForSelector('[data-testid=conn]:has-text("live")');
@@ -46,14 +48,14 @@ try {
     await pg.mouse.move(start.x - 120, start.y, { steps: 8 });
     await pg.mouse.up();
     await pg.waitForTimeout(400);
-    const stored = await pg.evaluate(() => localStorage.getItem('vp-split'));
+    const stored = await pg.evaluate(() => localStorage.getItem('deck.split'));
     if (!stored) errors.push('split ratio not persisted');
-    else if (Math.abs(Number(stored) - 0.8) < 0.01) errors.push(`split did not move (vp-split=${stored})`);
+    else if (Math.abs(Number(stored) - 0.8) < 0.01) errors.push(`split did not move (deck.split=${stored})`);
     const now = Number(await pg.locator('[data-testid=split]').getAttribute('aria-valuenow'));
     if (!(now >= 45 && now <= 82)) errors.push(`split aria-valuenow out of range: ${now}`);
   }
   await pg.screenshot({ path: outDrag });
-  const stage = await pg.locator('[data-testid=office-vanphong]').boundingBox();
+  const stage = await pg.locator('[data-testid=office-view]').boundingBox();
   const side = await pg.locator('.side').boundingBox();
   if (stage && side && stage.width + side.width > 1280) errors.push('panes overflow viewport');
   await ctx.close();

@@ -18,9 +18,9 @@ export interface OpenerFs { kind(p: string): Promise<'dir' | 'file' | null>; lis
 export interface SessionLocation { cwd?: string; project: string; folder: string; mtimeMs: number }
 export interface SessionOpenerOpts {
   locate(sid: string): Promise<SessionLocation | null>;
-  /** sid is live in the office right now (needs confirm) */
+  /** sid is live in Claude Deck right now (needs confirm) */
   isLive?(sid: string): boolean;
-  /** office run dir: macOS resume scripts go to <runDir>/resume/ */
+  /** Claude Deck run dir: macOS resume scripts go to <runDir>/resume/ */
   runDir?: string;
   /** History transcript root; a non-default one (or CLAUDE_CONFIG_DIR) is handed to claude as CLAUDE_CONFIG_DIR */
   historyRoot?: string;
@@ -52,7 +52,7 @@ export const resumeScript = (cwd: string, claude: string, sid: string, configDir
 /** caps (ms unless noted): openers cache, detection probes, osascript, open, wait after the editor window, editor cold start, live window, script lifetime, stale scripts, project dir stat */
 export const OPENER_CAP = { cacheMs: 60_000, detectMs: 5000, osaMs: 60_000, openMs: 20_000, editorWaitMs: 1500, editorColdMs: 6000, liveMs: 120_000, scriptMs: 120_000, staleMs: 600_000, statMs: 2000 };
 const OSA = '/usr/bin/osascript', OPEN = '/usr/bin/open', MDFIND = '/usr/bin/mdfind', PLUTIL = '/usr/bin/plutil', LSAPPINFO = '/usr/bin/lsappinfo';
-/** Windows env allow-list (lowercase): never ELECTRON_RUN_AS_NODE, NODE_OPTIONS, VSCODE_*, CLAUDECODE, CLAUDE_CODE_*, OFFICE_* … */
+/** Windows env allow-list (lowercase): never ELECTRON_RUN_AS_NODE, NODE_OPTIONS, VSCODE_*, CLAUDECODE, CLAUDE_CODE_*, DECK_* / OFFICE_* … */
 const WIN_ENV = new Set(['systemroot', 'windir', 'systemdrive', 'path', 'pathext', 'comspec', 'userprofile', 'username', 'userdomain', 'appdata', 'localappdata', 'temp', 'tmp', 'homedrive', 'homepath',
   'programfiles', 'programfiles(x86)', 'programdata', 'programw6432', 'number_of_processors', 'processor_architecture', 'os']);
 /** a claude.cmd that cmd.exe /d /c can run without any quoting or metacharacter (no spaces, %, ^, &, parentheses, quotes) */
@@ -71,23 +71,23 @@ const WIN: App[] = [
   { id: 'vscode', label: 'VS Code', kind: 'editor', scheme: 'vscode', ext: '.vscode' },
 ];
 const T = {
-  demo: 'Chế độ demo không mở ứng dụng thật.', os: 'Mở lại chỉ hỗ trợ macOS và Windows.', none: 'Không thấy ứng dụng nào mở lại được phiên (iTerm, Terminal, Cursor, VS Code, Windows Terminal).',
-  sid: 'Mã phiên không hợp lệ.', app: 'Ứng dụng này không có trên máy.', confirm: 'confirm phải là true hoặc false.', notFound: 'Không tìm thấy phiên này trong Lịch sử.',
-  noCwd: 'Phiên này không ghi lại thư mục dự án nên không biết mở ở đâu.', noDir: (p: string) => `Thư mục dự án không còn trên máy: ${p}`,
-  slowDir: (p: string) => `Thư mục dự án không phản hồi (ổ mạng đã ngắt?): ${p}`,
-  badDir: 'Đường dẫn dự án không hợp lệ (không phải đường dẫn tuyệt đối, quá dài hoặc có ký tự điều khiển), không mở an toàn được.',
-  mismatch: 'Thư mục dự án ghi trong phiên không khớp với thư mục lưu phiên, không mở để tránh chạy nhầm chỗ.',
-  live: 'Phiên này đang chạy trong văn phòng. Mở lại sẽ chạy thêm một claude nữa trên cùng phiên, hai bên có thể ghi chồng lên nhau. Gửi lại với confirm: true nếu vẫn muốn mở.',
-  recent: 'Phiên này vừa được mở lại chưa tới 2 phút trước. Mở thêm lần nữa sẽ có hai claude trên cùng phiên. Gửi lại với confirm: true nếu vẫn muốn mở.',
-  touched: 'Phiên này vừa được ghi trong 2 phút qua, có thể vẫn đang chạy ở một cửa sổ khác. Gửi lại với confirm: true nếu vẫn muốn mở.',
-  busy: 'Đang mở một phiên khác, đợi chút rồi thử lại.',
-  auth: (a: string) => `macOS chưa cho phép văn phòng điều khiển ${a}. Vào System Settings → Privacy & Security → Automation, bật ${a} cho ứng dụng đang chạy văn phòng (Terminal, iTerm hoặc app Văn phòng ảo), rồi thử lại.`,
-  pending: (a: string) => `macOS đang hỏi quyền cho phép điều khiển ${a} — bấm OK rồi thử lại.`,
-  script: 'Không tạo được script mở lại trong thư mục chạy của văn phòng.',
-  unsafeRun: 'Thư mục chạy của văn phòng (OFFICE_RUN_DIR) có ký tự đặc biệt, không gõ an toàn vào terminal được. Dùng đường dẫn chỉ có chữ, số, dấu cách và / . _ -',
-  winCmd: 'claude chỉ có dạng claude.cmd ở đường dẫn có dấu cách hoặc ký tự đặc biệt, không chạy an toàn được. Cài bản claude.exe (native) hoặc mở Windows Terminal rồi chạy claude --resume.',
-  ask: (a: string) => `Lần đầu macOS có thể hỏi cho phép văn phòng điều khiển ${a}.`, folder: (a: string) => `Chưa cài extension Claude Code trong ${a} nên chỉ mở thư mục dự án.`,
-  resumed: (a: string) => `Phiên mở trong cửa sổ ${a} đang được chọn.`, uriFail: (a: string) => `Đã mở thư mục trong ${a} nhưng chưa mở được phiên.`,
+  demo: 'Demo mode does not open real apps.', os: 'Reopen only works on macOS and Windows.', none: 'No app found that can resume a session (iTerm, Terminal, Cursor, VS Code, Windows Terminal).',
+  sid: 'Invalid session id.', app: 'This app is not installed on this machine.', confirm: 'confirm must be true or false.', notFound: 'Session not found in History.',
+  noCwd: 'This session did not record a project folder, so there is nowhere to open it.', noDir: (p: string) => `The project folder no longer exists: ${p}`,
+  slowDir: (p: string) => `The project folder is not responding (network drive disconnected?): ${p}`,
+  badDir: 'Invalid project path (not absolute, too long or has control characters); it cannot be opened safely.',
+  mismatch: 'The project folder recorded in the session does not match the folder the session is stored under; not opening it to avoid running in the wrong place.',
+  live: 'This session is running in Claude Deck. Reopening starts a second claude on the same session and the two may overwrite each other. Send again with confirm: true to open anyway.',
+  recent: 'This session was reopened less than 2 minutes ago. Opening it again puts two claudes on the same session. Send again with confirm: true to open anyway.',
+  touched: 'This session was written in the last 2 minutes and may still be running in another window. Send again with confirm: true to open anyway.',
+  busy: 'Another session is being opened; wait a moment and try again.',
+  auth: (a: string) => `macOS has not allowed Claude Deck to control ${a}. Go to System Settings → Privacy & Security → Automation, enable ${a} for the app running Claude Deck (Terminal, iTerm or the Claude Deck app), then try again.`,
+  pending: (a: string) => `macOS is asking for permission to control ${a}. Click OK, then try again.`,
+  script: 'Could not create the resume script in the Claude Deck run folder.',
+  unsafeRun: 'The Claude Deck run folder (DECK_RUN_DIR) has special characters and cannot be typed safely into a terminal. Use a path with only letters, digits, spaces and / . _ -',
+  winCmd: 'claude is only available as claude.cmd in a path with spaces or special characters, so it cannot run safely. Install the native claude.exe, or open Windows Terminal and run claude --resume.',
+  ask: (a: string) => `The first time, macOS may ask to allow Claude Deck to control ${a}.`, folder: (a: string) => `The Claude Code extension is not installed in ${a}, so only the project folder was opened.`,
+  resumed: (a: string) => `The session opens in the active ${a} window.`, uriFail: (a: string) => `Opened the folder in ${a} but could not open the session.`,
 };
 const nodeFs: OpenerFs = {
   kind: async (p) => { const s = await stat(p).catch(() => null) ?? await lstat(p).catch(() => null); return !s ? null : s.isDirectory() ? 'dir' : 'file'; }, // lstat: Windows app execution aliases (wt.exe)
@@ -97,7 +97,7 @@ type Reply = { status: number; body: HistoryOpenResponse | McpErrorResponse };
 const fail = (status: number, error: string, reason?: string): Reply => ({ status, body: { error, ...(reason ? { reason } : {}) } });
 const errText = (r: ExecResult) => `${r.error ?? ''} ${r.stderr} ${r.code === null ? '' : `exit ${r.code}`}`.trim();
 const within = <T>(p: Promise<T>, ms: number) => new Promise<T | 'timeout'>((res) => { const t = setTimeout(() => res('timeout'), ms); t.unref?.(); p.then((v) => { clearTimeout(t); res(v); }, () => { clearTimeout(t); res('timeout'); }); });
-/** Resumes a past Claude Code session in a local app (History "Mở lại"; GET /history/openers, POST /history/open). Detection reads app bundles, Spotlight, lsappinfo and
+/** Resumes a past Claude Code session in a local app (History "Reopen"; GET /history/openers, POST /history/open). Detection reads app bundles, Spotlight, lsappinfo and
  *  extension folders only; nothing is launched to probe. Every process gets an argv array (never a shell) and an allow-listed env. On macOS no transcript data is ever
  *  typed: it goes into a 0600 /bin/sh script under <runDir>/resume/ and the terminal only receives `/bin/sh '<script>'`; the AppleScripts are constants with data
  *  in argv. One launch at a time; a session that is live, was opened <2 min ago or whose transcript changed <2 min ago needs confirm. Under vitest nothing runs
@@ -115,7 +115,7 @@ export class SessionOpener {
     if (this.platform === 'darwin' && opts.runDir && !opts.demo) void this.sweep();
   }
   private now() { return this.opts.now?.() ?? Date.now(); }
-  /** CLAUDE_CONFIG_DIR for the resumed claude: the config dir of a non-default History root (<dir>/projects), else the office's own CLAUDE_CONFIG_DIR */
+  /** CLAUDE_CONFIG_DIR for the resumed claude: the config dir of a non-default History root (<dir>/projects), else Claude Deck's own CLAUDE_CONFIG_DIR */
   private configDir(): string | undefined {
     const P = this.platform === 'win32' ? win32 : posix, root = this.opts.historyRoot;
     const d = root && P.resolve(root) !== P.resolve(this.home, '.claude', 'projects') ? (P.basename(P.resolve(root)) === 'projects' ? P.dirname(P.resolve(root)) : undefined) : this.env.CLAUDE_CONFIG_DIR || undefined;
@@ -237,7 +237,7 @@ export class SessionOpener {
   }
   private async start(app: Found, sid: string, cwd: string, project: string): Promise<Reply> {
     const env = this.childEnv(), ok = (resumed: boolean, note?: string): Reply => ({ status: 200, body: { ok: true, app: app.id, project, resumed, ...(note ? { note } : {}) } });
-    const failed = (r: ExecResult) => fail(500, 'launch-failed', redactText(errText(r), 300)), spawnFailed = fail(500, 'launch-failed', `Không chạy được ${app.label}.`);
+    const failed = (r: ExecResult) => fail(500, 'launch-failed', redactText(errText(r), 300)), spawnFailed = fail(500, 'launch-failed', `Could not start ${app.label}.`);
     const sleep = this.opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
     const uri = `${app.scheme}://anthropic.claude-code/open?session=${sid}`;
     if (this.platform === 'win32') {

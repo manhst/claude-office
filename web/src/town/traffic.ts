@@ -6,20 +6,20 @@ import { LANES, TOWN, type Pt } from './map';
 import { pick } from './sim';
 
 export type VType =
-  | 'xe-may' | 'xe-dap' | 'xe-om' | 'oto-con' | 'taxi' | 'ban-tai' | 'xe-buyt' | 'oto-tai' | 'container' | 'tron-be-tong' | 'xe-rac'
-  | 'xe-cau' | 'xe-lu' | 'may-xuc' | 'may-ui' | 'xe-tang' | 'ba-gac' | 'cuu-thuong' | 'cuu-hoa' | 'canh-sat' | 'kiem-tra' | 'xe-kem';
+  | 'motorbike' | 'bicycle' | 'grab-bike' | 'car' | 'taxi' | 'pickup' | 'bus' | 'truck' | 'container' | 'cement-mixer' | 'garbage-truck'
+  | 'crane' | 'road-roller' | 'excavator' | 'bulldozer' | 'tank' | 'cargo-trike' | 'ambulance' | 'fire-truck' | 'police' | 'road-inspector' | 'ice-cream-van';
 export const VEHICLES: Record<VType, { name: string; len: number; speed: number }> = {
-  'xe-may': { name: 'Xe máy', len: 34, speed: 230 }, 'xe-dap': { name: 'Xe đạp', len: 30, speed: 95 }, 'xe-om': { name: 'Xe ôm Grab', len: 34, speed: 210 },
-  'oto-con': { name: 'Ô tô con', len: 70, speed: 240 }, taxi: { name: 'Taxi', len: 70, speed: 250 }, 'ban-tai': { name: 'Xe bán tải', len: 80, speed: 220 },
-  'xe-buyt': { name: 'Xe buýt', len: 150, speed: 150 }, 'oto-tai': { name: 'Ô tô tải', len: 120, speed: 160 }, container: { name: 'Xe container', len: 180, speed: 140 },
-  'tron-be-tong': { name: 'Xe trộn bê tông', len: 120, speed: 120 }, 'xe-rac': { name: 'Xe rác', len: 110, speed: 110 }, 'xe-cau': { name: 'Xe cẩu', len: 140, speed: 110 },
-  'xe-lu': { name: 'Xe lu', len: 80, speed: 45 }, 'may-xuc': { name: 'Máy xúc', len: 100, speed: 60 }, 'may-ui': { name: 'Máy ủi', len: 90, speed: 60 },
-  'xe-tang': { name: 'Xe tăng', len: 120, speed: 90 }, 'ba-gac': { name: 'Xe ba gác', len: 60, speed: 100 }, 'cuu-thuong': { name: 'Xe cứu thương', len: 90, speed: 280 },
-  'cuu-hoa': { name: 'Xe cứu hỏa', len: 130, speed: 260 }, 'canh-sat': { name: 'Xe cảnh sát', len: 75, speed: 270 }, 'kiem-tra': { name: 'Xe kiểm tra đường', len: 75, speed: 130 },
-  'xe-kem': { name: 'Xe bán kem', len: 70, speed: 90 },
+  motorbike: { name: 'Motorbike', len: 34, speed: 230 }, bicycle: { name: 'Bicycle', len: 30, speed: 95 }, 'grab-bike': { name: 'Grab bike', len: 34, speed: 210 },
+  car: { name: 'Car', len: 70, speed: 240 }, taxi: { name: 'Taxi', len: 70, speed: 250 }, pickup: { name: 'Pickup', len: 80, speed: 220 },
+  bus: { name: 'Bus', len: 150, speed: 150 }, truck: { name: 'Truck', len: 120, speed: 160 }, container: { name: 'Container truck', len: 180, speed: 140 },
+  'cement-mixer': { name: 'Cement mixer', len: 120, speed: 120 }, 'garbage-truck': { name: 'Garbage truck', len: 110, speed: 110 }, crane: { name: 'Crane', len: 140, speed: 110 },
+  'road-roller': { name: 'Road roller', len: 80, speed: 45 }, excavator: { name: 'Excavator', len: 100, speed: 60 }, bulldozer: { name: 'Bulldozer', len: 90, speed: 60 },
+  tank: { name: 'Tank', len: 120, speed: 90 }, 'cargo-trike': { name: 'Cargo trike', len: 60, speed: 100 }, ambulance: { name: 'Ambulance', len: 90, speed: 280 },
+  'fire-truck': { name: 'Fire truck', len: 130, speed: 260 }, police: { name: 'Police car', len: 75, speed: 270 }, 'road-inspector': { name: 'Road inspection', len: 75, speed: 130 },
+  'ice-cream-van': { name: 'Ice cream van', len: 70, speed: 90 },
 };
 /** Random traffic mix (service vehicles mostly arrive on call, but drive by now and then too). */
-const MIX: VType[] = ['xe-may', 'xe-may', 'xe-may', 'xe-om', 'xe-om', 'xe-dap', 'oto-con', 'oto-con', 'taxi', 'ban-tai', 'xe-buyt', 'oto-tai', 'container', 'tron-be-tong', 'xe-rac', 'xe-cau', 'xe-lu', 'may-xuc', 'may-ui', 'xe-tang', 'ba-gac', 'ba-gac', 'cuu-thuong', 'canh-sat', 'kiem-tra', 'xe-kem'];
+const MIX: VType[] = ['motorbike', 'motorbike', 'motorbike', 'grab-bike', 'grab-bike', 'bicycle', 'car', 'car', 'taxi', 'pickup', 'bus', 'truck', 'container', 'cement-mixer', 'garbage-truck', 'crane', 'road-roller', 'excavator', 'bulldozer', 'tank', 'cargo-trike', 'cargo-trike', 'ambulance', 'police', 'road-inspector', 'ice-cream-van'];
 export type VState = 'drive' | 'argue' | 'fire' | 'boom' | 'wreck' | 'parked';
 export interface Vehicle {
   id: number; type: VType; lane: 0 | 1; x: number; y: number; speed: number; state: VState; until: number;
@@ -40,12 +40,12 @@ function spawn(t: Traffic, type: VType, lane: 0 | 1, now: number, target?: numbe
   return { ...t, vs: [...t.vs, v], nextId: t.nextId + 1 };
 }
 /** Manually trigger incidents (screenshots / tests). */
-export function forceCrash(t: Traffic, now: number, x = 700, types: [VType, VType] = ['oto-con', 'xe-tang']): Traffic {
+export function forceCrash(t: Traffic, now: number, x = 700, types: [VType, VType] = ['car', 'tank']): Traffic {
   const a: Vehicle = { id: t.nextId, type: types[0], lane: 0, x, y: LANES[0].y, speed: 0, state: 'argue', until: now + P.argueMs, other: t.nextId + 1, turn: 0 };
   const b: Vehicle = { ...a, id: t.nextId + 1, type: types[1], x: x - (VEHICLES[types[0]].len + VEHICLES[types[1]].len) / 2 - 4, other: t.nextId, turn: 0 };
   return { ...t, vs: [...t.vs, a, b], nextId: t.nextId + 2 };
 }
-export function forceFire(t: Traffic, now: number, x = 1000, type: VType = 'oto-tai'): Traffic {
+export function forceFire(t: Traffic, now: number, x = 1000, type: VType = 'truck'): Traffic {
   const v: Vehicle = { id: t.nextId, type, lane: 1, x, y: LANES[1].y, speed: 0, state: 'fire', until: now + P.fireMs };
   return { ...t, vs: [...t.vs, say(v, LINES.fire[0], now)], nextId: t.nextId + 1 };
 }
@@ -75,8 +75,8 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
   }).filter((v) => !(v.state === 'wreck' && now > v.until));
   // after a crash: sometimes one car catches fire; spontaneous fires are rare.
   vs = vs.map((v) => {
-    if (v.state === 'argue' && v.other !== undefined && v.id < v.other && v.turn === 3 && !v.hitCd && r() < P.fireAfterCrash) { calls.push({ type: 'cuu-hoa', x: v.x }, { type: 'cuu-thuong', x: v.x }); return say({ ...v, state: 'fire' as const, until: now + P.fireMs, hitCd: 1 }, pick(LINES.fire, r), now); }
-    if (v.state === 'drive' && v.x > 300 && v.x < 1300 && r() < P.randomFire * dt * 5) { calls.push({ type: 'cuu-hoa', x: v.x }, { type: 'cuu-thuong', x: v.x }); return say({ ...v, state: 'fire' as const, speed: 0, until: now + P.fireMs }, pick(LINES.fire, r), now); }
+    if (v.state === 'argue' && v.other !== undefined && v.id < v.other && v.turn === 3 && !v.hitCd && r() < P.fireAfterCrash) { calls.push({ type: 'fire-truck', x: v.x }, { type: 'ambulance', x: v.x }); return say({ ...v, state: 'fire' as const, until: now + P.fireMs, hitCd: 1 }, pick(LINES.fire, r), now); }
+    if (v.state === 'drive' && v.x > 300 && v.x < 1300 && r() < P.randomFire * dt * 5) { calls.push({ type: 'fire-truck', x: v.x }, { type: 'ambulance', x: v.x }); return say({ ...v, state: 'fire' as const, speed: 0, until: now + P.fireMs }, pick(LINES.fire, r), now); }
     return v;
   });
   // the partner of a burning car stops arguing
@@ -84,10 +84,10 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
   vs = vs.map((v) => (v.state === 'argue' && v.other !== undefined && burning.has(v.other) ? say({ ...v, until: now + 1500 }, pick(LINES.fire, r), now) : v));
   // Keep responders coming to open incidents (covers forceFire / forceCrash and mid-sim fires).
   for (const v of vs) {
-    if ((v.state === 'fire' || v.state === 'boom' || v.state === 'wreck') && !vs.some((o) => o.type === 'cuu-hoa' && o.target !== undefined && Math.abs((o.target ?? 0) - v.x) < 200))
-      calls.push({ type: 'cuu-hoa', x: v.x }, { type: 'cuu-thuong', x: v.x });
-    if (v.state === 'argue' && v.other !== undefined && v.id < v.other && !vs.some((o) => o.type === 'canh-sat' && o.target !== undefined && Math.abs((o.target ?? 0) - v.x) < 200))
-      calls.push({ type: 'canh-sat', x: v.x }, { type: 'cuu-thuong', x: v.x });
+    if ((v.state === 'fire' || v.state === 'boom' || v.state === 'wreck') && !vs.some((o) => o.type === 'fire-truck' && o.target !== undefined && Math.abs((o.target ?? 0) - v.x) < 200))
+      calls.push({ type: 'fire-truck', x: v.x }, { type: 'ambulance', x: v.x });
+    if (v.state === 'argue' && v.other !== undefined && v.id < v.other && !vs.some((o) => o.type === 'police' && o.target !== undefined && Math.abs((o.target ?? 0) - v.x) < 200))
+      calls.push({ type: 'police', x: v.x }, { type: 'ambulance', x: v.x });
   }
   // driving: keep distance, rear-end sometimes, respond to calls, hit pedestrians sometimes
   vs = vs.map((v) => {
@@ -95,12 +95,12 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
     const dir = LANES[v.lane].dir, len = VEHICLES[v.type].len;
     const ahead = vs.filter((o) => o.id !== v.id && o.lane === v.lane && (o.x - v.x) * dir > 0).sort((a, b) => Math.abs(a.x - v.x) - Math.abs(b.x - v.x))[0];
     let nx = v.x + dir * v.speed * dt;
-    if (v.target !== undefined && (v.target - nx) * dir < len) { return say({ ...v, x: v.target - dir * len, state: 'parked' as const, until: now + 9000 }, pick(v.type === 'cuu-hoa' ? LINES.fireCrew : v.type === 'cuu-thuong' ? LINES.hit : LINES.police, r), now, 7000); }
+    if (v.target !== undefined && (v.target - nx) * dir < len) { return say({ ...v, x: v.target - dir * len, state: 'parked' as const, until: now + 9000 }, pick(v.type === 'fire-truck' ? LINES.fireCrew : v.type === 'ambulance' ? LINES.hit : LINES.police, r), now, 7000); }
     if (ahead) {
       const gap = (ahead.x - dir * VEHICLES[ahead.type].len / 2 - (nx + dir * len / 2)) * dir;
       if (gap < 6) {
         if (ahead.state === 'drive' && v.speed > ahead.speed && !v.hitCd && r() < P.crash) { // rear-end: both stop and argue
-          calls.push({ type: 'canh-sat', x: ahead.x }, { type: 'cuu-thuong', x: ahead.x });
+          calls.push({ type: 'police', x: ahead.x }, { type: 'ambulance', x: ahead.x });
           return { ...v, x: ahead.x - dir * (VEHICLES[ahead.type].len + len) / 2 - dir * 2, speed: 0, state: 'argue' as const, until: now + P.argueMs, other: ahead.id, turn: -1, crashWith: ahead.id } as Vehicle;
         }
         nx = ahead.x - dir * (VEHICLES[ahead.type].len + len) / 2 - dir * 8; // queue
@@ -117,7 +117,7 @@ export function stepTraffic(t0: Traffic, now: number, r: () => number, peds: { i
   for (const v of vs) {
     if (v.state !== 'drive' || v.speed < 40 || v.hitCd === 2) continue;
     const p = peds.find((q) => Math.abs(q.y - v.y) < 18 && Math.abs(q.x - front(v)) < 14 && !hits.includes(q.id));
-    if (p && r() < P.hit) { hits.push(p.id); calls.push({ type: 'cuu-thuong', x: v.x }); vs = vs.map((o) => (o.id === v.id ? say({ ...o, hitCd: 2 }, pick(LINES.hitDriver, r), now) : o)); }
+    if (p && r() < P.hit) { hits.push(p.id); calls.push({ type: 'ambulance', x: v.x }); vs = vs.map((o) => (o.id === v.id ? say({ ...o, hitCd: 2 }, pick(LINES.hitDriver, r), now) : o)); }
   }
   vs = vs.filter((v) => v.x > -260 && v.x < TOWN.w + 260);
   t = { ...t, vs };

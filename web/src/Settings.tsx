@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { IconCross, IconGear } from './icons';
 import { fetchSettings, saveSettings, type SettingsView } from './settingsApi';
-import { DEFAULT_LABELS, LABEL_ROWS, loadLabels, saveLabels, type LabelPrefs, type MonitorLabelMode } from './vpLabels';
-import { RUN_SPEED_DEFAULT, RUN_SPEED_MAX, RUN_SPEED_MIN, loadRunSpeed, saveRunSpeed } from './vpRunSpeed';
+import { DEFAULT_LABELS, LABEL_ROWS, loadLabels, saveLabels, type LabelPrefs, type MonitorLabelMode } from './officeLabels';
+import { RUN_SPEED_DEFAULT, RUN_SPEED_MAX, RUN_SPEED_MIN, loadRunSpeed, saveRunSpeed } from './officeRunSpeed';
 
-const MODE_VI: Record<string, string> = {
+const MODE_LABEL: Record<string, string> = {
   prometheus: 'Prometheus',
-  demo: 'Demo (giả lập)',
-  unconfigured: 'Chưa cấu hình',
+  demo: 'Demo (simulated)',
+  unconfigured: 'Not configured',
 };
 
 export function SettingsButton({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" className="icon-btn settings-btn" onClick={onClick} title="Cài đặt" aria-label="Cài đặt" data-testid="settings-open">
+    <button type="button" className="icon-btn settings-btn" onClick={onClick} title="Settings" aria-label="Settings" data-testid="settings-open">
       <IconGear size={16} />
     </button>
   );
@@ -26,7 +26,7 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
   const [query, setQuery] = useState('');
   const [intervalSec, setIntervalSec] = useState('30');
   const [urlDirty, setUrlDirty] = useState(false);
-  const [vpDebug, setVpDebug] = useState(() => localStorage.getItem('vp-debug') === '1');
+  const [debugHooks, setDebugHooks] = useState(() => localStorage.getItem('deck.debug') === '1');
   const [runSpeed, setRunSpeed] = useState(() => loadRunSpeed());
   const [advanced, setAdvanced] = useState(false);
   const [labels, setLabels] = useState<LabelPrefs>(() => loadLabels());
@@ -71,10 +71,10 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
   const onClearUrl = () => void apply({ prometheusUrl: null });
 
   const toggleDebug = () => {
-    const next = !vpDebug;
-    setVpDebug(next);
-    if (next) localStorage.setItem('vp-debug', '1');
-    else localStorage.removeItem('vp-debug');
+    const next = !debugHooks;
+    setDebugHooks(next);
+    if (next) localStorage.setItem('deck.debug', '1');
+    else localStorage.removeItem('deck.debug');
   };
 
   const setLabelBool = (key: Exclude<keyof LabelPrefs, 'monitor'>, on: boolean) => {
@@ -97,23 +97,23 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
     <div className="editor-back" role="dialog" aria-modal="true" aria-labelledby="settings-title" data-testid="settings-panel" onClick={onClose}>
       <div className="editor settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="editor-head">
-          <h3 id="settings-title"><IconGear size={16} /> Cài đặt</h3>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Đóng"><IconCross size={14} /></button>
+          <h3 id="settings-title"><IconGear size={16} /> Settings</h3>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close"><IconCross size={14} /></button>
         </div>
 
         {err && <p className="settings-err" role="alert">{err}</p>}
-        {!view && !err && <p className="muted">Đang tải…</p>}
+        {!view && !err && <p className="muted">Loading…</p>}
 
         {view && (
           <>
             <section className="settings-sec">
               <h4>IT Ops · Prometheus</h4>
-              <p className="muted">Trạng thái: <b>{MODE_VI[view.itops.mode] ?? view.itops.mode}</b>
+              <p className="muted">Status: <b>{MODE_LABEL[view.itops.mode] ?? view.itops.mode}</b>
                 {view.itops.state ? ` · ${view.itops.state}` : ''}
                 {view.itops.endpoint ? ` · ${view.itops.endpoint}` : ''}
               </p>
-              {view.demo && <p className="settings-badge" data-testid="settings-demo">Chế độ demo đang bật (--demo). Không có URL thì IT Ops dùng cảnh báo giả lập.</p>}
-              <label>URL Prometheus
+              {view.demo && <p className="settings-badge" data-testid="settings-demo">Demo mode is on (--demo). Without a URL, IT Ops shows simulated alerts.</p>}
+              <label>Prometheus URL
                 <input
                   data-testid="settings-prom-url"
                   type={view.prometheus.hasCredentials && !urlDirty ? 'password' : 'url'}
@@ -125,22 +125,22 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
                   onFocus={() => { if (!urlDirty && view.prometheus.hasCredentials) { setUrl(''); setUrlDirty(true); } }}
                 />
               </label>
-              <p className="muted">Mật khẩu trong URL được che trên UI; lưu server tại <code>orchestrator/.run/office-settings.json</code> (mode 600).</p>
+              <p className="muted">A password in the URL is masked in the UI; the server stores it in <code>orchestrator/.run/deck-settings.json</code> (mode 600).</p>
               <label>Query
                 <input data-testid="settings-prom-query" spellCheck={false} value={query} onChange={(e) => setQuery(e.target.value)} />
               </label>
-              <label>Chu kỳ poll (giây)
+              <label>Poll interval (seconds)
                 <input data-testid="settings-prom-interval" type="number" min={2} step={1} value={intervalSec} onChange={(e) => setIntervalSec(e.target.value)} />
               </label>
               <div className="editor-foot">
-                <button type="button" disabled={busy || !view.prometheus.urlSet} onClick={onClearUrl}>Xóa URL</button>
-                <button type="button" className="primary" disabled={busy} data-testid="settings-save" onClick={onSave}>Lưu</button>
+                <button type="button" disabled={busy || !view.prometheus.urlSet} onClick={onClearUrl}>Clear URL</button>
+                <button type="button" className="primary" disabled={busy} data-testid="settings-save" onClick={onSave}>Save</button>
               </div>
             </section>
 
             <section className="settings-sec" data-testid="settings-labels">
-              <h4>Nhãn công trình</h4>
-              <p className="muted">Bật/tắt label trên bản đồ (lưu localStorage). Mặc định chỉ quán + hồ; Monitor chỉ hiện khi lỗi/cảnh báo.</p>
+              <h4>Map labels</h4>
+              <p className="muted">Show or hide labels on the map (saved in localStorage). By default only the shops and the pond; Monitor shows only on errors or alerts.</p>
               <div className="settings-label-grid">
                 {LABEL_ROWS.filter((r) => r.key !== 'monitor').map(({ key, title }) => (
                   <label key={key} className="settings-check settings-label-item">
@@ -160,20 +160,20 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
                   onChange={(e) => setMonitorMode(e.target.value as MonitorLabelMode)}
                   data-testid="settings-label-monitor"
                 >
-                  <option value="alert">Chỉ khi lỗi / cảnh báo</option>
-                  <option value="off">Luôn ẩn</option>
-                  <option value="always">Luôn hiện</option>
+                  <option value="alert">Only on errors / alerts</option>
+                  <option value="off">Always hidden</option>
+                  <option value="always">Always shown</option>
                 </select>
               </label>
               <div className="editor-foot">
-                <button type="button" data-testid="settings-labels-reset" onClick={resetLabels}>Mặc định</button>
+                <button type="button" data-testid="settings-labels-reset" onClick={resetLabels}>Defaults</button>
               </div>
             </section>
 
             <section className="settings-sec" data-testid="settings-run-speed">
-              <h4>Tốc độ chạy</h4>
-              <p className="muted">Chỉ tốc độ <b>chạy</b> (đi bộ giữ nguyên). Ambient / NPC / ra quán dùng mức này; agent đang làm việc trở về bàn luôn chạy max.</p>
-              <label className="settings-run-speed">Tốc độ chạy
+              <h4>Run speed</h4>
+              <p className="muted">Only the <b>running</b> speed (walking is unchanged). Ambient moves, NPCs and trips to the shops use it; a working agent heading back to its desk always runs at max.</p>
+              <label className="settings-run-speed">Run speed
                 <input
                   type="range"
                   min={RUN_SPEED_MIN}
@@ -190,27 +190,27 @@ export function SettingsPanel({ token, onClose }: { token: string; onClose: () =
                 <span className="mono" data-testid="settings-run-speed-value">{runSpeed.toFixed(1)} m/s</span>
               </label>
               <div className="editor-foot">
-                <button type="button" data-testid="settings-run-speed-reset" onClick={() => { setRunSpeed(RUN_SPEED_DEFAULT); saveRunSpeed(RUN_SPEED_DEFAULT); }}>Mặc định</button>
+                <button type="button" data-testid="settings-run-speed-reset" onClick={() => { setRunSpeed(RUN_SPEED_DEFAULT); saveRunSpeed(RUN_SPEED_DEFAULT); }}>Default</button>
               </div>
             </section>
 
             <section className="settings-sec">
-              <h4>Phiên &amp; bàn</h4>
-              <p className="muted">Mỗi lần chạy: <b>{view.desks.total}</b> bàn · tối đa <b>{view.desks.perSession}</b> agent / phiên · lưới {view.desks.cols} cột (cố định trong layout).</p>
+              <h4>Sessions &amp; desks</h4>
+              <p className="muted">Per run: <b>{view.desks.total}</b> desks · up to <b>{view.desks.perSession}</b> agents / session · {view.desks.cols}-column grid (fixed in the layout).</p>
               <p className="muted">{view.notes.avatar}</p>
             </section>
 
             <section className="settings-sec">
               <button type="button" className="settings-adv-toggle" aria-expanded={advanced} onClick={() => setAdvanced((a) => !a)}>
-                Nâng cao ({advanced ? 'ẩn' : 'hiện'})
+                Advanced ({advanced ? 'hide' : 'show'})
               </button>
               {advanced && (
                 <div className="settings-adv">
                   <label className="settings-check">
-                    <input type="checkbox" checked={vpDebug} onChange={toggleDebug} data-testid="settings-vp-debug" />
-                    Bật vp-debug (tai nạn / ngoại tình qua console)
+                    <input type="checkbox" checked={debugHooks} onChange={toggleDebug} data-testid="settings-debug" />
+                    Enable deck.debug (crashes / affairs from the console)
                   </label>
-                  <p className="muted">{view.notes.vpDebug} Sau khi bật, tải lại trang rồi dùng <code>__vpTraffic</code> / <code>__vpTown</code>.</p>
+                  <p className="muted">{view.notes.debugHooks} After enabling it, reload the page and use <code>__deckTraffic</code> / <code>__deckTown</code>.</p>
                 </div>
               )}
             </section>

@@ -14,7 +14,7 @@ export class HeartFX {
     const n = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
       const div = document.createElement('div');
-      div.className = 'vp-heart';
+      div.className = 'office3d-heart';
       div.style.color = ['#e11d48', '#f43f5e', '#fb7185', '#be123c'][i % 4];
       div.style.setProperty('--dx', `${(Math.random() - 0.5) * 28}px`);
       div.style.setProperty('--delay', `${i * 90}ms`);

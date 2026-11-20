@@ -1,52 +1,52 @@
 import type { ModelErrorCategory, ModelErrorPattern, ModelReportResponse, ModelStats, ModelToolStat, ModelTrendPoint, ModelTrendWeek } from './types';
-/** Pure helpers for the "Hiệu suất" tab (unit-tested in test/model-report.test.ts). Wording follows _local/model-report/model_report.py; numbers are vi-VN (`1.234,5`). */
+/** Pure helpers for the "Performance" tab (unit-tested in test/model-report.test.ts). Categories follow _local/model-report/model_report.py; numbers are en-US (`1,234.5`). */
 
 export const CATS: readonly ModelErrorCategory[] = ['misuse', 'cmd_fail', 'infra', 'auto_denied', 'user_rejected', 'other'];
-export const CAT_LABEL: Record<ModelErrorCategory, string> = { misuse: 'Model dùng sai tool', cmd_fail: 'Lệnh chạy nhưng trả lỗi', infra: 'Hạ tầng / mạng', auto_denied: 'Auto mode chặn', user_rejected: 'Bạn từ chối', other: 'Khác' };
+export const CAT_LABEL: Record<ModelErrorCategory, string> = { misuse: 'Model misused a tool', cmd_fail: 'Command ran but failed', infra: 'Infrastructure / network', auto_denied: 'Blocked by auto mode', user_rejected: 'You rejected', other: 'Other' };
 export const CAT_HINT: Record<ModelErrorCategory, string> = {
-  misuse: 'Gọi sai tham số, Edit không khớp chuỗi, sửa file chưa đọc, SQL/ES query sai, đoán sai đường dẫn hoặc lệnh. Đây là lỗi do model.',
-  cmd_fail: 'Bash/PowerShell trả exit code khác 0: test/build fail, grep không thấy… Không hẳn là model sai.',
-  infra: 'Không kết nối được DB/ES, timeout, VPN, 401/403/5xx, MCP server lỗi. Không phải lỗi của model.',
-  auto_denied: 'Bộ phân loại của auto mode chặn hành động (thường là ghi lên prd, lệnh nguy hiểm).',
-  user_rejected: 'Bạn bấm từ chối khi Claude xin quyền chạy tool.', other: 'Không xếp được vào nhóm nào.',
+  misuse: 'Wrong parameters, Edit strings that don\'t match, editing a file it hasn\'t read, bad SQL/ES queries, guessed paths or commands. The model\'s fault.',
+  cmd_fail: 'Bash/PowerShell exited non-zero: failing tests or builds, grep found nothing… Not necessarily the model\'s fault.',
+  infra: 'Couldn\'t reach DB/ES, timeouts, VPN, 401/403/5xx, MCP server errors. Not the model\'s fault.',
+  auto_denied: 'Auto mode\'s classifier blocked the action (usually writes to prd or dangerous commands).',
+  user_rejected: 'You declined when Claude asked permission to run a tool.', other: 'Fits no other group.',
 };
-/** "Lỗi gặp nhiều nhất" groups: a rejection always reads the same, so it has no group. */
+/** "Most common errors" groups: a rejection always reads the same, so it has no group. */
 export const PATTERN_CATS: readonly ModelErrorCategory[] = CATS.filter((c) => c !== 'user_rejected');
-export const WINDOWS: readonly (readonly [number, string])[] = [[7, '7 ngày'], [30, '30 ngày'], [90, '90 ngày'], [0, 'Toàn bộ']];
+export const WINDOWS: readonly (readonly [number, string])[] = [[7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']];
 
 export const pct = (a: number, b: number): number | null => b ? 100 * a / b : null;
 const group = (s: string, sep: string) => s.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-/** vi-VN number with d decimals: `.` thousands, `,` decimals (1234.5 → `1.234,5`); no `-0`. */
-export function fmtDec(v: number, d = 0) { const [i, f] = Math.abs(v).toFixed(d).split('.'); return `${v < 0 && /[1-9]/.test(i + (f ?? '')) ? '-' : ''}${group(i, '.')}${f ? `,${f}` : ''}`; }
-/** Count: 13550 → `13.550`. */
+/** en-US number with d decimals: `,` thousands, `.` decimals (1234.5 → `1,234.5`); no `-0`. */
+export function fmtDec(v: number, d = 0) { const [i, f] = Math.abs(v).toFixed(d).split('.'); return `${v < 0 && /[1-9]/.test(i + (f ?? '')) ? '-' : ''}${group(i, ',')}${f ? `.${f}` : ''}`; }
+/** Count: 13550 → `13,550`. */
 export const fmtN = (v: number) => fmtDec(v, 0);
-/** `1,59%` (d decimals), `–` when there is nothing to divide by. */
+/** `1.59%` (d decimals), `–` when there is nothing to divide by. */
 export const fmtPct = (v: number | null, d = 1) => v === null ? '–' : `${fmtDec(v, d)}%`;
-/** Rate without a unit (per 100 turns): `4,4`, `–`. */
+/** Rate without a unit (per 100 turns): `4.4`, `–`. */
 export const fmtNum = (v: number | null, d = 1) => v === null ? '–' : fmtDec(v, d);
-/** `$845,06`, `$1.234,50`. */
+/** `$845.06`, `$1,234.50`. */
 export const fmtUsd = (v: number) => { const s = fmtDec(v, 2); return s[0] === '-' ? `-$${s.slice(1)}` : `$${s}`; };
-/** Axis tick: at most one decimal, no trailing zero (`0,5`, `10`). */
+/** Axis tick: at most one decimal, no trailing zero (`0.5`, `10`). */
 export const fmtTick = (v: number) => fmtDec(v, Number.isInteger(+v.toFixed(1)) ? 0 : 1);
-/** Turn time: `45 giây` under 90 s, `6.0 phút` under 90 min, then `1.6 giờ`; `–` when unknown. */
+/** Turn time: `45 s` under 90 s, `6.0 min` under 90 min, then `1.6 h`; `–` when unknown. */
 export function fmtDur(ms: number | null) {
   if (ms === null || !Number.isFinite(ms)) return '–';
   const s = Math.max(0, ms / 1000);
-  return s < 90 ? `${Math.round(s)} giây` : s < 5400 ? `${fmtDec(s / 60, 1)} phút` : `${fmtDec(s / 3600, 1)} giờ`;
+  return s < 90 ? `${Math.round(s)} s` : s < 5400 ? `${fmtDec(s / 60, 1)} min` : `${fmtDec(s / 3600, 1)} h`;
 }
 const p2 = (n: number) => String(n).padStart(2, '0');
-/** Local `dd/mm`. */
-export function fmtDay(ts: number) { const d = new Date(ts); return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}`; }
-/** Local `dd/mm/yyyy`. */
+/** Local `mm/dd`. */
+export function fmtDay(ts: number) { const d = new Date(ts); return `${p2(d.getMonth() + 1)}/${p2(d.getDate())}`; }
+/** Local `mm/dd/yyyy`. */
 export function fmtDate(ts: number) { return `${fmtDay(ts)}/${new Date(ts).getFullYear()}`; }
-/** Local `HH:MM dd/mm/yyyy` ("cập nhật lúc …"). */
-export function fmtStamp(ts: number) { const d = new Date(ts); return `${p2(d.getHours())}:${p2(d.getMinutes())} ${fmtDate(ts)}`; }
-/** Local `dd/mm HH:MM`. */
+/** Local `mm/dd/yyyy HH:MM` ("data as of …"). */
+export function fmtStamp(ts: number) { const d = new Date(ts); return `${fmtDate(ts)} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+/** Local `mm/dd HH:MM`. */
 export function fmtDayTime(ts: number) { const d = new Date(ts); return `${fmtDay(ts)} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
-/** Trend week (its Monday, `YYYY-MM-DD`) → `dd/mm`. */
-export const weekLabel = (w: string) => `${w.slice(8, 10)}/${w.slice(5, 7)}`;
-/** One-line scope of the report: `30 ngày gần nhất (từ 21/10/2026)` / `toàn bộ lịch sử`. */
-export const windowText = (r: Pick<ModelReportResponse, 'days' | 'since'>) => r.days > 0 ? `${r.days} ngày gần nhất (từ ${fmtDate(r.since)})` : 'toàn bộ lịch sử';
+/** Trend week (its Monday, `YYYY-MM-DD`) → `mm/dd`. */
+export const weekLabel = (w: string) => `${w.slice(5, 7)}/${w.slice(8, 10)}`;
+/** One-line scope of the report: `the last 30 days (since 10/21/2026)` / `all history`. */
+export const windowText = (r: Pick<ModelReportResponse, 'days' | 'since'>) => r.days > 0 ? `the last ${r.days} days (since ${fmtDate(r.since)})` : 'all history';
 
 /** `claude-opus-5-5` → `Opus 5.5`, `claude-haiku-4-5-20251001` → `Haiku 4.5`; anything else unchanged. */
 export function niceModel(m: string) {
@@ -65,29 +65,31 @@ export function colorSlot(model: string, order: readonly string[]) { const i = o
 export const shortTool = (n: string) => n.replace(/^mcp__(.+?)__/, (_, s: string) => `${s.replaceAll('claude_ai_', '')} · `);
 export const shortSid = (sid: string) => sid.slice(0, 8);
 
+/** `1 tool call`, `13,550 tool calls`. */
+export const plural = (n: number, one: string, many = `${one}s`) => `${fmtN(n)} ${n === 1 ? one : many}`;
 export type Tile = { k: string; v: string; d: string };
 /** The six stat tiles at the top. */
 export function reportTiles(r: Pick<ModelReportResponse, 'sessions' | 'auto' | 'autoSkipped' | 'totals'>): Tile[] {
   const t = r.totals;
   return [
-    { k: 'Phiên', v: fmtN(r.sessions), d: r.auto ? 'gồm cả phiên tự động (sdk-cli)' : r.autoSkipped ? `không tính ${fmtN(r.autoSkipped)} phiên tự động (sdk-cli)` : 'không tính phiên tự động (sdk-cli)' },
-    { k: 'Lượt hỏi–đáp', v: fmtN(t.turns), d: `${fmtN(t.toolCalls)} lần gọi tool` },
-    { k: 'Model dùng sai tool', v: fmtPct(pct(t.errors.misuse, t.toolCalls), 2), d: 'trên tổng số lần gọi tool' },
-    { k: 'Bạn ngắt hoặc sửa', v: fmtNum(pct(t.interrupts + t.corrections, t.turns)), d: 'lần ngắt hoặc câu sửa trên 100 lượt' },
-    { k: 'Chi phí', v: fmtUsd(t.costUsd), d: 'theo cost-state của từng phiên' },
-    { k: 'Lỗi API', v: fmtN(t.apiErrors), d: `${fmtN(t.retryIncidents)} lần phải retry` },
+    { k: 'Sessions', v: fmtN(r.sessions), d: r.auto ? 'automated sessions (sdk-cli) included' : r.autoSkipped ? `${plural(r.autoSkipped, 'automated session')} (sdk-cli) excluded` : 'automated sessions (sdk-cli) excluded' },
+    { k: 'Turns', v: fmtN(t.turns), d: plural(t.toolCalls, 'tool call') },
+    { k: 'Model misused a tool', v: fmtPct(pct(t.errors.misuse, t.toolCalls), 2), d: 'of all tool calls' },
+    { k: 'You interrupted or corrected', v: fmtNum(pct(t.interrupts + t.corrections, t.turns)), d: 'interrupts or corrections per 100 turns' },
+    { k: 'Cost', v: fmtUsd(t.costUsd), d: 'from each session\'s cost-state' },
+    { k: 'API errors', v: fmtN(t.apiErrors), d: plural(t.retryIncidents, 'retry incident') },
   ];
 }
 
 export type RateCol = { key: string; label: string; title: string; unit: '%' | ''; of: (m: ModelStats) => [number, number] };
-/** Rate columns of "Chất lượng theo model" (lower is better); each gets an inline data bar. */
+/** Rate columns of "Quality by model" (lower is better); each gets an inline data bar. */
 export const RATE_COLS: readonly RateCol[] = [
-  { key: 'misuse', label: 'Dùng sai tool', unit: '%', title: '% số lần gọi tool hỏng vì model gọi sai', of: (m) => [m.errors.misuse, m.toolCalls] },
-  { key: 'edit', label: 'Edit hỏng', unit: '%', title: '% số lần Edit/Write hỏng vì model (không khớp chuỗi, chưa đọc file…)', of: (m) => [m.editFails, m.edits] },
-  { key: 'cmd', label: 'Lệnh trả lỗi', unit: '%', title: '% số lần gọi tool mà lệnh chạy nhưng trả lỗi', of: (m) => [m.errors.cmd_fail, m.toolCalls] },
-  { key: 'intr', label: 'Bạn ngắt /100 lượt', unit: '', title: 'số lần bấm Esc trên 100 lượt', of: (m) => [m.interrupts, m.turns] },
-  { key: 'corr', label: 'Bạn sửa /100 câu', unit: '', title: 'số câu kiểu “sai rồi”, “vẫn lỗi” trên 100 câu hỏi', of: (m) => [m.corrections, m.prompts] },
-  { key: 'rej', label: 'Bạn từ chối', unit: '%', title: '% số lần gọi tool bạn bấm từ chối', of: (m) => [m.errors.user_rejected, m.toolCalls] },
+  { key: 'misuse', label: 'Tool misuse', unit: '%', title: '% of tool calls that failed because the model called them wrong', of: (m) => [m.errors.misuse, m.toolCalls] },
+  { key: 'edit', label: 'Failed edits', unit: '%', title: '% of Edit/Write calls the model got wrong (string mismatch, file not read…)', of: (m) => [m.editFails, m.edits] },
+  { key: 'cmd', label: 'Command errors', unit: '%', title: '% of tool calls where the command ran but failed', of: (m) => [m.errors.cmd_fail, m.toolCalls] },
+  { key: 'intr', label: 'You interrupt /100 turns', unit: '', title: 'Esc presses per 100 turns', of: (m) => [m.interrupts, m.turns] },
+  { key: 'corr', label: 'You correct /100 prompts', unit: '', title: 'prompts like “that\'s wrong”, “still broken” per 100 prompts', of: (m) => [m.corrections, m.prompts] },
+  { key: 'rej', label: 'You rejected', unit: '%', title: '% of tool calls you declined', of: (m) => [m.errors.user_rejected, m.toolCalls] },
 ];
 export const rateOf = (m: ModelStats, c: RateCol) => pct(...c.of(m));
 /** Bar scale of a rate column: the largest value among models with enough data (all models when every one is a small sample). */
@@ -112,7 +114,7 @@ export function mainCause(t: ModelToolStat): { cat: ModelErrorCategory; share: n
 
 export type PatternRow = Pick<ModelErrorPattern, 'pattern' | 'count' | 'tool' | 'lastAt'>;
 export type PatternGroup = { cat: ModelErrorCategory; total: number; items: PatternRow[] };
-/** "Lỗi gặp nhiều nhất" groups in category order. With a model: only its patterns, counted with `byModel`, and the group total is that model's count. */
+/** "Most common errors" groups in category order. With a model: only its patterns, counted with `byModel`, and the group total is that model's count. */
 export function patternGroups(r: Pick<ModelReportResponse, 'patterns' | 'models' | 'totals'>, model?: string): PatternGroup[] {
   const m = model ? r.models.find((x) => x.model === model) : undefined;
   return PATTERN_CATS.map((cat) => {
@@ -178,9 +180,9 @@ export function linePath(values: readonly (number | null)[], x: (i: number) => n
 export const RECHECK_MS = 1500;
 /** User-facing text for a failed GET /model-report (status 0 = network, -1 = not JSON). */
 export function reportErrorText(status: number) {
-  if (status === 401 || status === 403) return 'Run token bị từ chối. Mở lại URL trong orchestrator/.run/ui-url.txt.';
-  if (status === 0) return 'Không kết nối được orchestrator. Nó có đang chạy không?';
-  if (status === -1) return 'Orchestrator trả về dữ liệu không đọc được.';
-  if (status === 404 || status === 405 || status === 501) return 'Orchestrator này chưa có báo cáo (thiếu /model-report). Khởi động lại nó.';
-  return `Không tạo được báo cáo (${status}).`;
+  if (status === 401 || status === 403) return 'Run token rejected. Reopen the URL in orchestrator/.run/ui-url.txt.';
+  if (status === 0) return 'Can\'t reach the orchestrator. Is it running?';
+  if (status === -1) return 'The orchestrator sent a response that can\'t be read.';
+  if (status === 404 || status === 405 || status === 501) return 'This orchestrator has no report (no /model-report). Restart it.';
+  return `Couldn't build the report (${status}).`;
 }

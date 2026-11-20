@@ -18,7 +18,7 @@ const attachment = (min: number) => ({ parentUuid: 'x', isSidechain: false, atta
 const write = (root: string, dir: string, sid: string, lines: unknown[]) => { mkdirSync(join(root, dir), { recursive: true }); const f = join(root, dir, `${sid}.jsonl`); writeFileSync(f, lines.map((l) => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n') + '\n'); return f; };
 /** a1 (shop, ai titles), b2 (shop, custom title, 2 subagents), c3 (blog, no cwd, secret), d4 (shop, sdk-cli auto), e5 (home dir), plus files that must not be indexed */
 function world() {
-  const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+  const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
   write(root, '-w-shop', 'a1', [
     { type: 'queue-operation', operation: 'enqueue', timestamp: at(99), sessionId: 'a1' },
     user('Thêm trang Lịch sử đơn hàng\nsecond line', 100, { gitBranch: 'feat/xyz-branch' }),
@@ -144,7 +144,7 @@ describe('HistoryIndex summaries', () => {
     expect(s.a1.bytes).toBeGreaterThan(0);
   });
   it('title falls back to the first prompt line, capped at 120 chars', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     write(root, 'C--Users-me-proj', 'w1', [user(`${'long '.repeat(40)}\nsecond`, 0, { cwd: 'C:\\Users\\me\\proj' }), said('ok', 1)]);
     const s = (await index(root).list({})).sessions[0];
     expect(s).toMatchObject({ project: 'C:\\Users\\me\\proj', projectName: 'proj' });
@@ -208,7 +208,7 @@ describe('HistoryIndex search and listing', () => {
     expect(await page(10_000, 99)).toEqual([5, 99, []]);
   });
   it('missing root is an empty index', async () => {
-    const r = await index(join(tmpdir(), 'office-hist-missing-dir-xyz')).list({});
+    const r = await index(join(tmpdir(), 'deck-hist-missing-dir-xyz')).list({});
     expect(r).toMatchObject({ total: 0, sessions: [], projects: [], autoHidden: 0 }); expect(r.scannedAt).toBeGreaterThan(0);
   });
 });
@@ -226,7 +226,7 @@ describe('HistoryIndex detail', () => {
     expect(await ix.detail('nope')).toBeNull(); expect(await ix.detail('../x')).toBeNull(); expect(await ix.detail('bad name!')).toBeNull();
   });
   it('caps items at 3000 (truncated) and long texts at ~32 KB', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     write(root, '-w-big', 'big', [user('x'.repeat(50_000), 0), ...Array.from({ length: 3005 }, (_, i) => said(`line ${i}`, 1))]);
     const d = (await index(root).detail('big'))!;
     expect(d.items.length).toBe(3000); expect(d.truncated).toBe(true);
@@ -234,7 +234,7 @@ describe('HistoryIndex detail', () => {
     expect((await index(root).list({})).sessions[0].messages).toBe(3006);
   });
   it('streams lines longer than a read chunk and a last line without newline', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     const f = write(root, '-w-huge', 'h1', [result('R'.repeat(2_500_000), 0), user('first prompt', 1), said(`${'A'.repeat(1_500_000)} tailword`, 2)]);
     appendFileSync(f, JSON.stringify(user('no newline at end', 3)));
     const ix = index(root), s = (await ix.list({})).sessions[0];
@@ -276,7 +276,7 @@ describe('HistoryIndex refresh', () => {
     await ix.refresh(); expect((await ix.list({ auto: true })).total).toBe(6);
   });
   it('locate(): raw cwd for POST /history/open (never in list/detail), redacted project, folder name, mtime; no cwd when the transcript has none or it is >4096 chars', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     const f1 = write(root, '-w-x', 'l1', [user('go', 0, { cwd: `/w/${SECRET}/app` }), said('ok', 1)]);
     write(root, '-w-blog', 'l2', [user('go', 0, { cwd: undefined }), said('ok', 1, { cwd: undefined })]);
     write(root, '-w-long', 'l3', [user('go', 0, { cwd: `/${'x'.repeat(4100)}` }), said('ok', 1)]);
@@ -311,7 +311,7 @@ describe('HistoryIndex refresh', () => {
 });
 describe('HistoryIndex limits and privacy', () => {
   it('auto = only sdk-* entrypoints; a session resumed interactively is not auto', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     write(root, '-w', 'x1', [user('/esp-sync', 0, { entrypoint: 'sdk-cli' }), said('ok', 1, { entrypoint: 'sdk-cli' }), user('now by hand', 2, { entrypoint: 'cli' })]);
     write(root, '-w', 'x2', [user('probe', 3, { entrypoint: 'sdk-ts' }), said('ok', 4, { entrypoint: 'sdk-ts' })]);
     write(root, '-w', 'x3', [user('typed', 5, { entrypoint: 'claude-vscode' })]);
@@ -319,7 +319,7 @@ describe('HistoryIndex limits and privacy', () => {
     expect([s.x1.auto, s.x2.auto, s.x3.auto]).toEqual([false, true, false]); expect(s.x1.entrypoint).toBe('sdk-cli');
   });
   it('metadata and tool names are redacted and capped', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     const x = { gitBranch: `feat/${SECRET}`, cwd: `/w/${SECRET}`, version: 'v'.repeat(400), entrypoint: `cli-${SECRET}` };
     write(root, '-w', 'm1', [user('hi', 0, x), asst([{ type: 'text', text: 'ok' }, { type: 'tool_use', id: 't', name: `mcp-${SECRET}`, input: { file_path: '/a/b.ts' } }], 1, x), { ...said('ok', 2, x), message: { model: `m-${SECRET}`, role: 'assistant', content: [{ type: 'text', text: 'ok' }] } }]);
     const ix = index(root), s = (await ix.list({}))!.sessions[0], d = (await ix.detail('m1'))!;
@@ -329,14 +329,14 @@ describe('HistoryIndex limits and privacy', () => {
     expect(d.items.find((i) => i.role === 'tool')).toMatchObject({ name: 'mcp-[REDACTED]', detail: 'b.ts' });
   });
   it('a cut haystack block never keeps half a secret', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     // the pre-redaction slice (2 × block) ends 6 chars into the key; whitespace collapse would pull that 'sk-qqq' stub into the kept 4 KB
     write(root, '-w', 'k1', [user('hello', 0), said(`${' '.repeat(2 * HISTORY_CAP.block - 6)}sk-${'q'.repeat(30)} tail`, 1)]);
     const ix = index(root);
     expect((await ix.list({ q: 'hello' })).total).toBe(1); expect((await ix.list({ q: 'sk-q' })).total).toBe(0); expect((await ix.list({ q: 'qqq' })).total).toBe(0);
   });
   it('per-session haystack cap and global budget: the oldest sessions keep metadata only', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     for (const [i, sid] of ['old', 'mid', 'new'].entries()) write(root, `-w-${sid}`, sid, [user(`${sid}word topic`, i * 10, { cwd: `/w/${sid}` }), ...Array.from({ length: 40 }, (_, k) => said(`${sid}${k} ${'filler '.repeat(500)}`, i * 10 + 1))]);
     const full = new HistoryIndex(root, { home: '/x' }); await full.refresh();
     expect(full.stats.chars).toBe(3 * 2 * (HISTORY_CAP.hay)); // each session text hit the 64K cap (text + folded copy)
@@ -347,7 +347,7 @@ describe('HistoryIndex limits and privacy', () => {
     expect((await ix.detail('old'))!.items.length).toBe(41); // detail re-reads the file
   });
   it('detail stops at ~4 MB of text (truncated) and skips lines over 8 MB without parsing', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     write(root, '-w', 'big', Array.from({ length: 200 }, (_, i) => said(`${i} ${'y'.repeat(30_000)}`, i)));
     const d = (await index(root).detail('big'))!;
     expect(d.truncated).toBe(true); expect(d.items.length).toBe(Math.floor(HISTORY_CAP.detail / 30_004));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentUI, MessageUI } from '../src/reducer';
-import { idleLine, idlePlans, vpGoal, vpObstacles, vpPlan, ATM_AGENT_SPOTS, BBQ_SPOTS, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, GATE_AGENT_SPOTS, GYM_AGENT_SPOTS, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POD_AGENT_SPOTS, POOL_SPOTS, PRINT_AGENT_SPOTS, ROMANCE_CENTERS, ROOM, SMOKE_AGENT_SPOTS, VP_BOUNDS, type IdlePlan } from '../src/ref-vanphong/adapter';
+import { idleLine, idlePlans, officeGoal, officeObstacles, officePlan, ATM_AGENT_SPOTS, BBQ_SPOTS, CHAT_SPOTS, COFFEE_SPOTS, FIGHT_SPOTS, GATE_AGENT_SPOTS, GYM_AGENT_SPOTS, IDLE_AFTER_MS, IDLE_SLOT_MS, MASSAGE_SPOTS, PAIR_GAP, POD_AGENT_SPOTS, POOL_SPOTS, PRINT_AGENT_SPOTS, ROMANCE_CENTERS, ROOM, SMOKE_AGENT_SPOTS, OFFICE3D_BOUNDS, type IdlePlan } from '../src/office3d/adapter';
 import { clearLine, findPath, type Rect } from '../src/walk';
 import { DOOR, allDesks } from '../src/layout';
 
@@ -23,7 +23,7 @@ describe('idle behaviour gaps', () => {
     const ask: MessageUI[] = [{ from: 'a', to: 'b', text: 'q', kind: 'ask', ts: 1 }];
     for (let slot = 0; slot < 60; slot++) expect(idlePlans(agents, order, ask, slot * IDLE_SLOT_MS)['a']).toBeUndefined();
     for (let slot = 0; slot < 60; slot++) for (const p of Object.values(idlePlans(agents, order, ask, slot * IDLE_SLOT_MS))) expect(p.partner).not.toBe('a');
-    expect(vpGoal(agents.a, agents, ask, { kind: 'coffee', key: 'k', ...COFFEE_SPOTS[0] }).key).toBe('visit:b');
+    expect(officeGoal(agents.a, agents, ask, { kind: 'coffee', key: 'k', ...COFFEE_SPOTS[0] }).key).toBe('visit:b');
   });
   it('a single free agent never chats or fights and nothing throws', () => {
     const agents = { a: ag('a') }; const kinds = new Set<string>();
@@ -69,7 +69,7 @@ describe('idle behaviour gaps', () => {
       others += Object.keys(plans).length;
     }
     expect(others).toBeGreaterThan(0);
-    expect(vpGoal(agents.b, agents, ask).key).toBe('home');
+    expect(officeGoal(agents.b, agents, ask).key).toBe('home');
     expect(idlePlans(agents, order, [...ask, { from: 'b', to: 'a', text: 'r', kind: 'reply', ts: 2 }], 0)).toEqual(idlePlans(agents, order, [], 0)); // replied: free again
   });
   it('no idle spot sits on the entrance corridor outside the door', () => {
@@ -82,12 +82,12 @@ describe('idle behaviour gaps', () => {
     for (const [x, , z] of p) { expect(x).toBeGreaterThanOrEqual(b.x0); expect(x).toBeLessThanOrEqual(b.x1); expect(z).toBeGreaterThanOrEqual(b.z0); expect(z).toBeLessThanOrEqual(b.z1); }
     for (let i = 1; i < p.length; i++) expect(clearLine(p[i - 1], p[i], obs)).toBe(true);
   });
-  it('vpPlan from the door to every idle spot crosses no wall or furniture', () => {
-    const obs = vpObstacles();
+  it('officePlan from the door to every idle spot crosses no wall or furniture', () => {
+    const obs = officeObstacles();
     for (const to of allSpots()) {
-      const p = vpPlan(DOOR, to);
+      const p = officePlan(DOOR, to);
       expect(p.at(-1), String(to)).toEqual(to);
-      for (const [x, , z] of p.slice(1)) expect(x >= VP_BOUNDS.x0 && x <= VP_BOUNDS.x1 && z >= VP_BOUNDS.z0 && z <= VP_BOUNDS.z1, `${to} bounds`).toBe(true);
+      for (const [x, , z] of p.slice(1)) expect(x >= OFFICE3D_BOUNDS.x0 && x <= OFFICE3D_BOUNDS.x1 && z >= OFFICE3D_BOUNDS.z0 && z <= OFFICE3D_BOUNDS.z1, `${to} bounds`).toBe(true);
       for (let i = 1; i < p.length; i++) expect(clearLine(p[i - 1], p[i], obs), `${DOOR} -> ${to} seg ${i}: ${p[i - 1]} -> ${p[i]}`).toBe(true);
     }
   });

@@ -1,9 +1,9 @@
 /** Authenticated GET /model-report (Bearer run token in the Authorization header only, never in a URL). */
-import { officeHttpBase } from './settingsApi';
+import { deckHttpBase } from './settingsApi';
 import type { ModelReportResponse } from './types';
 
 export type ReportQuery = { days: number; auto: boolean; fresh?: boolean };
-/** `?days=30&auto=0` (days: 7 | 30 | 90 | 0 = all history); `&fresh=1` = wait for a rescan first ("Làm mới" only). */
+/** `?days=30&auto=0` (days: 7 | 30 | 90 | 0 = all history); `&fresh=1` = wait for a rescan first ("Refresh" only). */
 export const reportQs = (p: ReportQuery) => `?days=${Math.max(0, Math.floor(p.days) || 0)}&auto=${p.auto ? 1 : 0}${p.fresh ? '&fresh=1' : ''}`;
 /** HTTP failure; status 0 = network error, -1 = response was not JSON. */
 export class ReportHttpError extends Error {
@@ -12,7 +12,7 @@ export class ReportHttpError extends Error {
 }
 export async function fetchModelReport(token: string, p: ReportQuery, signal?: AbortSignal): Promise<ModelReportResponse> {
   let r: Response;
-  try { r = await fetch(`${officeHttpBase()}/model-report${reportQs(p)}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, cache: 'no-store', signal }); }
+  try { r = await fetch(`${deckHttpBase()}/model-report${reportQs(p)}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, cache: 'no-store', signal }); }
   catch (e) { if (signal?.aborted) throw e; throw new ReportHttpError(0); }
   if (!r.ok) throw new ReportHttpError(r.status);
   try { return (await r.json()) as ModelReportResponse; } catch (e) { if (signal?.aborted) throw e; throw new ReportHttpError(-1); }

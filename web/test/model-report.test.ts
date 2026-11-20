@@ -23,26 +23,26 @@ const report = (p: Partial<ModelReportResponse> = {}): ModelReportResponse => ({
 });
 const O = 'claude-opus-5-5', S = 'claude-sonnet-5-5', H = 'claude-haiku-4-5-20251001';
 
-describe('formatting (vi-VN: . thousands, , decimals)', () => {
+describe('formatting (en-US: , thousands, . decimals)', () => {
   it('counts, percents, rates', () => {
-    expect(fmtN(0)).toBe('0'); expect(fmtN(999)).toBe('999'); expect(fmtN(1129)).toBe('1.129'); expect(fmtN(13550)).toBe('13.550'); expect(fmtN(1234567.6)).toBe('1.234.568'); expect(fmtN(-4200)).toBe('-4.200');
-    expect(fmtDec(1234.5, 1)).toBe('1.234,5'); expect(fmtDec(-0.001, 2)).toBe('0,00'); expect(fmtDec(-1.25, 1)).toBe('-1,3'); expect(fmtDec(0.3, 0)).toBe('0');
-    expect(fmtPct(1.5912, 2)).toBe('1,59%'); expect(fmtPct(4.44)).toBe('4,4%'); expect(fmtPct(96.3, 0)).toBe('96%'); expect(fmtPct(1234.5)).toBe('1.234,5%'); expect(fmtPct(null)).toBe('–');
-    expect(fmtNum(4.44)).toBe('4,4'); expect(fmtNum(12.3)).toBe('12,3'); expect(fmtNum(null)).toBe('–'); expect(pct(1, 0)).toBeNull(); expect(pct(1, 4)).toBe(25);
-    expect(fmtTick(0.5)).toBe('0,5'); expect(fmtTick(10)).toBe('10'); expect(fmtTick(0.30000000000000004)).toBe('0,3'); expect(fmtTick(1500)).toBe('1.500');
+    expect(fmtN(0)).toBe('0'); expect(fmtN(999)).toBe('999'); expect(fmtN(1129)).toBe('1,129'); expect(fmtN(13550)).toBe('13,550'); expect(fmtN(1234567.6)).toBe('1,234,568'); expect(fmtN(-4200)).toBe('-4,200');
+    expect(fmtDec(1234.5, 1)).toBe('1,234.5'); expect(fmtDec(-0.001, 2)).toBe('0.00'); expect(fmtDec(-1.25, 1)).toBe('-1.3'); expect(fmtDec(0.3, 0)).toBe('0');
+    expect(fmtPct(1.5912, 2)).toBe('1.59%'); expect(fmtPct(4.44)).toBe('4.4%'); expect(fmtPct(96.3, 0)).toBe('96%'); expect(fmtPct(1234.5)).toBe('1,234.5%'); expect(fmtPct(null)).toBe('–');
+    expect(fmtNum(4.44)).toBe('4.4'); expect(fmtNum(12.3)).toBe('12.3'); expect(fmtNum(null)).toBe('–'); expect(pct(1, 0)).toBeNull(); expect(pct(1, 4)).toBe(25);
+    expect(fmtTick(0.5)).toBe('0.5'); expect(fmtTick(10)).toBe('10'); expect(fmtTick(0.30000000000000004)).toBe('0.3'); expect(fmtTick(1500)).toBe('1,500');
   });
   it('money', () => {
-    expect(fmtUsd(845.064)).toBe('$845,06'); expect(fmtUsd(0)).toBe('$0,00'); expect(fmtUsd(0.812)).toBe('$0,81'); expect(fmtUsd(1234.5)).toBe('$1.234,50'); expect(fmtUsd(-0.001)).toBe('$0,00'); expect(fmtUsd(-2.5)).toBe('-$2,50');
+    expect(fmtUsd(845.064)).toBe('$845.06'); expect(fmtUsd(0)).toBe('$0.00'); expect(fmtUsd(0.812)).toBe('$0.81'); expect(fmtUsd(1234.5)).toBe('$1,234.50'); expect(fmtUsd(-0.001)).toBe('$0.00'); expect(fmtUsd(-2.5)).toBe('-$2.50');
   });
-  it('turn durations: giây under 90 s, phút under 90 min, then giờ', () => {
-    expect(fmtDur(null)).toBe('–'); expect(fmtDur(73_000)).toBe('73 giây'); expect(fmtDur(89_400)).toBe('89 giây');
-    expect(fmtDur(372_000)).toBe('6,2 phút'); expect(fmtDur(57.1 * 60_000)).toBe('57,1 phút'); expect(fmtDur(5400_000)).toBe('1,5 giờ');
+  it('turn durations: s under 90 s, min under 90 min, then h', () => {
+    expect(fmtDur(null)).toBe('–'); expect(fmtDur(73_000)).toBe('73 s'); expect(fmtDur(89_400)).toBe('89 s');
+    expect(fmtDur(372_000)).toBe('6.2 min'); expect(fmtDur(57.1 * 60_000)).toBe('57.1 min'); expect(fmtDur(5400_000)).toBe('1.5 h');
   });
-  it('dates are local dd/mm', () => {
+  it('dates are local mm/dd', () => {
     const t = new Date(2026, 9, 21, 9, 5).getTime();
-    expect(fmtDay(t)).toBe('21/10'); expect(fmtDate(t)).toBe('21/10/2026'); expect(fmtStamp(t)).toBe('09:05 21/10/2026'); expect(fmtDayTime(t)).toBe('21/10 09:05');
-    expect(weekLabel('2026-11-16')).toBe('16/11');
-    expect(windowText({ days: 30, since: t })).toBe('30 ngày gần nhất (từ 21/10/2026)'); expect(windowText({ days: 0, since: 0 })).toBe('toàn bộ lịch sử');
+    expect(fmtDay(t)).toBe('10/21'); expect(fmtDate(t)).toBe('10/21/2026'); expect(fmtStamp(t)).toBe('10/21/2026 09:05'); expect(fmtDayTime(t)).toBe('10/21 09:05');
+    expect(weekLabel('2026-11-16')).toBe('11/16');
+    expect(windowText({ days: 30, since: t })).toBe('the last 30 days (since 10/21/2026)'); expect(windowText({ days: 0, since: 0 })).toBe('all history');
   });
   it('model labels and short names', () => {
     expect(niceModel(O)).toBe('Opus 5.5'); expect(niceModel(H)).toBe('Haiku 4.5'); expect(niceModel('claude-opus-4')).toBe('Opus 4'); expect(niceModel('gpt-x')).toBe('gpt-x'); expect(niceModel('')).toBe('?');
@@ -52,9 +52,9 @@ describe('formatting (vi-VN: . thousands, , decimals)', () => {
     expect(shortTool('mcp__elasticsearch-mcp-server__search')).toBe('elasticsearch-mcp-server · search');
     expect(shortTool('Bash')).toBe('Bash'); expect(shortTool('mcp__x')).toBe('mcp__x'); expect(shortSid('0123456789abcdef')).toBe('01234567');
   });
-  it('categories have Vietnamese labels and hints', () => {
+  it('categories have labels and hints', () => {
     for (const c of CATS) { expect(CAT_LABEL[c]).toBeTruthy(); expect(CAT_HINT[c]).toBeTruthy(); }
-    expect(CAT_LABEL.misuse).toBe('Model dùng sai tool'); expect(PATTERN_CATS).not.toContain('user_rejected');
+    expect(CAT_LABEL.misuse).toBe('Model misused a tool'); expect(PATTERN_CATS).not.toContain('user_rejected');
   });
 });
 
@@ -73,11 +73,11 @@ describe('color slots', () => {
 describe('tiles and table rates', () => {
   it('tiles', () => {
     const t = reportTiles({ sessions: 95, auto: false, autoSkipped: 1419, totals: { turns: 1129, toolCalls: 13550, errors: errs({ misuse: 243 }), interrupts: 40, corrections: 18, costUsd: 845.06, apiErrors: 18, retryIncidents: 6 } });
-    expect(t.map((x) => x.k)).toEqual(['Phiên', 'Lượt hỏi–đáp', 'Model dùng sai tool', 'Bạn ngắt hoặc sửa', 'Chi phí', 'Lỗi API']);
-    expect(t.map((x) => x.v)).toEqual(['95', '1.129', '1,79%', '5,1', '$845,06', '18']);
-    expect(t[0].d).toBe('không tính 1.419 phiên tự động (sdk-cli)'); expect(t[1].d).toBe('13.550 lần gọi tool'); expect(t[5].d).toBe('6 lần phải retry');
-    expect(reportTiles({ sessions: 0, auto: true, autoSkipped: 0, totals: report().totals }).map((x) => x.v)).toEqual(['0', '0', '–', '–', '$0,00', '0']);
-    expect(reportTiles({ sessions: 0, auto: true, autoSkipped: 0, totals: report().totals })[0].d).toMatch(/gồm cả/);
+    expect(t.map((x) => x.k)).toEqual(['Sessions', 'Turns', 'Model misused a tool', 'You interrupted or corrected', 'Cost', 'API errors']);
+    expect(t.map((x) => x.v)).toEqual(['95', '1,129', '1.79%', '5.1', '$845.06', '18']);
+    expect(t[0].d).toBe('1,419 automated sessions (sdk-cli) excluded'); expect(reportTiles({ sessions: 1, auto: false, autoSkipped: 1, totals: { ...report().totals, toolCalls: 1, retryIncidents: 1 } }).map((x) => x.d)).toEqual(expect.arrayContaining(['1 automated session (sdk-cli) excluded', '1 tool call', '1 retry incident'])); expect(t[1].d).toBe('13,550 tool calls'); expect(t[5].d).toBe('6 retry incidents');
+    expect(reportTiles({ sessions: 0, auto: true, autoSkipped: 0, totals: report().totals }).map((x) => x.v)).toEqual(['0', '0', '–', '–', '$0.00', '0']);
+    expect(reportTiles({ sessions: 0, auto: true, autoSkipped: 0, totals: report().totals })[0].d).toMatch(/included/);
   });
   it('rates and bar scale ignore small samples', () => {
     const mis = RATE_COLS.find((c) => c.key === 'misuse')!, edit = RATE_COLS.find((c) => c.key === 'edit')!, corr = RATE_COLS.find((c) => c.key === 'corr')!;
@@ -180,7 +180,7 @@ describe('model report api', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('html'); } })));
     await expect(fetchModelReport('t', { days: 30, auto: false })).rejects.toMatchObject({ status: -1 });
     expect(reportStatus(new Error('x'))).toBe(0);
-    expect(reportErrorText(403)).toMatch(/token/); expect(reportErrorText(0)).toMatch(/kết nối/); expect(reportErrorText(404)).toMatch(/model-report/); expect(reportErrorText(500)).toMatch(/500/); expect(reportErrorText(-1)).toMatch(/không đọc/);
+    expect(reportErrorText(403)).toMatch(/token/); expect(reportErrorText(0)).toMatch(/reach/); expect(reportErrorText(404)).toMatch(/model-report/); expect(reportErrorText(500)).toMatch(/500/); expect(reportErrorText(-1)).toMatch(/can't be read/);
   });
   it('aborts pass through untouched', async () => {
     env(); const ac = new AbortController(); ac.abort();

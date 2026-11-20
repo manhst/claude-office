@@ -42,15 +42,15 @@ export class BookmarkStore {
   /** Bad file shape → start empty, file moved to `.bak`; bad entries are dropped, original copied to `.bak`. One log line either way. */
   private load(path: string, log: (line: string) => void) {
     let raw: string;
-    try { raw = readFileSync(path, 'utf8'); } catch (e: any) { if (e?.code !== 'ENOENT') log(`[office] bookmarks: cannot read ${path} (${e?.code ?? e}); starting empty`); return; }
+    try { raw = readFileSync(path, 'utf8'); } catch (e: any) { if (e?.code !== 'ENOENT') log(`[deck] bookmarks: cannot read ${path} (${e?.code ?? e}); starting empty`); return; }
     let j: any; try { j = JSON.parse(raw); } catch { j = undefined; }
     const bm = j?.version === 1 && j.bookmarks && typeof j.bookmarks === 'object' && !Array.isArray(j.bookmarks) ? j.bookmarks : undefined;
-    if (!bm) { try { renameSync(path, `${path}.bak`); } catch { /* keep going empty */ } log(`[office] bookmarks: ${path} is not a valid bookmarks file; moved to ${path}.bak, starting empty`); return; }
+    if (!bm) { try { renameSync(path, `${path}.bak`); } catch { /* keep going empty */ } log(`[deck] bookmarks: ${path} is not a valid bookmarks file; moved to ${path}.bak, starting empty`); return; }
     let bad = 0;
     for (const [sid, b] of Object.entries<any>(bm)) {
       if (!HISTORY_SID.test(sid) || !b || typeof b !== 'object' || typeof b.at !== 'number' || !Number.isFinite(b.at) || (b.note !== undefined && typeof b.note !== 'string') || this.map.size >= BOOKMARK_CAP.count) { bad++; continue; }
       const note = cleanNote(b.note); this.map.set(sid, note ? { at: b.at, note } : { at: b.at });
     }
-    if (bad) { try { copyFileSync(path, `${path}.bak`); chmodSync(`${path}.bak`, 0o600); } catch { /* best effort */ } log(`[office] bookmarks: ignored ${bad} invalid entr${bad === 1 ? 'y' : 'ies'} in ${path} (original copied to .bak)`); }
+    if (bad) { try { copyFileSync(path, `${path}.bak`); chmodSync(`${path}.bak`, 0o600); } catch { /* best effort */ } log(`[deck] bookmarks: ignored ${bad} invalid entr${bad === 1 ? 'y' : 'ies'} in ${path} (original copied to .bak)`); }
   }
 }

@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 import { start, parseArgs, DEMO_NOW } from '../src/cli.js';
 import { originOk, tokenOk, eventRequestRejection, inboxGetRejection, promptRequestRejection, historyRequestRejection } from '../src/server.js';
 import { simulate } from '../src/simulate.js';
-import { turnBody } from '../../mod/office/hooks/register.js';
+import { turnBody } from '../../mod/deck/hooks/register.js';
 describe('security helpers', () => {
   it('origin check allows loopback only', () => {
     expect(originOk(undefined)).toBe(true); expect(originOk('http://127.0.0.1:5173')).toBe(true); expect(originOk('http://localhost:3000')).toBe(true);
@@ -45,7 +45,7 @@ const post = (port: number, body: string, headers: Record<string, string> = { 'c
 });
 describe('server end to end (demo simulator)', () => {
   it('ingests mod events, broadcasts sessions to authed WS, rejects bad token/origin/requests', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const url = `ws://127.0.0.1:${r.port}/ws?token=${r.token}`; const got: any[] = []; const rejected: string[] = [];
@@ -61,12 +61,12 @@ describe('server end to end (demo simulator)', () => {
       await simulate(`http://127.0.0.1:${r.port}/event`, { stepMs: 5, loops: 1 });
       await new Promise((res) => setTimeout(res, 100));
       const types = got.map((e) => e.t);
-      expect(types[0]).toBe('office.snapshot');
+      expect(types[0]).toBe('deck.snapshot');
       for (const t of ['agent.spawned', 'agent.state', 'tool.call', 'tool.result', 'agent.done', 'sessions.update', 'session.turn']) expect(types).toContain(t);
       const last = got.filter((e) => e.t === 'sessions.update').at(-1);
       expect(last.sessions.map((s: any) => `${s.project}:${s.source}`)).toEqual(['shop-api:agents', 'blog:claude-md', 'scratch:default']);
       expect(rejected.sort()).toEqual(['origin', 'token']);
-      expect(r.tracker.snapshot()).toMatchObject({ t: 'office.snapshot' });
+      expect(r.tracker.snapshot()).toMatchObject({ t: 'deck.snapshot' });
       const turns = (r.tracker.snapshot() as any).turns; expect(turns.filter((x: any) => x.status === 'answer').length).toBeGreaterThanOrEqual(4);
       expect(turns.find((x: any) => x.who === 'planner')).toMatchObject({ sid: 'demo-shop-0001', deskId: expect.stringContaining('planner'), answer: expect.stringContaining('\n') });
       expect(readFileSync(r.logPath, 'utf8')).not.toContain(r.token);
@@ -77,7 +77,7 @@ describe('server end to end (demo simulator)', () => {
 describe('turn events end to end (live mode)', () => {
   const connect = (port: number, token: string) => new Promise<{ ws: WebSocket; got: any[] }>((res) => { const got: any[] = []; const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`, { origin: 'http://localhost:5173' }); ws.on('message', (m) => got.push(JSON.parse(String(m)))); ws.once('open', () => res({ ws, got })); });
   it('merges start/progress/end into one redacted turn, keeps newlines, and replays it in a reconnect snapshot', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const sid = 'live-turn-1'; const secret = 'sk-abcdefghijklmnop1234';
@@ -100,7 +100,7 @@ describe('turn events end to end (live mode)', () => {
       expect(t1.answer).toContain('# Result\n\n- one\n- two\n'); expect(t1.answer).toContain('\n  const k = '); expect(t1.answer).not.toContain(secret);
       expect(snapTurns[1].answer.length).toBeLessThanOrEqual(12_020);
       const b = await connect(r.port, r.token); await new Promise((res) => setTimeout(res, 100));
-      expect(b.got[0].t).toBe('office.snapshot');
+      expect(b.got[0].t).toBe('deck.snapshot');
       const bt = b.got[0].turns.filter((t: any) => t.sid === sid); expect(bt.map((t: any) => t.turnId)).toEqual(['t1', 't2']);
       expect(bt[0].answer).toBe(t1.answer); expect(JSON.stringify(b.got[0])).not.toContain(secret); expect(readFileSync(r.logPath, 'utf8')).not.toContain(secret);
       a.ws.close(); b.ws.close();
@@ -109,7 +109,7 @@ describe('turn events end to end (live mode)', () => {
 });
 describe('event body decoding and turn log', () => {
   it('keeps a multibyte char split across two writes; logs a turn at start and end only', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const text = 'Xin chào 🎉 Việt Nam';
@@ -134,7 +134,7 @@ const httpJson = (port: number, path: string, opts: { method?: string; headers?:
 });
 describe('prompt reverse channel', () => {
   it('issues inboxToken on /event, never on WS/logs; /prompt needs run token; /inbox needs inbox token; claim once', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const got: any[] = [];
@@ -183,12 +183,12 @@ describe('prompt reverse channel', () => {
   }, 15000);
 });
 describe('history endpoints', () => {
-  it('parses --history-dir / OFFICE_HISTORY_DIR', () => {
+  it('parses --history-dir / DECK_HISTORY_DIR', () => {
     expect(parseArgs(['--history-dir', 'some/dir']).historyDir).toBe(join(process.cwd(), 'some/dir'));
-    expect(parseArgs([]).historyDir).toBe(process.env.OFFICE_HISTORY_DIR);
+    expect(parseArgs([]).historyDir).toBe(process.env.DECK_HISTORY_DIR);
   });
   it('GET /history and /history/session: run token (header only), loopback Origin, GET only; redacted JSON', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), secret = 'sk-abcdefghijklmnop1234';
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), hist = mkdtempSync(join(tmpdir(), 'deck-hist-')), secret = 'sk-abcdefghijklmnop1234';
     mkdirSync(join(hist, '-w-shop'));
     const line = (type: string, message: unknown, ts: string) => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, uuid: ts, timestamp: ts, entrypoint: 'cli', cwd: '/w/shop', sessionId: 'h-1', version: '2.1.0', gitBranch: 'main' });
     writeFileSync(join(hist, '-w-shop', 'h-1.jsonl'), [line('user', { role: 'user', content: `deploy Lịch sử with ${secret}` }, '2026-11-01T10:00:00.000Z'),
@@ -222,7 +222,7 @@ describe('history endpoints', () => {
     } finally { await r.close(); }
   }, 15000);
   it('POST /history/bookmark: /prompt gates + run token, validation, add → list/detail → re-note keeps at → remove; demo keeps bookmarks in memory', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), bookmarksPath = join(dir, 'bm', 'history-bookmarks.json');
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), hist = mkdtempSync(join(tmpdir(), 'deck-hist-')), bookmarksPath = join(dir, 'bm', 'history-bookmarks.json');
     mkdirSync(join(hist, '-w-shop'));
     const line = (type: string, message: unknown, ts: string, entrypoint = 'cli') => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, timestamp: ts, entrypoint, cwd: '/w/shop', gitBranch: 'main' });
     writeFileSync(join(hist, '-w-shop', 'h-1.jsonl'), line('user', { role: 'user', content: 'deploy it' }, '2026-11-01T10:00:00.000Z') + '\n');
@@ -259,15 +259,15 @@ describe('history endpoints', () => {
       expect(await get('/history?bookmarked=1')).toMatchObject({ total: 0, bookmarked: 0 });
       expect(JSON.parse(readFileSync(bookmarksPath, 'utf8'))).toEqual({ version: 1, bookmarks: {} });
     } finally { await r.close(); }
-    const saved = process.env.OFFICE_HISTORY_BOOKMARKS; delete process.env.OFFICE_HISTORY_BOOKMARKS;
-    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.OFFICE_HISTORY_BOOKMARKS = saved; }
+    const saved = process.env.DECK_HISTORY_BOOKMARKS; delete process.env.DECK_HISTORY_BOOKMARKS;
+    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.DECK_HISTORY_BOOKMARKS = saved; }
     const d = await start(o);
     try { expect(d.bookmarks.path).toBeUndefined(); } finally { await d.close(); }
   }, 15000);
 });
 describe('model report endpoint', () => {
   it('GET /model-report: /history gate (run token in the header only, loopback Origin, GET only), days validation, redacted report; demo reads the fixtures', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), secret = 'sk-abcdefghijklmnop1234', ts = (min: number) => new Date(Date.now() - 3_600_000 + min * 60_000).toISOString();
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), hist = mkdtempSync(join(tmpdir(), 'deck-hist-')), secret = 'sk-abcdefghijklmnop1234', ts = (min: number) => new Date(Date.now() - 3_600_000 + min * 60_000).toISOString();
     mkdirSync(join(hist, '-w-shop'));
     const line = (type: string, message: unknown, t: string) => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, timestamp: t, entrypoint: 'cli', cwd: '/w/shop', sessionId: 'm-1' });
     writeFileSync(join(hist, '-w-shop', 'm-1.jsonl'), [line('user', { role: 'user', content: 'fix it' }, ts(0)),
@@ -299,8 +299,8 @@ describe('model report endpoint', () => {
       const fresh = JSON.parse((await get('/model-report?fresh=1')).body);
       expect(fresh).toMatchObject({ sessions: 2, refreshing: false }); expect(fresh.scannedAt).toBeGreaterThanOrEqual(body.scannedAt);
     } finally { await r.close(); }
-    const saved = process.env.OFFICE_HISTORY_DIR; delete process.env.OFFICE_HISTORY_DIR;
-    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.OFFICE_HISTORY_DIR = saved; }
+    const saved = process.env.DECK_HISTORY_DIR; delete process.env.DECK_HISTORY_DIR;
+    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.DECK_HISTORY_DIR = saved; }
     const d = await start(o);
     try {
       const x = JSON.parse((await httpJson(d.port, '/model-report', { headers: { authorization: `Bearer ${d.token}` } })).body);
@@ -310,7 +310,7 @@ describe('model report endpoint', () => {
 });
 describe('history open endpoints', () => {
   it('GET /history/openers (/history gate) and POST /history/open (/prompt gate, 4 KB): run token in the header only; demo lists nothing and opens nothing', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const auth = { authorization: `Bearer ${r.token}` }, json = { ...auth, 'content-type': 'application/json' };
       const call = (path: string, headers: Record<string, string>, method = 'GET', body?: string) => httpJson(r.port, path, { headers, method, body });
@@ -343,7 +343,7 @@ describe('history open endpoints', () => {
 });
 describe('claude config endpoints', () => {
   it('GET /claude-config + POST /claude-config/mcp/*: run token (header only), Origin, JSON, size cap; secrets stay masked', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), cj = process.env.OFFICE_CLAUDE_JSON!, secret = 'secret-value-1234567';
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), cj = process.env.DECK_CLAUDE_JSON!, secret = 'secret-value-1234567';
     writeFileSync(cj, JSON.stringify({ mcpServers: { a: { type: 'stdio', command: 'node', args: [], env: { API_TOKEN: secret, MODE: 'dev' } } } }));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
