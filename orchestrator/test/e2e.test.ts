@@ -308,6 +308,39 @@ describe('model report endpoint', () => {
     } finally { await d.close(); }
   }, 15000);
 });
+describe('history open endpoints', () => {
+  it('GET /history/openers (/history gate) and POST /history/open (/prompt gate, 4 KB): run token in the header only; demo lists nothing and opens nothing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'office-')), r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, json = { ...auth, 'content-type': 'application/json' };
+      const call = (path: string, headers: Record<string, string>, method = 'GET', body?: string) => httpJson(r.port, path, { headers, method, body });
+      expect((await call('/history/openers', {})).status).toBe(401);
+      expect((await call(`/history/openers?token=${r.token}`, {})).status).toBe(401);
+      expect((await call('/history/openers', { ...auth, origin: 'https://evil.example' })).status).toBe(403);
+      expect((await call('/history/openers', json, 'POST', '{}')).status).toBe(405);
+      const ok = await call('/history/openers', { ...auth, origin: 'http://127.0.0.1:7777' });
+      expect(ok.status).toBe(200); expect(ok.headers['content-type']).toBe('application/json'); expect(Array.isArray(JSON.parse(ok.body).openers)).toBe(true);
+      const body = JSON.stringify({ sid: '11111111-2222-4333-8444-555555555555', app: 'iterm' });
+      expect((await call('/history/open', { 'content-type': 'application/json' }, 'POST', body)).status).toBe(401);
+      expect((await call('/history/open', { ...json, authorization: 'Bearer nope' }, 'POST', body)).status).toBe(401);
+      expect((await call('/history/open', { ...json, origin: 'https://evil.example' }, 'POST', body)).status).toBe(403);
+      expect((await call('/history/open', { ...auth, 'content-type': 'text/plain' }, 'POST', body)).status).toBe(415);
+      expect((await call('/history/open', auth)).status).toBe(405);
+      expect((await call('/history/open', json, 'POST', JSON.stringify({ sid: 'x'.repeat(5000) }))).status).toBe(413);
+      expect(JSON.parse((await call('/history/open', json, 'POST', '{nope')).body)).toEqual({ error: 'bad json' });
+      expect(JSON.parse((await call('/history/open', json, 'POST', JSON.stringify({ sid: '../x', app: 'iterm' }))).body)).toMatchObject({ error: 'bad-sid' });
+      const nf = await call('/history/open', { ...json, origin: 'http://localhost:5173' }, 'POST', body);
+      if (process.platform === 'darwin' || process.platform === 'win32') { expect(nf.status).toBe(404); expect(JSON.parse(nf.body)).toMatchObject({ error: 'not-found', reason: expect.any(String) }); }
+    } finally { await r.close(); }
+    const d = await start(parseArgs(['--demo', '--port', '0', '--log-dir', dir]));
+    try {
+      const auth = { authorization: `Bearer ${d.token}` };
+      expect(JSON.parse((await httpJson(d.port, '/history/openers', { headers: auth })).body)).toEqual({ openers: [], reason: expect.any(String) });
+      const o = await httpJson(d.port, '/history/open', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ sid: '7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a05', app: 'iterm' }) });
+      expect(o.status).toBe(409); expect(JSON.parse(o.body)).toMatchObject({ error: 'unavailable' });
+    } finally { await d.close(); }
+  }, 15000);
+});
 describe('claude config endpoints', () => {
   it('GET /claude-config + POST /claude-config/mcp/*: run token (header only), Origin, JSON, size cap; secrets stay masked', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'office-')), cj = process.env.OFFICE_CLAUDE_JSON!, secret = 'secret-value-1234567';

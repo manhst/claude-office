@@ -80,7 +80,7 @@ describe('resume command', () => {
     expect(shq("it's")).toBe(`'it'\\''s'`);
     expect(resumeCommand('/Users/me/My Project', 'abc-123')).toBe(`cd '/Users/me/My Project' && claude --resume abc-123`);
     expect(resumeCommand("/tmp/O'Brien dir", '0b9f2c1e-aaaa-4bbb-8ccc-123456789abc')).toBe(`cd '/tmp/O'\\''Brien dir' && claude --resume 0b9f2c1e-aaaa-4bbb-8ccc-123456789abc`);
-    expect(resumeCommand('/p', 'x; rm -rf ~')).toBe(`cd '/p' && claude --resume 'x; rm -rf ~'`);
+    expect(resumeCommand('/p', 'x; rm -rf ~')).toBe(`cd /p && claude --resume 'x; rm -rf ~'`);
   });
   it('uses PowerShell quoting for drive and UNC paths', () => {
     expect([String.raw`C:\Users\me`, 'd:/src/x', String.raw`\\srv\share\p`].map(isWinPath)).toEqual([true, true, true]);

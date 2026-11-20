@@ -11,6 +11,7 @@ import { UsageStore } from './usage.js';
 import { ItOpsMonitor } from './itops.js';
 import { HistoryIndex, historyRoot } from './history.js';
 import { ModelReport } from './modelReport.js';
+import { SessionOpener } from './opener.js';
 import { BookmarkStore } from './bookmarks.js';
 import { ClaudeConfig, claudePaths } from './claudeConfig.js';
 import { applyPatch, loadSettings, resolveItopsConfig, saveSettings, toView, type OfficeSettingsFile, type SettingsPatch } from './settings.js';
@@ -51,6 +52,8 @@ export async function start(o: StartOpts) {
   const histRoot = o.historyDir ?? (o.demo ? resolve(here, '../fixtures/demo/history') : historyRoot());
   const history = new HistoryIndex(histRoot, { bookmarks });
   // Hiệu suất tab: per-model stats from the same transcripts, parsed on first use; the demo fixtures are dated, so demo pins "today" to 2026-11-20
+  // History "Mở lại": resumes a past session in iTerm/Terminal/Cursor/VS Code (macOS) or Windows Terminal/Cursor/VS Code; demo lists no apps and launches nothing
+  const opener = new SessionOpener({ demo: o.demo, runDir, historyRoot: histRoot, locate: (sid) => history.locate(sid), isLive: (sid) => tracker.list().some((s) => s.sid === sid) });
   const modelReport = new ModelReport(histRoot, o.demo && !o.historyDir ? { now: () => DEMO_NOW } : {});
   // Claude config tab: Claude Code's MCP servers; demo reads fixtures (project paths mapped under fixtures/…/fs) and never writes
   const ccDemo = o.demo ? resolve(here, '../fixtures/demo/claude-config') : undefined;
@@ -75,7 +78,7 @@ export async function start(o: StartOpts) {
     onInboxClaim: (sid, tok) => inbox.claim(sid, tok),
     onInboxAck: (sid, tok, id, state, reason) => inbox.ack(sid, tok, id, state as any, reason),
     staticDir: existsSync(o.webDir) ? o.webDir : undefined,
-    history, claude, modelReport,
+    history, claude, modelReport, opener,
     getSettings: () => view(),
     setSettings: (raw) => {
       try {
@@ -103,7 +106,7 @@ export async function start(o: StartOpts) {
   console.error(`[office] settings: ${settingsPath}`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
   const close = async () => { clearInterval(sweep); itops.stop(); history.stop(); modelReport.stop(); await server.close(); };
-  return { port, token, tracker, server, inbox, usage, itops, history, modelReport, bookmarks, claude, settingsPath, close, logPath: log.path };
+  return { port, token, tracker, server, inbox, usage, itops, history, modelReport, opener, bookmarks, claude, settingsPath, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

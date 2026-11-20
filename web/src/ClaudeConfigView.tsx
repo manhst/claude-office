@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ClaudeConfigView as Cfg, McpScope, McpServerView, McpTestResult } from './types';
 import {
   APPLY_NOTE, argsFromText, configErrorText, describeLocation, isNewerView, keptHeadersMoved, maskArgs, maskedView, maskUrl, projectSecretsText, renameNote, RUN_CONFIRM, sanitizeName, draftFromImport, draftFromView, draftKey, emptyDraft, filterServers, groupServers, KNOWN_TYPES, namesIn, parseMcpAddCommand,
@@ -9,6 +9,7 @@ import { errInfo, fetchClaudeConfig, isConfirmRequired, mcpDelete, mcpReveal, mc
 import { isAbort } from './historyApi';
 import { absTime } from './history';
 import { IconCross, IconEye, IconWarn } from './icons';
+import { Confirm, type Ask } from './Confirm';
 
 type How = 'form' | 'json' | 'cmd';
 /** Editor state: the draft, its starting point (dirty check / revert), the stored entry it came from, and import notes. */
@@ -336,36 +337,3 @@ function Importer({ how, cfg, defLoc, busy, onImport, onImportAll }: { how: 'jso
   </div>;
 }
 
-
-/** A pending confirmation: OK runs `run`; cancel label defaults to "Cancel". */
-type Ask = { title: string; body: ReactNode; ok: string; cancel?: string; danger?: boolean; run: () => void };
-const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-/** Small modal confirm (the tab stays mounted, hidden when not shown).
- *  Esc / backdrop = cancel; focus starts on Cancel, Tab stays inside, and on close focus goes back to the element focused when it first showed
- *  (the opener; if it opened while its tab was hidden, the element focused when the tab came back), when that is still visible.
- *  active = its tab is visible: the Esc/Tab/focus listeners exist only then, so a dialog left open in the hidden tab never swallows keys elsewhere,
- *  and focus moves back into it when the tab is shown again. */
-function Confirm({ a, onClose, active = true }: { a: Ask; onClose: () => void; active?: boolean }) {
-  const id = useId(), box = useRef<HTMLDivElement>(null), cancel = useRef<HTMLButtonElement>(null), close = useRef(onClose); close.current = onClose;
-  const opener = useRef<HTMLElement | null>(null);
-  useEffect(() => () => { const o = opener.current; if (o?.isConnected && o.getClientRects().length) o.focus(); }, []);
-  useEffect(() => {
-    if (!active) return;
-    opener.current ??= document.activeElement as HTMLElement | null;
-    cancel.current?.focus();
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close.current(); return; }
-      if (e.key !== 'Tab' || !box.current) return;
-      const f = [...box.current.querySelectorAll<HTMLElement>(FOCUSABLE)], first = f[0], last = f[f.length - 1], at = document.activeElement;
-      if (!first) return;
-      if (e.shiftKey ? at === first || !box.current.contains(at) : at === last || !box.current.contains(at)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
-    };
-    const into = (e: FocusEvent) => { if (box.current && !box.current.contains(e.target as Node)) cancel.current?.focus(); };
-    document.addEventListener('keydown', key, true); document.addEventListener('focusin', into);
-    return () => { document.removeEventListener('keydown', key, true); document.removeEventListener('focusin', into); };
-  }, [active]);
-  return <div className="editor-back" onClick={onClose}><div ref={box} className="editor cc-confirm" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`} onClick={(e) => e.stopPropagation()} data-testid="cc-confirm">
-    <h3 id={`${id}-t`}>{a.title}</h3><p id={`${id}-d`}>{a.body}</p>
-    <div className="editor-foot"><button ref={cancel} type="button" onClick={onClose}>{a.cancel ?? 'Cancel'}</button><button type="button" className={a.danger ? 'cc-danger-b' : 'primary'} onClick={() => { onClose(); a.run(); }} data-testid="cc-confirm-ok">{a.ok}</button></div>
-  </div></div>;
-}

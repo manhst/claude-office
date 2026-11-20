@@ -1,8 +1,10 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistorySession } from './types';
-import { fetchHistory, fetchHistorySession, fetchHistoryUpTo, HistoryHttpError, isAbort, setBookmark } from './historyApi';
-import { absTime, bookmarkRequest, continuePage, fmtCost, fmtDuration, fmtSpan, ghostSession, GHOST_RETRY_MS, highlight, historyErrorText, isGhost, NOTE_MAX, parseTerms, patchList, patchSession, projectOptions, relTime, resumeCommand, unGhost, type OpenRequest } from './history';
+import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistoryOpener, HistorySession } from './types';
+import { fetchHistory, fetchHistorySession, fetchHistoryUpTo, fetchOpeners, HistoryHttpError, isAbort, setBookmark } from './historyApi';
+import { absTime, bookmarkRequest, continuePage, fmtCost, fmtDuration, fmtSpan, ghostSession, GHOST_RETRY_MS, highlight, historyErrorText, isGhost, NOTE_MAX, parseTerms, patchList, patchSession, permissionHint, projectOptions, relTime, resumeCommand, SH_ONLY_NOTE, shOnlyPath, unGhost, type OpenRequest } from './history';
 import { IconBranch } from './icons';
+import { OpenButton, useOpenSession } from './OpenSession';
+import { Confirm } from './Confirm';
 
 const PAGE = 50;
 type ListState = { data?: HistoryListResponse; next: number; loading: boolean; more?: boolean; err?: string; moreErr?: string };
@@ -24,9 +26,12 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
   const [list, setList] = useState<ListState>({ next: 0, loading: true });
   const [sel, setSel] = useState<HistorySession>(), [det, setDet] = useState<DetState>(), [detReload, setDetReload] = useState(0);
   const [now, setNow] = useState(Date.now);
-  const [bmOnly, setBmOnly] = useState(false), [bmErr, setBmErr] = useState<{ sid: string; text: string }>();
+  const [bmOnly, setBmOnly] = useState(false), [bmErr, setBmErr] = useState<{ sid: string; text: string }>(), [openers, setOpeners] = useState<readonly HistoryOpener[]>([]);
   const bmSeq = useRef(new Map<string, number>()), bmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(bmTimer.current), []);
+  useEffect(() => { // "Mở lại" apps: fetched once when the tab first opens, kept for its lifetime; any failure (old orchestrator…) just hides the button
+    const ac = new AbortController(); fetchOpeners(token, ac.signal).then((r) => setOpeners(Array.isArray(r.openers) ? r.openers : []), () => {}); return () => ac.abort();
+  }, [token]);
   const input = useRef<HTMLInputElement>(null), listEl = useRef<HTMLDivElement>(null), detEl = useRef<HTMLElement>(null), gen = useRef(0), moreAc = useRef<AbortController | undefined>(undefined);
   const terms = useMemo(() => parseTerms(dq), [dq]);
   useEffect(() => { if (focusTick) input.current?.focus(); }, [focusTick]); // click-opened tab (not arrow-key tab navigation)
@@ -114,7 +119,7 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
         </div>
       </section>
       <section className="hist-detail" aria-label="Session transcript" data-testid="history-detail" ref={detEl}>
-        {sel ? <Detail key={sel.sid} x={sel} det={det?.sid === sel.sid ? det : undefined} terms={terms} live={live.has(sel.sid)} onRetry={retry} onStar={bm ? onStar : undefined} err={bmErr?.sid === sel.sid ? bmErr.text : undefined} />
+        {sel ? <Detail key={sel.sid} x={sel} det={det?.sid === sel.sid ? det : undefined} terms={terms} live={live.has(sel.sid)} onRetry={retry} onStar={bm ? onStar : undefined} err={bmErr?.sid === sel.sid ? bmErr.text : undefined} token={token} openers={openers} active={active} />
           : <div className="muted hist-empty">{list.loading ? '' : 'Select a session to read its transcript.'}</div>}
       </section>
     </div>
@@ -142,13 +147,18 @@ const Row = memo(function Row({ x, sel, live, terms, now, onPick, onStar, dim, e
 });
 
 /** Memoised (stable props), and the highlighted transcript is memoised on (items, terms): typing, list loads and the app tick don't redo it. */
-const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err }: { x: HistorySession; det?: DetState; terms: readonly string[]; live: boolean; onRetry: () => void; onStar?: OnStar; err?: string }) {
-  const m = det?.data?.session ?? x, items = det?.data?.items, cmd = resumeCommand(m.project, m.sid);
-  const [copied, setCopied] = useState<'cmd' | 'sid' | 'fail'>();
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), tx = useRef<HTMLDivElement>(null);
+const COPIED = { cmd: 'Đã sao chép lệnh', sid: 'Sid copied', 'cmd-fail': 'Không sao chép được: lệnh đã được chọn, bấm ⌘C / Ctrl+C', 'sid-fail': 'Copy failed' } as const;
+const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err, token, openers, active }: { x: HistorySession; det?: DetState; terms: readonly string[]; live: boolean; onRetry: () => void; onStar?: OnStar; err?: string; token: string; openers: readonly HistoryOpener[]; active: boolean }) {
+  const m = det?.data?.session ?? x, items = det?.data?.items, cmd = resumeCommand(m.project, m.sid), op = useOpenSession(token, m.sid, openers);
+  const [copied, setCopied] = useState<keyof typeof COPIED>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), tx = useRef<HTMLDivElement>(null), cmdEl = useRef<HTMLElement>(null);
   useEffect(() => () => clearTimeout(timer.current), []);
+  /** Clipboard, else (no permission / not a secure context) select the command so ⌘C / Ctrl+C works. */
   const copy = (what: 'cmd' | 'sid', text: string) => {
-    const done = (ok: boolean) => { setCopied(ok ? what : 'fail'); clearTimeout(timer.current); timer.current = setTimeout(() => setCopied(undefined), 1800); };
+    const done = (ok: boolean) => {
+      if (!ok && what === 'cmd' && cmdEl.current) { const s = window.getSelection(), r = document.createRange(); r.selectNodeContents(cmdEl.current); s?.removeAllRanges(); s?.addRange(r); }
+      setCopied(ok ? what : `${what}-fail`); clearTimeout(timer.current); timer.current = setTimeout(() => setCopied(undefined), ok ? 1800 : 5000);
+    };
     const p = navigator.clipboard?.writeText(text); if (p) p.then(() => done(true), () => done(false)); else done(false);
   };
   useEffect(() => { // scroll the transcript (only) to the first match
@@ -162,7 +172,11 @@ const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err 
     <div className="hx-scroll" data-testid="history-transcript">{det?.err ? <div className="hist-err" role="alert"><span>{det.err}</span><button type="button" className="hist-btn" onClick={onRetry}>Retry</button></div> : <div className="muted hist-empty">Loading transcript…</div>}</div></>);
   return (<>
     <div className="hd-head"><h2><Hl text={m.title || m.sid.slice(0, 8)} terms={terms} /></h2>{live ? <span className="hbadge live">live</span> : null}{m.auto ? <span className="hbadge">auto</span> : null}
+      {op.cur ? <OpenButton openers={openers} cur={op.cur} busy={op.busy} onOpen={op.open} /> : null}
       {onStar ? <Star on={!!m.bookmark} onClick={() => onStar(m, !m.bookmark)} className="hd-star" testid="history-star" /> : null}</div>
+    {op.slow ? <p className="hd-open-wait" role="status" data-testid="history-open-wait">{permissionHint(op.slow)}</p> : null}
+    {op.msg ? <p className={op.msg.kind === 'ok' ? 'hd-open-ok' : 'hist-err'} role={op.msg.kind === 'ok' ? 'status' : 'alert'} data-testid="history-open-msg">{op.msg.text}</p> : null}
+    {op.ask ? <Confirm a={op.ask} onClose={op.closeAsk} active={active} /> : null}
     {onStar && m.bookmark ? <NoteField note={m.bookmark.note ?? ''} onSave={(n) => onStar(m, true, n)} /> : null}
     {err ? <p className="hist-err" role="alert">{err}</p> : null}
     <div className="hd-meta" data-testid="history-meta">
@@ -176,11 +190,11 @@ const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err 
       {kv('Sid', m.sid, true)}
     </div>
     <div className="hd-actions">
-      <button type="button" className="hist-btn" onClick={() => copy('cmd', cmd)} data-testid="history-copy-resume">Copy resume command</button>
       <button type="button" className="hist-btn" onClick={() => copy('sid', m.sid)}>Copy sid</button>
-      <span role="status" className={copied === 'fail' ? 'fail' : undefined}>{copied === 'cmd' ? 'Resume command copied' : copied === 'sid' ? 'Sid copied' : copied === 'fail' ? 'Copy failed: select the command below' : ''}</span>
+      <span role="status" className={copied?.endsWith('fail') ? 'fail' : undefined}>{copied ? COPIED[copied] : ''}</span>
     </div>
-    <code className="hd-cmd">{cmd}</code>
+    <div className="hd-cmdrow" title="Lệnh mở lại phiên này trong terminal (luôn dùng được)"><code className="hd-cmd" ref={cmdEl}>{cmd}</code><button type="button" className="hist-btn" onClick={() => copy('cmd', cmd)} data-testid="history-copy-resume">Sao chép</button></div>
+    {shOnlyPath(m.project) ? <p className="muted hd-note" data-testid="history-sh-only">{SH_ONLY_NOTE}</p> : null}
     {det?.data?.truncated ? <p className="muted hd-note">Transcript truncated by the orchestrator: showing {plural(det.data.items.length, 'item')}.</p> : null}
     <div className="hx-scroll" ref={tx} data-testid="history-transcript">
       {det?.err ? <div className="hist-err" role="alert"><span>{det.err}</span><button type="button" className="hist-btn" onClick={onRetry}>Retry</button></div>

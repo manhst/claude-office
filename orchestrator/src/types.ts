@@ -86,6 +86,18 @@ export interface HistoryDetailResponse { session: HistorySession; items: History
 /** POST /history/bookmark body: on=true adds/updates (note replaces the old one), on=false removes. Reply: HistoryBookmarkResponse. */
 export interface HistoryBookmarkRequest { sid: string; on: boolean; note?: string }
 export interface HistoryBookmarkResponse { sid: string; bookmark: HistoryBookmark | null }
+/** History tab "Mở lại": apps on this machine that can resume a past session (GET /history/openers, cached ~60 s).
+ *  kind terminal = runs `cd <project> && claude --resume <sid>` in a new window; editor = opens the project folder, then the Claude Code
+ *  extension's `<scheme>://anthropic.claude-code/open?session=<sid>` link (resumes: false when that extension isn't installed: folder only). */
+export type HistoryOpenerId = 'iterm' | 'terminal' | 'cursor' | 'vscode' | 'windows-terminal';
+export interface HistoryOpener { id: HistoryOpenerId; label: string; kind: 'terminal' | 'editor'; resumes: boolean }
+/** reason: why the list is empty (demo mode, unsupported OS) */
+export interface HistoryOpenersResponse { openers: HistoryOpener[]; reason?: string }
+/** POST /history/open. sid must be in the History index (lookup key only); the project dir comes from the index and must still exist.
+ *  confirm: needed when the session is live in the office right now, else 409 {error:'confirm-required', reason}. Errors: McpErrorResponse shape {error, reason?}. */
+export interface HistoryOpenRequest { sid: string; app: HistoryOpenerId; confirm?: boolean }
+/** resumed: false when an editor only opened the folder; note: e.g. "macOS may ask once to let the office control iTerm" */
+export interface HistoryOpenResponse { ok: true; app: HistoryOpenerId; project: string; resumed: boolean; note?: string }
 
 /** Claude config tab (GET /claude-config). Where an MCP server entry lives: user = ~/.claude.json mcpServers; local = ~/.claude.json
  *  projects[path].mcpServers; project = <path>/.mcp.json; settings = ~/.claude/settings.json mcpServers (NOT loaded by Claude Code: read-only, clone it to use it). */

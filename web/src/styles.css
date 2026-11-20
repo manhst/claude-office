@@ -203,6 +203,18 @@ main[hidden]{display:none}
 .cc-fs{position:relative}.cc-showsec{position:absolute;top:-6px;right:8px;font-size:11px;padding:1px 8px}.cc-fixname{align-self:flex-start;margin-top:4px;font-size:11.5px;padding:2px 8px}
 .cc-confirm small.cc-reason,.cc-confirm code.cc-reason{display:block;margin-top:8px;padding:6px 8px;border-radius:6px;background:#0b1222;color:#cbd5e1;font:11.5px/1.45 ui-monospace,Consolas,monospace;overflow-wrap:anywhere;white-space:pre-wrap}
 .cc-confirm p{margin:0;color:#cbd5e1;font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}.editor .cc-danger-b{background:#b91c1c;border-color:#b91c1c;color:#fff}
+/* History "Mở lại" (OpenSession.tsx): split button + menu button pattern, status line; resume command row with "Sao chép" */
+.hopen{position:relative;flex:none;display:inline-flex;margin-top:1px}.hopen>.hist-btn{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.hopen-main{border-radius:6px 0 0 6px}.hopen-main small{color:#94a3b8;font-size:11.5px}.hopen-more{border-radius:0 6px 6px 0;margin-left:-1px;padding:4px 7px}
+.hopen-list{position:absolute;right:0;top:calc(100% + 4px);z-index:6;min-width:230px;display:flex;flex-direction:column;gap:2px;padding:4px;background:#0f172a;border:1px solid #334155;border-radius:8px;box-shadow:0 10px 30px #0008}
+.hopen-list button{display:flex;align-items:baseline;gap:6px;background:none;border:0;border-radius:5px;color:#cbd5e1;font:inherit;font-size:12.5px;padding:5px 8px;text-align:left;cursor:pointer;white-space:nowrap}
+.hopen-list button:focus{outline:none;background:#1e293b;color:#fff}.hopen-list button:focus-visible{box-shadow:inset 0 0 0 2px #3b82f6}
+.hopen-list i{flex:none;width:12px;font-style:normal;color:#86efac}.hopen-list small{color:#64748b;font-size:11.5px}
+.hopen-spin{width:10px;height:10px;border:2px solid #475569;border-top-color:#93c5fd;border-radius:50%;animation:rl-spin .8s linear infinite}@media (prefers-reduced-motion:reduce){.hopen-spin{animation:none}}
+.hopen>.hist-btn[aria-disabled=true]{opacity:.6;cursor:progress;border-color:#334155;color:#cbd5e1}
+.hd-open-wait{margin:0 0 8px;padding:6px 8px;border-radius:6px;background:#172554;color:#bfdbfe;font-size:12px}
+.hd-open-ok{margin:0 0 8px;padding:6px 8px;border-radius:6px;background:#052e16;color:#bbf7d0;font-size:12px}
+.hd-cmdrow{display:flex;align-items:flex-start;gap:6px}.hd-cmdrow .hd-cmd{flex:1;min-width:0}.hd-cmdrow .hist-btn{flex:none}
 @media (max-width:900px){.cc-pair{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 24px 24px}}
 @media (max-width:900px){.hist{grid-template-columns:1fr;height:auto;min-height:0}.hist-list{max-height:75vh}.hist-detail{overflow:visible}.hist-detail>.hx-scroll{max-height:70vh}}
 /* "Hiệu suất" tab (ModelReportView.tsx, modelReport.ts). Series colors are fixed slots by modelOrder (--mr-s1..8, s0 = neutral); data bars use slot 1.

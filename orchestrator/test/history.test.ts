@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BookmarkStore } from '../src/bookmarks.js';
@@ -275,6 +275,18 @@ describe('HistoryIndex refresh', () => {
     expect((await ix.list({ auto: true })).total).toBe(5);
     await ix.refresh(); expect((await ix.list({ auto: true })).total).toBe(6);
   });
+  it('locate(): raw cwd for POST /history/open (never in list/detail), redacted project, folder name, mtime; no cwd when the transcript has none or it is >4096 chars', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'office-hist-'));
+    const f1 = write(root, '-w-x', 'l1', [user('go', 0, { cwd: `/w/${SECRET}/app` }), said('ok', 1)]);
+    write(root, '-w-blog', 'l2', [user('go', 0, { cwd: undefined }), said('ok', 1, { cwd: undefined })]);
+    write(root, '-w-long', 'l3', [user('go', 0, { cwd: `/${'x'.repeat(4100)}` }), said('ok', 1)]);
+    const ix = index(root);
+    expect(await ix.locate('l1')).toEqual({ cwd: `/w/${SECRET}/app`, project: '/w/[REDACTED]/app', folder: '-w-x', mtimeMs: statSync(f1).mtimeMs });
+    expect(await ix.locate('l2')).toEqual({ project: '/w/blog', folder: '-w-blog', mtimeMs: expect.any(Number) }); // the folder-name decode is never used as a cwd
+    expect((await ix.locate('l3'))?.cwd).toBeUndefined();
+    expect(await ix.locate('nope')).toBeNull(); expect(await ix.locate('../x')).toBeNull();
+    expect(JSON.stringify([await ix.list({}), await ix.detail('l1')])).not.toContain(SECRET);
+  });
   it('detail() of a sid newer than the index waits for one shared rescan before answering null', async () => {
     const root = world(), ix = index(root, 60_000);
     expect((await ix.list({ auto: true })).total).toBe(5);
@@ -283,8 +295,8 @@ describe('HistoryIndex refresh', () => {
     const [a, b, c] = await Promise.all([ix.detail('n10'), ix.detail('nope-1'), ix.detail('nope-2')]);
     expect(a?.session.sid).toBe('n10'); expect(b).toBeNull(); expect(c).toBeNull(); expect(scans).toBe(1);
     expect(await ix.detail('a1')).not.toBeNull(); expect(scans).toBe(1); // known sids never rescan within the TTL
-    expect(await ix.detail('nope-3')).toBeNull(); expect(await ix.detail('nope-4')).toBeNull(); expect(scans).toBe(1); // misses rescan at most every 5 s
-    (ix as any).missAt -= 5000; expect(await ix.detail('nope-5')).toBeNull(); expect(scans).toBe(2);
+    expect(await ix.detail('nope-3')).toBeNull(); expect(await ix.locate('nope-4')).toBeNull(); expect(scans).toBe(1); // misses rescan at most every 5 s
+    (ix as any).missAt -= 5000; expect(await ix.locate('nope-5')).toBeNull(); expect(scans).toBe(2);
   });
   it('after the first scan, stale requests answer at once and refresh in the background (one shared scan)', async () => {
     const root = world(), ix = index(root, 0);

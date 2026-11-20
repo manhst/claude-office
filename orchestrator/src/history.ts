@@ -1,7 +1,7 @@
 import { createReadStream, type Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { redactText } from './redact.js';
 import type { BookmarkStore } from './bookmarks.js';
 import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistoryProject, HistorySession } from './types.js';
@@ -122,7 +122,8 @@ async function eachLine(file: string, fn: (line: string) => boolean | void) {
 }
 const tsOf = (j: any) => (typeof j?.timestamp === 'string' ? Date.parse(j.timestamp) : NaN);
 const json = (l: string): any => { try { return JSON.parse(l); } catch { return undefined; } };
-interface Entry { file: string; s: HistorySession; hay: string; fh: string; at: number }
+/** cwd: the raw first working directory, ≤4096 chars (unredacted; only POST /history/open uses it, never sent to the client) */
+interface Entry { file: string; s: HistorySession; hay: string; fh: string; at: number; cwd?: string }
 interface Cached { mtimeMs: number; size: number; e: Entry | null }
 /** Summary + search haystack of one transcript (redacted, whitespace-collapsed blocks; metadata first, text from `at`). null when it has no user/assistant line. */
 async function indexFile(file: string, sid: string, dir: string, st: { size: number; mtimeMs: number }, home: string): Promise<Entry | null> {
@@ -154,7 +155,7 @@ async function indexFile(file: string, sid: string, dir: string, st: { size: num
     startedAt: t0 <= t1 ? t0 : st.mtimeMs, endedAt: t0 <= t1 ? t1 : st.mtimeMs, prompts, messages, ...(cost !== undefined ? { costUsd: cost } : {}), ...(model ? { model: meta(model) } : {}),
     ...(version ? { version: meta(version) } : {}), ...(entry ? { entrypoint: meta(entry) } : {}), auto: sdk && !other, subagents: 0, bytes: st.size };
   const m = [named ? title : '', project, gitBranch ?? '', sid].join('\n'), hay = `${m}\n${blocks.join('\n')}`;
-  return { file, s, hay, fh: fold(hay), at: m.length + 1 };
+  return { file, s, hay, fh: fold(hay), at: m.length + 1, ...(cwd && cwd.length <= 4096 ? { cwd: copy(cwd) } : {}) }; // an over-long cwd is dropped, never cut
 }
 const countAgents = (d: string) => readdir(d).then((xs) => xs.filter((x) => /^agent-.+\.jsonl$/.test(x)).length, () => 0);
 const tick = () => new Promise<void>((r) => setImmediate(r));
@@ -268,6 +269,14 @@ export class HistoryIndex {
     if (p) { await p.catch(() => {}); e = this.bySid.get(sid); if (e) return e; } // that scan may predate the file
     if (Date.now() - this.missAt >= C.missMs) { this.missAt = Date.now(); await this.refresh().catch(() => {}); } else if (this.pending) await this.pending.catch(() => {});
     return this.bySid.get(sid);
+  }
+  /** POST /history/open: the session's recorded working directory (raw, unredacted, never sent to the client; absent when the transcript has none), its redacted
+   *  project label, the transcript's folder name and mtime. null = unknown sid. */
+  async locate(sid: string): Promise<{ cwd?: string; project: string; folder: string; mtimeMs: number } | null> {
+    if (!HISTORY_SID.test(sid)) return null;
+    const e = await this.lookup(sid); if (!e) return null;
+    const st = await stat(e.file).catch(() => null);
+    return { ...(e.cwd ? { cwd: e.cwd } : {}), project: e.s.project, folder: basename(dirname(e.file)), mtimeMs: st?.mtimeMs ?? 0 };
   }
   /** GET /history/session: the transcript re-read as prompts, assistant text and tool summaries (no thinking, no tool results); ≤3000 items and ~4 MB of text, else
    *  truncated. An unknown sid waits for one rescan (a deep link to a session newer than the index) before null. */

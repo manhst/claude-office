@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { ClaudeConfigView, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, ModelReportResponse, OfficeEvent } from './types.js';
+import type { ClaudeConfigView, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, ModelReportResponse, OfficeEvent } from './types.js';
 import { redactText } from './redact.js';
 import { HISTORY_SID, type HistoryQuery } from './history.js';
 export const HOST = '127.0.0.1';
@@ -65,6 +65,7 @@ export class OfficeServer {
       bookmark(sid: string, on: boolean, note?: string | null): Promise<HistoryBookmarkResponse | 'unknown' | 'full' | 'unavailable'> };
     claude?: { view(): Promise<ClaudeConfigView>; post(op: string, body: unknown, signal?: AbortSignal): Promise<{ status: number; body: unknown }> };
     modelReport?: { report(q: { days: number; auto: boolean; fresh: boolean }): Promise<ModelReportResponse> };
+    opener?: { openers(): Promise<HistoryOpenersResponse>; open(body: unknown): Promise<{ status: number; body: unknown }> };
   } = {}) {
     this.http = createServer((req, res) => { this.handle(req, res).catch(() => { if (!res.headersSent) res.writeHead(500).end(); }); });
     this.wss = new WebSocketServer({ noServer: true });
@@ -113,6 +114,23 @@ export class OfficeServer {
       let p: unknown; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
       const ac = new AbortController(); res.on('close', () => { if (!res.writableFinished) ac.abort(); }); // client gone: stop a running test
       const r = await this.opts.claude.post(cc, p, ac.signal); if (!res.destroyed) out(r.status, r.body); return;
+    }
+    if (url.pathname === '/history/openers' || url.pathname === '/history/open') { // launches local apps: GET = /history gate, POST = /prompt gate; both need the Bearer run token
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      const list = url.pathname === '/history/openers';
+      if (req.method !== (list ? 'GET' : 'POST')) { req.resume(); res.writeHead(405, sec).end(); return; }
+      const why = list ? historyRequestRejection(req) : promptRequestRejection(req);
+      if (why) { req.resume(); res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { req.resume(); out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.opener) { req.resume(); out(501, { error: 'unavailable' }); return; }
+      try {
+        if (list) { out(200, await this.opts.opener.openers()); return; }
+        const raw = await this.readBody(req, res, sec, 4 * 1024); if (raw == null) return;
+        let p: unknown; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
+        const r = await this.opts.opener.open(p); if (!res.destroyed) out(r.status, r.body);
+      } catch (e) { if (!res.headersSent) out(500, { error: redactText(String((e as Error)?.message ?? e), 300) }); }
+      return;
     }
     if (url.pathname === '/history/bookmark') {
       const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
