@@ -1,6 +1,6 @@
-# Văn phòng ảo (Virtual Office) — Architecture (draft, Step A)
+# Claude Deck (formerly Virtual Office) — Architecture (draft, Step A)
 
-> **Superseded (2026-11-04):** the office no longer spawns `claude -p` or defines roles. Sessions are reported by the `office` mod (`mod/`); see README. This doc is kept for history.
+> **Superseded (2026-11-04):** Claude Deck no longer spawns `claude -p` or defines roles. Sessions are reported by the `deck` mod (`mod/`); see README. This doc is kept for history.
 
 ## 0. Mods API verdict (checked 2026-11-04)
 Claude Code **Mods are real and documented** (plugins/mods):
@@ -12,14 +12,14 @@ Caveats: Pane is a text/box UI (no WebGL) → 3D (phases 3–4) must live in a b
 
 ## 1. Components
 ```
- Claude Code session ──(mod "virtual-office")──┐  /office-start "task"; Pane = 2D text office (phase 2 alt)
+ Claude Code session ──(mod "virtual-office")──┐  /deck-start "task"; Pane = 2D text office (phase 2 alt)
                                                │  forwards agent/tool/turn events → HTTP POST
  Orchestrator (Node/TS, localhost:7777) ◄──────┘  ◄── Claude Code hooks (PreToolUse/PostToolUse/SubagentStop/Stop) POST (fallback source)
    ├─ AgentPool (max 6, configurable 5–7)
    │    each agent = `claude -p --output-format stream-json --verbose
    │                  --allowedTools <role list> --permission-mode default
    │                  --append-system-prompt <role>`  (or Agent SDK `query()`)
-   ├─ StreamParser (NDJSON line → OfficeEvent)
+   ├─ StreamParser (NDJSON line → DeckEvent)
    ├─ Router (agent↔agent messages, via orchestrator only)
    ├─ StateStore (agents, desks, transcript ring buffer)
    └─ WS server ws://127.0.0.1:7777/ws ──► Vite + React app (phase 2: SVG dots+bubbles; phase 3–4: R3F/drei)
@@ -29,7 +29,7 @@ Two backends behind one `AgentDriver` interface: `CliDriver` (subprocess, phase 
 ## 2. Event schema (orchestrator → UI, all JSON over WS)
 ```ts
 type AgentState = 'idle'|'thinking'|'working'|'talking'|'done'|'error';
-type OfficeEvent =
+type DeckEvent =
  | {t:'agent.spawned', id, role, name, desk:{x,y}, tools:string[], ts}
  | {t:'agent.state',  id, state:AgentState, ts}
  | {t:'agent.text',   id, text, partial?:boolean, ts}          // assistant text → speech bubble
@@ -38,7 +38,7 @@ type OfficeEvent =
  | {t:'agent.message',from, to, text, ts}                      // routed talk; UI walks `from` to `to`'s desk
  | {t:'agent.done',   id, result, costUsd?, durationMs, ts}
  | {t:'agent.error',  id, error, ts}
- | {t:'office.snapshot', agents:AgentView[], ts}               // on WS connect
+ | {t:'deck.snapshot', agents:AgentView[], ts}               // on WS connect
 ```
 stream-json mapping: `system/init`→spawned; `assistant` content `text`→agent.text (state talking); `tool_use`→tool.call (working); `user` `tool_result`→tool.result (thinking); `result`→agent.done. Hook payloads (`hook_event_name`, `tool_name`, `tool_input`, `session_id`) map to the same types.
 
@@ -62,11 +62,11 @@ Agents never talk directly. Each agent's system prompt says: to ask a colleague,
 - Budgets: `--max-turns`, `--max-budget-usd`, per-agent timeout, kill process group on cancel.
 - Mods: respect org `allowManagedModsOnly`; the mod only forwards events to localhost.
 
-## 6. /office-start
-`.claude/commands/office-start.md` (slash command) runs `!npx tsx orchestrator/src/cli.ts start "$ARGUMENTS"` and prints UI URL. Mod variant: `$.command.register({name:'office-start'})` + `$.ui.open({id:'office'})`.
+## 6. /deck-start
+`.claude/commands/deck-start.md` (slash command) runs `!npx tsx orchestrator/src/cli.ts start "$ARGUMENTS"` and prints UI URL. Mod variant: `$.command.register({name:'deck-start'})` + `$.ui.open({id:'office'})`.
 
 ## 7. Phases
-1. CliDriver: spawn 1 agent, log OfficeEvents to console/NDJSON.
+1. CliDriver: spawn 1 agent, log DeckEvents to console/NDJSON.
 2. WS + React 2D (dots + bubbles); optional Mod Pane.
 3. R3F/drei: capsule avatars, desks, lerped movement.
 4. Walk-to-desk on agent.message, Quaternius GLTF + walk anim, thinking effects.

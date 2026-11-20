@@ -1,0 +1,7 @@
+{
+  "permissions": { "allow": ["Bash(npm test:*)"] },
+  "mcpServers": {
+    "figma-desktop": { "type": "sse", "url": "http://127.0.0.1:3845/sse" },
+    "linear": { "command": "npx", "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"] }
+  }
+}

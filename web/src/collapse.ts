@@ -1,5 +1,5 @@
 /** Persist left-sidebar section collapse (Session / Responses / Agents). Client-only localStorage. */
-export const VP_COLLAPSE_KEY = 'vp-collapse';
+export const COLLAPSE_KEY = 'deck.collapse';
 
 export type CollapsePrefs = { session: boolean; responses: boolean; agents: boolean };
 
@@ -12,7 +12,7 @@ function storage(): Storage | undefined {
 export function loadCollapse(): CollapsePrefs {
   const out: CollapsePrefs = { ...DEFAULT_COLLAPSE };
   try {
-    const raw = storage()?.getItem(VP_COLLAPSE_KEY);
+    const raw = storage()?.getItem(COLLAPSE_KEY);
     if (!raw) return out;
     const j = JSON.parse(raw) as Partial<CollapsePrefs> & { events?: boolean };
     if (typeof j.session === 'boolean') out.session = j.session;
@@ -25,7 +25,7 @@ export function loadCollapse(): CollapsePrefs {
 export function saveCollapse(prefs: CollapsePrefs): void {
   const s = storage();
   if (!s) return;
-  s.setItem(VP_COLLAPSE_KEY, JSON.stringify(prefs));
+  s.setItem(COLLAPSE_KEY, JSON.stringify(prefs));
 }
 
 export function setCollapse(key: keyof CollapsePrefs, collapsed: boolean): CollapsePrefs {

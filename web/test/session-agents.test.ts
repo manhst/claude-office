@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { reduce, initialState, type OfficeState } from '../src/reducer';
+import { reduce, initialState, type DeckState } from '../src/reducer';
 import { AGENT_STATE_LABEL, TASK_UNAVAILABLE, countAgents, matchesDesk, sessionAgentTree, subagentStatus } from '../src/sessionAgents';
-import type { OfficeEvent, SessionView, TurnView } from '../src/types';
+import type { DeckEvent, SessionView, TurnView } from '../src/types';
 
 const sess = (sid: string, agentIds: string[] = [], extra: Partial<SessionView> = {}): SessionView => ({
   sid, project: sid, cwd: '/p', state: 'idle', subagents: [], startedAt: 0, lastSeen: 0, source: 'default', profiles: [], agentIds, ...extra,
 });
-const ev = (s: OfficeState | undefined, ...es: OfficeEvent[]) => es.reduce((x, e) => reduce(x, { type: 'event', e }), s ?? initialState());
-const spawn = (id: string, name: string, sid: string, ts = 1): OfficeEvent => ({ t: 'agent.spawned', id, role: name, name, desk: { x: 0, y: 0 }, tools: [], sessionId: sid, ts });
+const ev = (s: DeckState | undefined, ...es: DeckEvent[]) => es.reduce((x, e) => reduce(x, { type: 'event', e }), s ?? initialState());
+const spawn = (id: string, name: string, sid: string, ts = 1): DeckEvent => ({ t: 'agent.spawned', id, role: name, name, desk: { x: 0, y: 0 }, tools: [], sessionId: sid, ts });
 
 describe('subagentStatus', () => {
   it('maps known payload statuses without inventing roles', () => {

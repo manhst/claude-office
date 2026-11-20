@@ -14,9 +14,9 @@ describe('settings helpers', () => {
     expect(urlHasCredentials('http://a:b@h/')).toBe(true);
     expect(urlHasCredentials('http://h/')).toBe(false);
   });
-  it('load/save office-settings.json', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-set-'));
-    const path = join(dir, 'office-settings.json');
+  it('load/save deck-settings.json', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'deck-set-'));
+    const path = join(dir, 'deck-settings.json');
     expect(loadSettings(path)).toEqual({});
     saveSettings(path, { prometheusUrl: 'http://user:pw@localhost:9090/', prometheusQuery: 'up', prometheusIntervalMs: 5000 });
     expect(existsSync(path)).toBe(true);
@@ -36,7 +36,7 @@ describe('settings helpers', () => {
     expect(() => applyPatch({}, { prometheusIntervalMs: 500 })).toThrow(/intervalMs/);
   });
   it('resolveItopsConfig: CLI > file > env; demo only without url', () => {
-    const env = { OFFICE_PROMETHEUS_URL: 'http://env:9090', OFFICE_PROMETHEUS_QUERY: 'envq', OFFICE_PROMETHEUS_INTERVAL_MS: '8000' } as NodeJS.ProcessEnv;
+    const env = { DECK_PROMETHEUS_URL: 'http://env:9090', DECK_PROMETHEUS_QUERY: 'envq', DECK_PROMETHEUS_INTERVAL_MS: '8000' } as NodeJS.ProcessEnv;
     expect(resolveItopsConfig(env, true, 'http://cli:9090', {}).url).toBe('http://cli:9090');
     expect(resolveItopsConfig(env, true, undefined, { prometheusUrl: 'http://file:9090' }).url).toBe('http://file:9090');
     expect(resolveItopsConfig(env, true, undefined, {}).url).toBe('http://env:9090');
@@ -83,8 +83,8 @@ const httpJson = (port: number, method: string, path: string, body?: unknown, to
 
 describe('settings HTTP API', () => {
   it('GET/PUT /settings with token; persists prometheus and applies', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-setapi-'));
-    const settingsPath = join(dir, 'office-settings.json');
+    const dir = mkdtempSync(join(tmpdir(), 'deck-setapi-'));
+    const settingsPath = join(dir, 'deck-settings.json');
     const r = await start({ ...parseArgs(['--port', '0', '--log-dir', dir]), settingsPath });
     try {
       expect((await httpJson(r.port, 'GET', '/settings')).status).toBe(401);
@@ -119,7 +119,7 @@ describe('settings HTTP API', () => {
   });
 
   it('demo mode reflected in settings view', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-setdemo-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-setdemo-'));
     const r = await start({ ...parseArgs(['--port', '0', '--log-dir', dir, '--demo']), settingsPath: join(dir, 's.json') });
     try {
       const g = await httpJson(r.port, 'GET', '/settings', undefined, r.token);

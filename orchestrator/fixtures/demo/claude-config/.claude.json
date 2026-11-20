@@ -1,0 +1,23 @@
+{
+  "numStartups": 42,
+  "mcpServers": {
+    "github": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_demoDemoDemoDemoDemoDemoDemo1234" } },
+    "postgres-shop-dev": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://demo@dev-db.example.internal:5432/shop"], "env": { "PGAPPNAME": "claude-deck-demo" } },
+    "postgres-shop-prd": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://readonly@prd-db.example.internal:5432/shop"], "env": { "PGPASSWORD": "demo-not-a-real-password" } },
+    "docs": { "type": "http", "url": "https://mcp.example.com/docs", "headers": { "Authorization": "Bearer demo-token-1234567890", "X-Team": "shop" }, "timeout": 30000 },
+    "legacy-api": { "type": "https", "url": "https://legacy.example.com/mcp" }
+  },
+  "projects": {
+    "/home/demo/shop-api": {
+      "allowedTools": ["Bash(npm test:*)", "Bash(git status)"],
+      "mcpServers": {
+        "postgres-shop-dev": { "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://demo@localhost:5432/shop_local"], "env": {} },
+        "local-tool": { "command": "/opt/demo/bin/missing-tool", "args": ["--stdio"], "env": {} }
+      },
+      "enabledMcpjsonServers": ["sentry"], "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": true, "lastSessionId": "7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a01", "lastCost": 1.84
+    },
+    "/home/demo/blog": { "allowedTools": [], "mcpServers": {}, "enabledMcpjsonServers": [], "disabledMcpjsonServers": [], "hasTrustDialogAccepted": true, "lastSessionId": "7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a03", "lastCost": 0.61 },
+    "/home/demo/old-prototype": { "allowedTools": [], "mcpServers": { "scratch-notes": { "type": "stdio", "command": "node", "args": ["server.js"], "env": {} } }, "hasTrustDialogAccepted": false }
+  }
+}

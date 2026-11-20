@@ -1,27 +1,29 @@
 // Screenshots: Layoff hunt, eat-on-spot, pond drop.
 import { spawn } from 'node:child_process';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 mkdirSync(resolve(root, 'docs/screens'), { recursive: true });
 const out = (n) => resolve(root, `docs/screens/layoff-${n}.png`);
-const env = { ...process.env }; delete env.OFFICE_PROMETHEUS_URL;
+const runDir = mkdtempSync(join(tmpdir(), 'deck-screens-')); // temp DECK_RUN_DIR: never overwrite the live orchestrator/.run/ui-url.txt
+const env = { ...process.env, DECK_RUN_DIR: runDir }; for (const k of ['DECK_PROMETHEUS_URL', 'OFFICE_PROMETHEUS_URL', 'OFFICE_RUN_DIR']) delete env[k];
 const p = spawn(resolve(root, 'orchestrator/node_modules/.bin/tsx'), ['orchestrator/src/cli.ts', 'start', '--demo', '--port', '0', '--step-ms', '2000'], { cwd: root, env, stdio: ['ignore', 'ignore', 'pipe'] });
 const url = await new Promise((res, rej) => {
-  p.stderr.on('data', (d) => { if (/\[office\] UI:/.test(String(d))) res(readFileSync(resolve(root, 'orchestrator/.run/ui-url.txt'), 'utf8').trim()); });
+  p.stderr.on('data', (d) => { if (/\[deck\] UI:/.test(String(d))) res(readFileSync(join(runDir, 'ui-url.txt'), 'utf8').trim()); });
   setTimeout(() => rej(new Error('no start')), 15000);
 });
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const errors = []; const done = [];
 try {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 });
-  await ctx.addInitScript(() => localStorage.setItem('vp-debug', '1'));
+  await ctx.addInitScript(() => localStorage.setItem('deck.debug', '1'));
   const pg = await ctx.newPage(); pg.on('pageerror', (e) => errors.push(e.message));
   await pg.goto(url); await pg.waitForSelector('[data-testid=conn]:has-text("live")');
   await pg.waitForTimeout(1800);
-  const stage = pg.locator('[data-testid=office-vanphong]');
+  const stage = pg.locator('[data-testid=office-view]');
   const box = await stage.boundingBox();
   const dismiss = async () => {
     await pg.keyboard.press('Escape').catch(() => {});
@@ -58,7 +60,7 @@ try {
   await zoomOut(8);
 
   // 1) Hunt — Layoff next to a panicking idle NPC (no resolve yet)
-  await pg.evaluate(() => window.__vpTown.layoff('hunt'));
+  await pg.evaluate(() => window.__deckTown.layoff('hunt'));
   await pg.waitForSelector('[data-testid=ent-layoff]', { state: 'attached', timeout: 10000 });
   await pg.waitForFunction(() => {
     const el = document.querySelector('[data-testid=ent-layoff]');
@@ -69,14 +71,14 @@ try {
   done.push('hunt');
 
   // 2) Eat
-  await pg.evaluate(() => window.__vpTown.layoffEat());
+  await pg.evaluate(() => window.__deckTown.layoffEat());
   await pg.waitForFunction(() => document.querySelector('[data-testid=ent-layoff]')?.dataset.act === 'chomp', null, { timeout: 8000 }).catch(() => errors.push('no chomp'));
   await pg.waitForTimeout(350);
   await shotAround('[data-testid=ent-layoff]', out('eat'), 980, 760, 30);
   done.push('eat');
 
   // 3) Pond
-  await pg.evaluate(() => window.__vpTown.layoffPond());
+  await pg.evaluate(() => window.__deckTown.layoffPond());
   await pg.waitForFunction(() => {
     const L = document.querySelector('[data-testid=ent-layoff]');
     return L && (L.dataset.act === 'carry' || document.querySelector('[data-act=carried]') || document.querySelector('[data-act=fall]'));
@@ -88,8 +90,8 @@ try {
     await pg.waitForTimeout(350);
   }
   await pg.waitForTimeout(400);
-  const pondCount = await pg.locator('[data-testid=vp-pond]').count();
-  if (pondCount) await shotAround('[data-testid=vp-pond]', out('pond'), 1000, 780, 100);
+  const pondCount = await pg.locator('[data-testid=office3d-pond]').count();
+  if (pondCount) await shotAround('[data-testid=office3d-pond]', out('pond'), 1000, 780, 100);
   else await shotAround('[data-testid=ent-layoff]', out('pond'), 1000, 780, 40);
   done.push('pond');
 

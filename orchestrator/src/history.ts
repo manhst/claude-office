@@ -1,7 +1,7 @@
 import { createReadStream, type Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { redactText } from './redact.js';
 import type { BookmarkStore } from './bookmarks.js';
 import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistoryProject, HistorySession } from './types.js';
@@ -12,12 +12,12 @@ export const historyRoot = (env: NodeJS.ProcessEnv = process.env) => join(env.CL
 export const HISTORY_SID = /^[\w-]{1,64}$/;
 export interface HistoryQuery { q?: string; project?: string; auto?: boolean; bookmarked?: boolean; limit?: number; offset?: number }
 /** Caps in chars unless noted: haystack block / per session / all sessions (text + folded copy), detail item / item count / response text, title, first prompt,
- *  tool detail, metadata fields, search terms, refresh TTL, pre-filter head bytes, longest parsed line (bytes). */
+ *  tool detail, metadata fields, search terms, refresh TTL, pre-filter head bytes, longest parsed line (bytes), min gap between miss-triggered rescans (ms). */
 export const HISTORY_CAP = { block: 4096, hay: 64 * 1024, budget: 96 * 1024 * 1024, item: 32 * 1024, items: 3000, detail: 4 * 1024 * 1024, title: 120, first: 300, tool: 200, meta: 300,
-  terms: 8, term: 100, hits: 999, ttlMs: 10_000, head: 512, line: 8 * 1024 * 1024 };
+  terms: 8, term: 100, hits: 999, ttlMs: 10_000, head: 512, line: 8 * 1024 * 1024, missMs: 5000 };
 const C = HISTORY_CAP;
 const FOLD = new Uint16Array(65536);
-/** Search fold, one output unit per UTF-16 unit so indexes map 1:1: `(c.normalize('NFD')[0] ?? c).toLowerCase()[0]`, then 'đ' → 'd'. web/ duplicates it for highlighting; keep identical. */
+/** Search fold, one output unit per UTF-16 unit so indexes map 1:1: `(c.normalize('NFD')[0] ?? c).toLowerCase()[0]`, then 'đ' → 'd' (intentionally folds Vietnamese input). web/ duplicates it for highlighting; keep identical. */
 export function fold(s: string): string {
   if (!/[^\x00-\x7f]/.test(s)) return s.toLowerCase();
   const out = new Uint16Array(s.length);
@@ -80,11 +80,12 @@ export function projectLabel(p: string, home = homedir()) {
 export function promptText(j: any): string | undefined {
   if (j?.type !== 'user' || j.isMeta || j.isCompactSummary || j.toolUseResult !== undefined || j.origin?.kind === 'task-notification') return undefined;
   const c = j.message?.content, L = 2 * C.item;
+  // drop context blocks BEFORE cutting to L: a cut-off <ide_selection> loses its closing tag and would swallow the prompt after it
+  const strip = (x: string) => x.replace(/<(system-reminder|ide_opened_file|ide_selection|user-prompt-submit-hook)>[\s\S]*?(?:<\/\1>|$)/g, '');
   let t: string;
-  if (typeof c === 'string') t = head(c, L);
-  else if (Array.isArray(c) && !c.some((b) => b?.type === 'tool_result')) t = head(c.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => head(b.text, L)).join('\n'), L);
+  if (typeof c === 'string') t = head(strip(c), L);
+  else if (Array.isArray(c) && !c.some((b) => b?.type === 'tool_result')) t = head(c.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => head(strip(b.text), L)).join('\n'), L);
   else return undefined;
-  t = t.replace(/<(system-reminder|ide_opened_file|ide_selection|user-prompt-submit-hook)>[\s\S]*?(?:<\/\1>|$)/g, '');
   if (/^\s*(<(task-notification|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr)>|\[Request interrupted by user)/.test(t)) return undefined;
   const bash = /^\s*<bash-input>([\s\S]*?)(?:<\/bash-input>|$)/.exec(t);
   if (bash) { const l = line1(bash[1]); return l ? `! ${l}` : undefined; }
@@ -121,7 +122,8 @@ async function eachLine(file: string, fn: (line: string) => boolean | void) {
 }
 const tsOf = (j: any) => (typeof j?.timestamp === 'string' ? Date.parse(j.timestamp) : NaN);
 const json = (l: string): any => { try { return JSON.parse(l); } catch { return undefined; } };
-interface Entry { file: string; s: HistorySession; hay: string; fh: string; at: number }
+/** cwd: the raw first working directory, ≤4096 chars (unredacted; only POST /history/open uses it, never sent to the client) */
+interface Entry { file: string; s: HistorySession; hay: string; fh: string; at: number; cwd?: string }
 interface Cached { mtimeMs: number; size: number; e: Entry | null }
 /** Summary + search haystack of one transcript (redacted, whitespace-collapsed blocks; metadata first, text from `at`). null when it has no user/assistant line. */
 async function indexFile(file: string, sid: string, dir: string, st: { size: number; mtimeMs: number }, home: string): Promise<Entry | null> {
@@ -153,7 +155,7 @@ async function indexFile(file: string, sid: string, dir: string, st: { size: num
     startedAt: t0 <= t1 ? t0 : st.mtimeMs, endedAt: t0 <= t1 ? t1 : st.mtimeMs, prompts, messages, ...(cost !== undefined ? { costUsd: cost } : {}), ...(model ? { model: meta(model) } : {}),
     ...(version ? { version: meta(version) } : {}), ...(entry ? { entrypoint: meta(entry) } : {}), auto: sdk && !other, subagents: 0, bytes: st.size };
   const m = [named ? title : '', project, gitBranch ?? '', sid].join('\n'), hay = `${m}\n${blocks.join('\n')}`;
-  return { file, s, hay, fh: fold(hay), at: m.length + 1 };
+  return { file, s, hay, fh: fold(hay), at: m.length + 1, ...(cwd && cwd.length <= 4096 ? { cwd: copy(cwd) } : {}) }; // an over-long cwd is dropped, never cut
 }
 const countAgents = (d: string) => readdir(d).then((xs) => xs.filter((x) => /^agent-.+\.jsonl$/.test(x)).length, () => 0);
 const tick = () => new Promise<void>((r) => setImmediate(r));
@@ -180,7 +182,7 @@ const int = (v: unknown, d: number) => { const n = Math.trunc(Number(v ?? d)); r
  *  budget (oldest sessions lose their text first, metadata stays searchable), never transcripts (detail re-reads the file). */
 export class HistoryIndex {
   private files = new Map<string, Cached>(); private bySid = new Map<string, Entry>(); private sorted: Entry[] = [];
-  private pending?: Promise<void>; private stopped = false;
+  private pending?: Promise<void>; private stopped = false; private missAt = -Infinity;
   /** epoch ms of the last completed refresh (0 before the first) */
   scannedAt = 0;
   /** last refresh: transcript files seen, files (re)parsed, wall time, search text chars held (text + folded copy) */
@@ -259,12 +261,28 @@ export class HistoryIndex {
     await this.ensure(); if (!this.bySid.has(sid)) return 'unknown';
     const b = marks.set(sid, note); return b === 'full' ? 'full' : { sid, bookmark: { ...b } };
   }
+  /** Index entry of sid. An unknown sid waits for a scan already running, then for one rescan that started after the call (shared); miss-triggered rescans
+   *  start at most every 5 s, so bogus sids cannot keep the disk busy. */
+  private async lookup(sid: string) {
+    const p = this.pending; await this.ensure();
+    let e = this.bySid.get(sid); if (e) return e;
+    if (p) { await p.catch(() => {}); e = this.bySid.get(sid); if (e) return e; } // that scan may predate the file
+    if (Date.now() - this.missAt >= C.missMs) { this.missAt = Date.now(); await this.refresh().catch(() => {}); } else if (this.pending) await this.pending.catch(() => {});
+    return this.bySid.get(sid);
+  }
+  /** POST /history/open: the session's recorded working directory (raw, unredacted, never sent to the client; absent when the transcript has none), its redacted
+   *  project label, the transcript's folder name and mtime. null = unknown sid. */
+  async locate(sid: string): Promise<{ cwd?: string; project: string; folder: string; mtimeMs: number } | null> {
+    if (!HISTORY_SID.test(sid)) return null;
+    const e = await this.lookup(sid); if (!e) return null;
+    const st = await stat(e.file).catch(() => null);
+    return { ...(e.cwd ? { cwd: e.cwd } : {}), project: e.s.project, folder: basename(dirname(e.file)), mtimeMs: st?.mtimeMs ?? 0 };
+  }
   /** GET /history/session: the transcript re-read as prompts, assistant text and tool summaries (no thinking, no tool results); ≤3000 items and ~4 MB of text, else
-   *  truncated. null = unknown sid. */
+   *  truncated. An unknown sid waits for one rescan (a deep link to a session newer than the index) before null. */
   async detail(sid: string): Promise<HistoryDetailResponse | null> {
     if (!HISTORY_SID.test(sid)) return null;
-    await this.ensure();
-    const e = this.bySid.get(sid); if (!e) return null;
+    const e = await this.lookup(sid); if (!e) return null;
     const items: HistoryItem[] = []; let truncated = false, chars = 0;
     const add = (it: HistoryItem, n: number) => { if (items.length >= C.items || chars + n > C.detail) { truncated = true; return false; } items.push(it); chars += n; return true; };
     try {

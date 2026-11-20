@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, OfficeEvent } from './types.js';
+import type { ClaudeConfigView, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, ModelReportResponse, DeckEvent } from './types.js';
+import { redactText } from './redact.js';
 import { HISTORY_SID, type HistoryQuery } from './history.js';
 export const HOST = '127.0.0.1';
 export function newToken() { return randomBytes(24).toString('base64url'); }
@@ -43,7 +44,7 @@ export function promptRequestRejection(req: Pick<IncomingMessage, 'headers' | 'm
   if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return 415;
   return 0;
 }
-/** GET /history* (UI read): loopback peer + Origin allow-list; the Bearer run token is checked separately (401). */
+/** GET /history*, /claude-config, /model-report (UI read): loopback peer + Origin allow-list; the Bearer run token is checked separately (401). */
 export function historyRequestRejection(req: Pick<IncomingMessage, 'headers'> & { socket: { remoteAddress?: string } }): number {
   if (!LOOPBACK.has(req.socket.remoteAddress ?? '')) return 403;
   return originOk(req.headers.origin) ? 0 : 403;
@@ -51,10 +52,10 @@ export function historyRequestRejection(req: Pick<IncomingMessage, 'headers'> & 
 export type EventResult = boolean | { ok: true; inboxToken?: string };
 export type PromptResult = { ok: true; id: string; nonce: string; state: string } | { ok: false; error: string; status: number };
 export type InboxClaim = { ok: 'unauthorized' } | { ok: 'empty' } | { ok: true; id: string; text: string; model?: string; effort?: string };
-export class OfficeServer {
+export class DeckServer {
   private http: Server; private wss: WebSocketServer;
   port = 0;
-  constructor(private token: string, private snapshot: () => OfficeEvent, private opts: {
+  constructor(private token: string, private snapshot: () => DeckEvent, private opts: {
     onEvent?: (p: unknown) => EventResult; staticDir?: string;
     getSettings?: () => unknown; setSettings?: (patch: unknown) => { ok: true; view: unknown } | { ok: false; error: string };
     onPrompt?: (p: { sid: string; text: unknown; nonce: unknown; model?: unknown; effort?: unknown }) => PromptResult;
@@ -62,6 +63,9 @@ export class OfficeServer {
     onInboxAck?: (sid: string, token: string | undefined, id: string, state: string, reason?: string) => 'unauthorized' | boolean;
     history?: { list(q: HistoryQuery): Promise<HistoryListResponse>; detail(sid: string): Promise<HistoryDetailResponse | null>;
       bookmark(sid: string, on: boolean, note?: string | null): Promise<HistoryBookmarkResponse | 'unknown' | 'full' | 'unavailable'> };
+    claude?: { view(): Promise<ClaudeConfigView>; post(op: string, body: unknown, signal?: AbortSignal): Promise<{ status: number; body: unknown }> };
+    modelReport?: { report(q: { days: number; auto: boolean; fresh: boolean }): Promise<ModelReportResponse> };
+    opener?: { openers(): Promise<HistoryOpenersResponse>; open(body: unknown): Promise<{ status: number; body: unknown }> };
   } = {}) {
     this.http = createServer((req, res) => { this.handle(req, res).catch(() => { if (!res.headersSent) res.writeHead(500).end(); }); });
     this.wss = new WebSocketServer({ noServer: true });
@@ -95,6 +99,38 @@ export class OfficeServer {
         res.writeHead(200, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(r.view)); return;
       }
       res.writeHead(405, sec).end(); return;
+    }
+    const cc = url.pathname === '/claude-config' ? 'view' : /^\/claude-config\/mcp\/(save|delete|reveal|test)$/.exec(url.pathname)?.[1];
+    if (cc) {
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      if (req.method !== (cc === 'view' ? 'GET' : 'POST')) { req.resume(); res.writeHead(405, sec).end(); return; }
+      const why = cc === 'view' ? historyRequestRejection(req) : promptRequestRejection(req);
+      if (why) { req.resume(); res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { req.resume(); out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.claude) { req.resume(); out(501, { error: 'unavailable' }); return; }
+      if (cc === 'view') { try { out(200, await this.opts.claude.view()); } catch (e) { out(500, { error: redactText(String((e as Error)?.message ?? e), 300) }); } return; }
+      const raw = await this.readBody(req, res, sec, 64 * 1024); if (raw == null) return;
+      let p: unknown; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
+      const ac = new AbortController(); res.on('close', () => { if (!res.writableFinished) ac.abort(); }); // client gone: stop a running test
+      const r = await this.opts.claude.post(cc, p, ac.signal); if (!res.destroyed) out(r.status, r.body); return;
+    }
+    if (url.pathname === '/history/openers' || url.pathname === '/history/open') { // launches local apps: GET = /history gate, POST = /prompt gate; both need the Bearer run token
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      const list = url.pathname === '/history/openers';
+      if (req.method !== (list ? 'GET' : 'POST')) { req.resume(); res.writeHead(405, sec).end(); return; }
+      const why = list ? historyRequestRejection(req) : promptRequestRejection(req);
+      if (why) { req.resume(); res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { req.resume(); out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.opener) { req.resume(); out(501, { error: 'unavailable' }); return; }
+      try {
+        if (list) { out(200, await this.opts.opener.openers()); return; }
+        const raw = await this.readBody(req, res, sec, 4 * 1024); if (raw == null) return;
+        let p: unknown; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
+        const r = await this.opts.opener.open(p); if (!res.destroyed) out(r.status, r.body);
+      } catch (e) { if (!res.headersSent) out(500, { error: redactText(String((e as Error)?.message ?? e), 300) }); }
+      return;
     }
     if (url.pathname === '/history/bookmark') {
       const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
@@ -131,6 +167,19 @@ export class OfficeServer {
       const d = await this.opts.history.detail(sid);
       if (!d) { out(404, { error: 'not found' }); return; }
       out(200, d); return;
+    }
+    if (url.pathname === '/model-report') {
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      if (req.method !== 'GET') { req.resume(); res.writeHead(405, sec).end(); return; }
+      const why = historyRequestRejection(req);
+      if (why) { res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.modelReport) { out(501, { error: 'unavailable' }); return; }
+      const d = url.searchParams.get('days'), days = d === null || d === '' ? 30 : /^\d{1,4}$/.test(d) ? Number(d) : NaN;
+      if (!(days === 0 || (days >= 1 && days <= 3650))) { out(400, { error: 'days must be 0 or 1..3650' }); return; }
+      try { out(200, await this.opts.modelReport.report({ days, auto: url.searchParams.get('auto') === '1', fresh: url.searchParams.get('fresh') === '1' })); } catch (e) { out(500, { error: redactText(String((e as Error)?.message ?? e), 300) }); }
+      return;
     }
     if (url.pathname === '/event') {
       if (req.method !== 'POST') { res.writeHead(405, sec).end(); return; }
@@ -206,7 +255,7 @@ export class OfficeServer {
     return body;
   }
   listen(port: number) { return new Promise<number>((res, rej) => { this.http.once('error', rej); this.http.listen(port, HOST, () => { this.port = (this.http.address() as any).port; res(this.port); }); }); }
-  broadcast(e: OfficeEvent) { const s = JSON.stringify(e); for (const c of this.wss.clients) if (c.readyState === WebSocket.OPEN) c.send(s); }
+  broadcast(e: DeckEvent) { const s = JSON.stringify(e); for (const c of this.wss.clients) if (c.readyState === WebSocket.OPEN) c.send(s); }
   async close() {
     // graceful: let queued frames flush, then force after 1s
     await Promise.all([...this.wss.clients].map((c) => new Promise<void>((r) => { const t = setTimeout(() => { c.terminate(); r(); }, 1000); c.once('close', () => { clearTimeout(t); r(); }); c.close(1000, 'run finished'); })));

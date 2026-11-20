@@ -1,4 +1,4 @@
-import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryHit, HistoryListResponse, HistoryProject, HistorySession } from './types';
+import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryHit, HistoryListResponse, HistoryOpener, HistoryOpenResponse, HistoryProject, HistorySession } from './types';
 /** Pure helpers for the History tab (unit-tested in test/history.test.ts). */
 
 const foldMemo = new Map<string, string>();
@@ -50,10 +50,11 @@ export const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 export const psq = (s: string) => `'${s.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`;
 /** Drive (`C:\`, `C:/`) or UNC (`\\host\share`) path. */
 export const isWinPath = (p: string) => /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
-/** Clipboard command to reopen a past session in its project: PowerShell for Windows paths (-LiteralPath: no wildcard expansion of [ ]), POSIX sh otherwise. */
+/** Clipboard command to reopen a past session in its project: PowerShell for Windows paths (-LiteralPath: no wildcard expansion of [ ]), POSIX sh otherwise
+ *  (the path is single-quoted only when it has a space or another shell character). */
 export function resumeCommand(project: string, sid: string) {
   const safe = /^[\w-]+$/.test(sid);
-  return isWinPath(project) ? `cd -LiteralPath ${psq(project)}; claude --resume ${safe ? sid : psq(sid)}` : `cd ${shq(project)} && claude --resume ${safe ? sid : shq(sid)}`;
+  return isWinPath(project) ? `cd -LiteralPath ${psq(project)}; claude --resume ${safe ? sid : psq(sid)}` : `cd ${/^[\w@%+=:,./-]+$/.test(project) ? project : shq(project)} && claude --resume ${safe ? sid : shq(sid)}`;
 }
 const p2 = (n: number) => String(n).padStart(2, '0');
 /** Local `YYYY-MM-DD HH:MM`. */
@@ -121,9 +122,49 @@ export function projectOptions(projects: readonly HistoryProject[], current = ''
   for (const p of projects) out.push({ value: p.project, label: `${(n.get(p.projectName) ?? 0) > 1 ? p.project : p.projectName} (${p.sessions})`, title: p.project });
   return out;
 }
-export type MainTab = 'office' | 'history';
-export const TAB_KEY = 'office.tab';
+/** Placeholder for a session opened by sid alone (from the "Performance" tab) until /history/session answers; bytes -1 marks it. */
+export const ghostSession = (sid: string): HistorySession => ({ sid, project: '', projectName: '', title: '', startedAt: 0, endedAt: 0, prompts: 0, messages: 0, auto: false, subagents: 0, bytes: -1 });
+export const isGhost = (x: HistorySession) => x.bytes < 0;
+/** The selection to keep once a transcript is loaded: a placeholder for that sid becomes the loaded session (same object otherwise). */
+export function unGhost<T extends HistorySession>(sel: T, det: { sid: string; data?: { session: HistorySession } }): T | HistorySession {
+  return isGhost(sel) && det.sid === sel.sid && det.data ? det.data.session : sel;
+}
+/** A placeholder's 404 is retried once after this long: the server refreshes its index on an unknown sid. */
+export const GHOST_RETRY_MS = 2000;
+/** Request from another tab to open a sid in History; n changes on every request so the same sid can be opened again. */
+export type OpenRequest = { sid: string; n: number };
+export type MainTab = 'office' | 'history' | 'claude' | 'report';
+export const TAB_KEY = 'deck.tab';
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 const local = (): Store | undefined => { try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; } };
-export function loadTab(store: Store | undefined = local()): MainTab { try { return store?.getItem(TAB_KEY) === 'history' ? 'history' : 'office'; } catch { return 'office'; } }
+/** "Reopen": last app used (localStorage, best effort). */
+export const OPENER_KEY = 'deck.opener';
+export function loadOpener(store: Store | undefined = local()): string | undefined { try { return store?.getItem(OPENER_KEY) ?? undefined; } catch { return undefined; } }
+export function saveOpener(id: string, store: Store | undefined = local()) { try { store?.setItem(OPENER_KEY, id); } catch { /* private mode / quota */ } }
+/** The main button's app: the last one used if it is still offered, else the first. */
+export const pickOpener = (openers: readonly HistoryOpener[], last?: string) => openers.find((o) => o.id === last) ?? openers[0];
+/** Menu hint for an editor without the Claude Code extension (it only opens the folder). */
+export const openerHint = (o: HistoryOpener) => o.kind === 'editor' && !o.resumes ? '(opens the folder only)' : '';
+/** Inline status after POST /history/open succeeded. */
+export const openedText = (r: Pick<HistoryOpenResponse, 'resumed' | 'note'>, label: string) => `${r.resumed ? 'Opened in' : 'Opened the folder in'} ${label}${r.note ? `. ${r.note}` : ''}`;
+/** Inline error for a failed open: the server's reason when it gave one (status 0 = network, -1 = not JSON).
+ *  409 automation-pending = macOS is showing its Automation prompt (osascript timed out); 409 busy = another launch is running (one at a time). */
+export function openErrorText(status: number, error?: string, reason?: string) {
+  if (reason) return reason;
+  if (error === 'automation-pending') return 'macOS is asking whether Claude Deck may control the app: click OK in that dialog, then click Reopen.';
+  if (error === 'busy') return 'Another session is opening. Try again in a moment.';
+  if (status === 401 || status === 403) return 'Run token rejected. Reopen the URL in orchestrator/.run/ui-url.txt.';
+  if (status === 0) return 'Can\'t reach the orchestrator.';
+  if (status === -1) return 'The orchestrator sent a response that can\'t be read.';
+  if (!error && (status === 404 || status === 405 || status === 501)) return 'This orchestrator doesn\'t support “Reopen” yet. Restart it.';
+  return `Couldn't open${error ? `: ${error}` : ` (${status})`}.`;
+}
+export const isOpenConfirm = (error?: string) => error === 'confirm-required';
+/** A launch still running after this long may be waiting on the macOS Automation prompt: show `permissionHint`. */
+export const OPEN_SLOW_MS = 3000;
+export const permissionHint = (label: string) => `If macOS asks for permission to control ${label}, click OK.`;
+/** The copyable command is quoted for sh/bash/zsh only: a POSIX path with \ ! ' or a control character (newline…) reads differently in fish & co. */
+export const shOnlyPath = (project: string) => !isWinPath(project) && /[\\!'\x00-\x1f\x7f]/.test(project);
+export const SH_ONLY_NOTE = 'the path has special characters: use in bash/zsh only';
+export function loadTab(store: Store | undefined = local()): MainTab { try { const t = store?.getItem(TAB_KEY); return t === 'history' || t === 'claude' || t === 'report' ? t : 'office'; } catch { return 'office'; } }
 export function saveTab(t: MainTab, store: Store | undefined = local()) { try { store?.setItem(TAB_KEY, t); } catch { /* private mode / quota */ } }

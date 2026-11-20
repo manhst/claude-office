@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { turnKey, type OfficeState } from './reducer';
+import { turnKey, type DeckState } from './reducer';
 import type { TurnView } from './types';
 import { loadCollapse, setCollapse } from './collapse';
 import { multiSession, turnLines, turnsSig, type TurnLine } from './turnLines';
@@ -7,7 +7,7 @@ import { multiSession, turnLines, turnsSig, type TurnLine } from './turnLines';
 const hms = (ts: number) => new Date(ts).toLocaleTimeString([], { hour12: false });
 
 /** Claude Code turns as the CLI shows them: `> prompt`, ● text / ● Tool(detail) steps, answer, status. Oldest on top, sticks to the bottom. */
-export function ResponseLog({ s, now }: { s: OfficeState; now?: number }) {
+export function ResponseLog({ s, now }: { s: DeckState; now?: number }) {
   const turns = s.turns;
   const [collapsed, setCollapsed] = useState(() => loadCollapse().responses);
   const toggle = () => setCollapsed(setCollapse('responses', !collapsed).responses);

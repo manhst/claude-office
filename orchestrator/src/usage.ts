@@ -1,4 +1,4 @@
-// Account-wide Claude usage (5h / 7d limits) as reported by the `office` mod (esp-claude payload shape). Newest ts wins.
+// Account-wide Claude usage (5h / 7d limits) as reported by the `deck` mod (esp-claude payload shape). Newest ts wins.
 import type { UsageReading, UsageWindow } from './types.js';
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 function win(w: any): UsageWindow | null {

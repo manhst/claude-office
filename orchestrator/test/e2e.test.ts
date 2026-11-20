@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
 import WebSocket from 'ws';
-import { start, parseArgs } from '../src/cli.js';
+import { start, parseArgs, DEMO_NOW } from '../src/cli.js';
 import { originOk, tokenOk, eventRequestRejection, inboxGetRejection, promptRequestRejection, historyRequestRejection } from '../src/server.js';
 import { simulate } from '../src/simulate.js';
-import { turnBody } from '../../mod/office/hooks/register.js';
+import { turnBody } from '../../mod/deck/hooks/register.js';
 describe('security helpers', () => {
   it('origin check allows loopback only', () => {
     expect(originOk(undefined)).toBe(true); expect(originOk('http://127.0.0.1:5173')).toBe(true); expect(originOk('http://localhost:3000')).toBe(true);
@@ -45,7 +45,7 @@ const post = (port: number, body: string, headers: Record<string, string> = { 'c
 });
 describe('server end to end (demo simulator)', () => {
   it('ingests mod events, broadcasts sessions to authed WS, rejects bad token/origin/requests', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const url = `ws://127.0.0.1:${r.port}/ws?token=${r.token}`; const got: any[] = []; const rejected: string[] = [];
@@ -61,12 +61,12 @@ describe('server end to end (demo simulator)', () => {
       await simulate(`http://127.0.0.1:${r.port}/event`, { stepMs: 5, loops: 1 });
       await new Promise((res) => setTimeout(res, 100));
       const types = got.map((e) => e.t);
-      expect(types[0]).toBe('office.snapshot');
+      expect(types[0]).toBe('deck.snapshot');
       for (const t of ['agent.spawned', 'agent.state', 'tool.call', 'tool.result', 'agent.done', 'sessions.update', 'session.turn']) expect(types).toContain(t);
       const last = got.filter((e) => e.t === 'sessions.update').at(-1);
       expect(last.sessions.map((s: any) => `${s.project}:${s.source}`)).toEqual(['shop-api:agents', 'blog:claude-md', 'scratch:default']);
       expect(rejected.sort()).toEqual(['origin', 'token']);
-      expect(r.tracker.snapshot()).toMatchObject({ t: 'office.snapshot' });
+      expect(r.tracker.snapshot()).toMatchObject({ t: 'deck.snapshot' });
       const turns = (r.tracker.snapshot() as any).turns; expect(turns.filter((x: any) => x.status === 'answer').length).toBeGreaterThanOrEqual(4);
       expect(turns.find((x: any) => x.who === 'planner')).toMatchObject({ sid: 'demo-shop-0001', deskId: expect.stringContaining('planner'), answer: expect.stringContaining('\n') });
       expect(readFileSync(r.logPath, 'utf8')).not.toContain(r.token);
@@ -77,7 +77,7 @@ describe('server end to end (demo simulator)', () => {
 describe('turn events end to end (live mode)', () => {
   const connect = (port: number, token: string) => new Promise<{ ws: WebSocket; got: any[] }>((res) => { const got: any[] = []; const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${token}`, { origin: 'http://localhost:5173' }); ws.on('message', (m) => got.push(JSON.parse(String(m)))); ws.once('open', () => res({ ws, got })); });
   it('merges start/progress/end into one redacted turn, keeps newlines, and replays it in a reconnect snapshot', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const sid = 'live-turn-1'; const secret = 'sk-abcdefghijklmnop1234';
@@ -100,7 +100,7 @@ describe('turn events end to end (live mode)', () => {
       expect(t1.answer).toContain('# Result\n\n- one\n- two\n'); expect(t1.answer).toContain('\n  const k = '); expect(t1.answer).not.toContain(secret);
       expect(snapTurns[1].answer.length).toBeLessThanOrEqual(12_020);
       const b = await connect(r.port, r.token); await new Promise((res) => setTimeout(res, 100));
-      expect(b.got[0].t).toBe('office.snapshot');
+      expect(b.got[0].t).toBe('deck.snapshot');
       const bt = b.got[0].turns.filter((t: any) => t.sid === sid); expect(bt.map((t: any) => t.turnId)).toEqual(['t1', 't2']);
       expect(bt[0].answer).toBe(t1.answer); expect(JSON.stringify(b.got[0])).not.toContain(secret); expect(readFileSync(r.logPath, 'utf8')).not.toContain(secret);
       a.ws.close(); b.ws.close();
@@ -109,7 +109,7 @@ describe('turn events end to end (live mode)', () => {
 });
 describe('event body decoding and turn log', () => {
   it('keeps a multibyte char split across two writes; logs a turn at start and end only', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const text = 'Xin chào 🎉 Việt Nam';
@@ -134,7 +134,7 @@ const httpJson = (port: number, path: string, opts: { method?: string; headers?:
 });
 describe('prompt reverse channel', () => {
   it('issues inboxToken on /event, never on WS/logs; /prompt needs run token; /inbox needs inbox token; claim once', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-'));
+    const dir = mkdtempSync(join(tmpdir(), 'deck-'));
     const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
     try {
       const got: any[] = [];
@@ -183,12 +183,12 @@ describe('prompt reverse channel', () => {
   }, 15000);
 });
 describe('history endpoints', () => {
-  it('parses --history-dir / OFFICE_HISTORY_DIR', () => {
+  it('parses --history-dir / DECK_HISTORY_DIR', () => {
     expect(parseArgs(['--history-dir', 'some/dir']).historyDir).toBe(join(process.cwd(), 'some/dir'));
-    expect(parseArgs([]).historyDir).toBe(process.env.OFFICE_HISTORY_DIR);
+    expect(parseArgs([]).historyDir).toBe(process.env.DECK_HISTORY_DIR);
   });
   it('GET /history and /history/session: run token (header only), loopback Origin, GET only; redacted JSON', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), secret = 'sk-abcdefghijklmnop1234';
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), hist = mkdtempSync(join(tmpdir(), 'deck-hist-')), secret = 'sk-abcdefghijklmnop1234';
     mkdirSync(join(hist, '-w-shop'));
     const line = (type: string, message: unknown, ts: string) => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, uuid: ts, timestamp: ts, entrypoint: 'cli', cwd: '/w/shop', sessionId: 'h-1', version: '2.1.0', gitBranch: 'main' });
     writeFileSync(join(hist, '-w-shop', 'h-1.jsonl'), [line('user', { role: 'user', content: `deploy Lịch sử with ${secret}` }, '2026-11-01T10:00:00.000Z'),
@@ -222,7 +222,7 @@ describe('history endpoints', () => {
     } finally { await r.close(); }
   }, 15000);
   it('POST /history/bookmark: /prompt gates + run token, validation, add → list/detail → re-note keeps at → remove; demo keeps bookmarks in memory', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'office-')), hist = mkdtempSync(join(tmpdir(), 'office-hist-')), bookmarksPath = join(dir, 'bm', 'history-bookmarks.json');
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), hist = mkdtempSync(join(tmpdir(), 'deck-hist-')), bookmarksPath = join(dir, 'bm', 'history-bookmarks.json');
     mkdirSync(join(hist, '-w-shop'));
     const line = (type: string, message: unknown, ts: string, entrypoint = 'cli') => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, timestamp: ts, entrypoint, cwd: '/w/shop', gitBranch: 'main' });
     writeFileSync(join(hist, '-w-shop', 'h-1.jsonl'), line('user', { role: 'user', content: 'deploy it' }, '2026-11-01T10:00:00.000Z') + '\n');
@@ -259,9 +259,119 @@ describe('history endpoints', () => {
       expect(await get('/history?bookmarked=1')).toMatchObject({ total: 0, bookmarked: 0 });
       expect(JSON.parse(readFileSync(bookmarksPath, 'utf8'))).toEqual({ version: 1, bookmarks: {} });
     } finally { await r.close(); }
-    const saved = process.env.OFFICE_HISTORY_BOOKMARKS; delete process.env.OFFICE_HISTORY_BOOKMARKS;
-    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.OFFICE_HISTORY_BOOKMARKS = saved; }
+    const saved = process.env.DECK_HISTORY_BOOKMARKS; delete process.env.DECK_HISTORY_BOOKMARKS;
+    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.DECK_HISTORY_BOOKMARKS = saved; }
     const d = await start(o);
     try { expect(d.bookmarks.path).toBeUndefined(); } finally { await d.close(); }
   }, 15000);
+});
+describe('model report endpoint', () => {
+  it('GET /model-report: /history gate (run token in the header only, loopback Origin, GET only), days validation, redacted report; demo reads the fixtures', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), hist = mkdtempSync(join(tmpdir(), 'deck-hist-')), secret = 'sk-abcdefghijklmnop1234', ts = (min: number) => new Date(Date.now() - 3_600_000 + min * 60_000).toISOString();
+    mkdirSync(join(hist, '-w-shop'));
+    const line = (type: string, message: unknown, t: string) => JSON.stringify({ parentUuid: null, isSidechain: false, type, message, timestamp: t, entrypoint: 'cli', cwd: '/w/shop', sessionId: 'm-1' });
+    writeFileSync(join(hist, '-w-shop', 'm-1.jsonl'), [line('user', { role: 'user', content: 'fix it' }, ts(0)),
+      line('assistant', { model: 'claude-opus-5-5', id: 'a1', role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: '/w/shop/a.ts' } }] }, ts(1)),
+      line('user', { role: 'user', content: [{ tool_use_id: 't1', type: 'tool_result', is_error: true, content: `<tool_use_error>String to replace not found in /w/shop/private/a.ts ${secret}</tool_use_error>` }] }, ts(2))].join('\n') + '\n');
+    const r = await start(parseArgs(['--port', '0', '--log-dir', dir, '--history-dir', hist]));
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, get = (path: string, headers: Record<string, string> = auth, method = 'GET') => httpJson(r.port, path, { headers, method });
+      const no = await get('/model-report', {}); expect(no.status).toBe(401); expect(JSON.parse(no.body)).toEqual({ error: 'unauthorized' });
+      expect((await get('/model-report', { authorization: 'Bearer nope' })).status).toBe(401);
+      expect((await get(`/model-report?token=${r.token}`, {})).status).toBe(401);
+      expect((await get('/model-report', { ...auth, origin: 'https://evil.example' })).status).toBe(403);
+      expect((await get('/model-report', { ...auth, origin: 'null' })).status).toBe(403);
+      expect((await get('/model-report', auth, 'POST')).status).toBe(405);
+      for (const bad of ['abc', '-1', '3651', '1.5', '1e2']) { const x = await get(`/model-report?days=${bad}`); expect(x.status).toBe(400); expect(JSON.parse(x.body).error).toMatch(/days/); }
+      const ok = await get('/model-report', { ...auth, origin: 'http://127.0.0.1:7777' });
+      expect(ok.status).toBe(200); expect(ok.headers).toMatchObject({ 'content-type': 'application/json', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' });
+      const body = JSON.parse(ok.body);
+      expect(body).toMatchObject({ days: 30, auto: false, autoSkipped: 0, sessions: 1, totals: { turns: 1, toolCalls: 1, errors: { misuse: 1 } }, modelOrder: ['claude-opus-5-5'],
+        models: [{ model: 'claude-opus-5-5', label: 'Opus 5.5', editFails: 1, smallSample: true }], patterns: [{ category: 'misuse', tool: 'Edit', count: 1 }], review: [{ sid: 'm-1', project: '/w/shop', score: 1 }] });
+      expect(body.trend).toHaveLength(12); expect(body.patterns[0].pattern).toContain('<path>');
+      for (const s of [secret, '/w/shop/private', 'fix it']) expect(ok.body).not.toContain(s);
+      expect(JSON.parse((await get('/model-report?days=0&auto=1')).body)).toMatchObject({ days: 0, auto: true, sessions: 1 });
+      expect(JSON.parse((await get('/model-report?days=0')).body).trend).toHaveLength(52);
+      expect(JSON.parse((await get('/model-report?days=')).body).days).toBe(30);
+      expect(body).toMatchObject({ refreshing: false, scannedAt: expect.any(Number) });
+      writeFileSync(join(hist, '-w-shop', 'm-2.jsonl'), [line('user', { role: 'user', content: 'again' }, ts(3)), line('assistant', { model: 'claude-opus-5-5', id: 'a2', role: 'assistant', content: [] }, ts(4))].join('\n') + '\n');
+      expect(JSON.parse((await get('/model-report')).body).sessions).toBe(1); // cached within the TTL
+      const fresh = JSON.parse((await get('/model-report?fresh=1')).body);
+      expect(fresh).toMatchObject({ sessions: 2, refreshing: false }); expect(fresh.scannedAt).toBeGreaterThanOrEqual(body.scannedAt);
+    } finally { await r.close(); }
+    const saved = process.env.DECK_HISTORY_DIR; delete process.env.DECK_HISTORY_DIR;
+    let o; try { o = parseArgs(['--demo', '--port', '0', '--log-dir', dir]); } finally { process.env.DECK_HISTORY_DIR = saved; }
+    const d = await start(o);
+    try {
+      const x = JSON.parse((await httpJson(d.port, '/model-report', { headers: { authorization: `Bearer ${d.token}` } })).body);
+      expect(x).toMatchObject({ generatedAt: DEMO_NOW, autoSkipped: 1 }); expect(x.sessions).toBeGreaterThan(0); expect(x.models.length).toBeGreaterThan(1);
+    } finally { await d.close(); }
+  }, 15000);
+});
+describe('history open endpoints', () => {
+  it('GET /history/openers (/history gate) and POST /history/open (/prompt gate, 4 KB): run token in the header only; demo lists nothing and opens nothing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, json = { ...auth, 'content-type': 'application/json' };
+      const call = (path: string, headers: Record<string, string>, method = 'GET', body?: string) => httpJson(r.port, path, { headers, method, body });
+      expect((await call('/history/openers', {})).status).toBe(401);
+      expect((await call(`/history/openers?token=${r.token}`, {})).status).toBe(401);
+      expect((await call('/history/openers', { ...auth, origin: 'https://evil.example' })).status).toBe(403);
+      expect((await call('/history/openers', json, 'POST', '{}')).status).toBe(405);
+      const ok = await call('/history/openers', { ...auth, origin: 'http://127.0.0.1:7777' });
+      expect(ok.status).toBe(200); expect(ok.headers['content-type']).toBe('application/json'); expect(Array.isArray(JSON.parse(ok.body).openers)).toBe(true);
+      const body = JSON.stringify({ sid: '11111111-2222-4333-8444-555555555555', app: 'iterm' });
+      expect((await call('/history/open', { 'content-type': 'application/json' }, 'POST', body)).status).toBe(401);
+      expect((await call('/history/open', { ...json, authorization: 'Bearer nope' }, 'POST', body)).status).toBe(401);
+      expect((await call('/history/open', { ...json, origin: 'https://evil.example' }, 'POST', body)).status).toBe(403);
+      expect((await call('/history/open', { ...auth, 'content-type': 'text/plain' }, 'POST', body)).status).toBe(415);
+      expect((await call('/history/open', auth)).status).toBe(405);
+      expect((await call('/history/open', json, 'POST', JSON.stringify({ sid: 'x'.repeat(5000) }))).status).toBe(413);
+      expect(JSON.parse((await call('/history/open', json, 'POST', '{nope')).body)).toEqual({ error: 'bad json' });
+      expect(JSON.parse((await call('/history/open', json, 'POST', JSON.stringify({ sid: '../x', app: 'iterm' }))).body)).toMatchObject({ error: 'bad-sid' });
+      const nf = await call('/history/open', { ...json, origin: 'http://localhost:5173' }, 'POST', body);
+      if (process.platform === 'darwin' || process.platform === 'win32') { expect(nf.status).toBe(404); expect(JSON.parse(nf.body)).toMatchObject({ error: 'not-found', reason: expect.any(String) }); }
+    } finally { await r.close(); }
+    const d = await start(parseArgs(['--demo', '--port', '0', '--log-dir', dir]));
+    try {
+      const auth = { authorization: `Bearer ${d.token}` };
+      expect(JSON.parse((await httpJson(d.port, '/history/openers', { headers: auth })).body)).toEqual({ openers: [], reason: expect.any(String) });
+      const o = await httpJson(d.port, '/history/open', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ sid: '7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a05', app: 'iterm' }) });
+      expect(o.status).toBe(409); expect(JSON.parse(o.body)).toMatchObject({ error: 'unavailable' });
+    } finally { await d.close(); }
+  }, 15000);
+});
+describe('claude config endpoints', () => {
+  it('GET /claude-config + POST /claude-config/mcp/*: run token (header only), Origin, JSON, size cap; secrets stay masked', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), cj = process.env.DECK_CLAUDE_JSON!, secret = 'secret-value-1234567';
+    writeFileSync(cj, JSON.stringify({ mcpServers: { a: { type: 'stdio', command: 'node', args: [], env: { API_TOKEN: secret, MODE: 'dev' } } } }));
+    const r = await start(parseArgs(['--port', '0', '--log-dir', dir]));
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, json = { ...auth, 'content-type': 'application/json' };
+      const call = (path: string, body?: string, headers: Record<string, string> = json, method = 'POST') => httpJson(r.port, path, { method, headers, body });
+      expect((await call('/claude-config', undefined, {}, 'GET')).status).toBe(401);
+      expect((await call(`/claude-config?token=${r.token}`, undefined, {}, 'GET')).status).toBe(401);
+      expect((await call('/claude-config', undefined, { ...auth, origin: 'https://evil.example' }, 'GET')).status).toBe(403);
+      expect((await call('/claude-config', '{}')).status).toBe(405);
+      const v = await call('/claude-config', undefined, { ...auth, origin: 'http://127.0.0.1:7777' }, 'GET');
+      expect(v.status).toBe(200); expect(v.headers['content-type']).toBe('application/json'); expect(v.body).not.toContain(secret);
+      expect(JSON.parse(v.body)).toMatchObject({ writable: true, cli: { version: '9.9.9' }, servers: [{ name: 'a', scope: 'user', env: [{ key: 'API_TOKEN', masked: true }, { key: 'MODE', value: 'dev' }] }] });
+      for (const op of ['save', 'delete', 'reveal', 'test']) {
+        const path = `/claude-config/mcp/${op}`;
+        expect((await call(path, '{}', { 'content-type': 'application/json' })).status).toBe(401);
+        expect((await call(path, '{}', { ...json, authorization: 'Bearer nope' })).status).toBe(401);
+        expect((await call(path, '{}', { ...json, origin: 'https://evil.example' })).status).toBe(403);
+        expect((await call(path, '{}', { ...auth, 'content-type': 'text/plain' })).status).toBe(415);
+        expect((await call(path, undefined, auth, 'GET')).status).toBe(405);
+        expect((await call(path, `{"x":"${'y'.repeat(65 * 1024)}"}`)).status).toBe(413);
+        const bad = await call(path, '{nope'); expect(bad.status).toBe(400); expect(JSON.parse(bad.body)).toEqual({ error: 'bad json' });
+      }
+      expect(JSON.parse((await call('/claude-config/mcp/reveal', JSON.stringify({ scope: 'user', name: 'a', field: 'env', key: 'API_TOKEN' }))).body)).toEqual({ value: secret });
+      const saved = await call('/claude-config/mcp/save', JSON.stringify({ target: { scope: 'user', name: 'b' }, server: { type: 'http', url: 'https://b.example/mcp' } }));
+      expect(saved.status).toBe(200); expect(JSON.parse(saved.body)).toMatchObject({ ok: true, backup: expect.any(String) });
+      expect(JSON.parse(readFileSync(cj, 'utf8')).mcpServers.b).toEqual({ type: 'http', url: 'https://b.example/mcp' });
+      const bad = await call('/claude-config/mcp/save', JSON.stringify({ target: { scope: 'user', name: 'a/b' }, server: { type: 'http', url: 'https://b' } }));
+      expect(bad.status).toBe(400); expect(JSON.parse(bad.body).error).toContain('name');
+    } finally { await r.close(); }
+  }, 20000);
 });

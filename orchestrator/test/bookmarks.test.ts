@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BookmarkStore, cleanNote, BOOKMARK_CAP } from '../src/bookmarks.js';
 
-const tmp = () => mkdtempSync(join(tmpdir(), 'office-bm-'));
+const tmp = () => mkdtempSync(join(tmpdir(), 'deck-bm-'));
 const logs = () => { const out: string[] = []; return Object.assign((l: string) => { out.push(l); }, { out }); };
 const posix = process.platform !== 'win32';
 describe('bookmark notes', () => {

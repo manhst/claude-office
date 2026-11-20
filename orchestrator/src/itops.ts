@@ -1,12 +1,12 @@
 // IT Ops side character: polls a Prometheus-compatible HTTP API (instant query) and reports firing alerts to the UI.
-// Not configured → status 'unconfigured' (UI shows "chưa cấu hình"). Demo alerts only when explicitly in demo mode, and labelled demo.
+// Not configured → status 'unconfigured' (UI shows "not configured"). Demo alerts only when explicitly in demo mode, and labelled demo.
 import type { ItOpsAlert, ItOpsStatus } from './types.js';
 export interface ItOpsConfig { url?: string; query: string; intervalMs: number; demo: boolean }
 export const DEFAULT_QUERY = 'ALERTS{alertstate="firing"}';
 export function itopsConfigFromEnv(env: NodeJS.ProcessEnv, demo: boolean, urlArg?: string): ItOpsConfig {
-  const url = (urlArg ?? env.OFFICE_PROMETHEUS_URL ?? '').trim().replace(/\/+$/, '') || undefined;
-  const iv = Number(env.OFFICE_PROMETHEUS_INTERVAL_MS);
-  return { url, query: env.OFFICE_PROMETHEUS_QUERY?.trim() || DEFAULT_QUERY, intervalMs: Number.isFinite(iv) && iv >= 2000 ? iv : 30_000, demo: demo && !url };
+  const url = (urlArg ?? env.DECK_PROMETHEUS_URL ?? '').trim().replace(/\/+$/, '') || undefined;
+  const iv = Number(env.DECK_PROMETHEUS_INTERVAL_MS);
+  return { url, query: env.DECK_PROMETHEUS_QUERY?.trim() || DEFAULT_QUERY, intervalMs: Number.isFinite(iv) && iv >= 2000 ? iv : 30_000, demo: demo && !url };
 }
 /** Prometheus /api/v1/query vector result → alerts. Every returned series counts as a problem. */
 export function parsePrometheus(body: unknown): ItOpsAlert[] {

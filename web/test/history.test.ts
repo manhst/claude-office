@@ -13,7 +13,7 @@ describe('fold', () => {
     expect(fold('Lịch Sử')).toBe('lich su');
     expect(fold('Đơn')).toBe('don');
     expect(fold('đường ĐI')).toBe('duong di');
-    for (const s of ['Lịch Sử', 'Văn phòng ảo', 'ÀÁÂÃ èéêë', 'naïve café', '😀 emoji ok', 'İstanbul']) expect(fold(s)).toHaveLength(s.length);
+    for (const s of ['Lịch Sử', 'Claude Deck', 'ÀÁÂÃ èéêë', 'naïve café', '😀 emoji ok', 'İstanbul']) expect(fold(s)).toHaveLength(s.length);
     expect(fold('npm TEST --Run')).toBe('npm test --run');
   });
   it('matches the per-unit rule from the contract', () => {
@@ -80,7 +80,7 @@ describe('resume command', () => {
     expect(shq("it's")).toBe(`'it'\\''s'`);
     expect(resumeCommand('/Users/me/My Project', 'abc-123')).toBe(`cd '/Users/me/My Project' && claude --resume abc-123`);
     expect(resumeCommand("/tmp/O'Brien dir", '0b9f2c1e-aaaa-4bbb-8ccc-123456789abc')).toBe(`cd '/tmp/O'\\''Brien dir' && claude --resume 0b9f2c1e-aaaa-4bbb-8ccc-123456789abc`);
-    expect(resumeCommand('/p', 'x; rm -rf ~')).toBe(`cd '/p' && claude --resume 'x; rm -rf ~'`);
+    expect(resumeCommand('/p', 'x; rm -rf ~')).toBe(`cd /p && claude --resume 'x; rm -rf ~'`);
   });
   it('uses PowerShell quoting for drive and UNC paths', () => {
     expect([String.raw`C:\Users\me`, 'd:/src/x', String.raw`\\srv\share\p`].map(isWinPath)).toEqual([true, true, true]);

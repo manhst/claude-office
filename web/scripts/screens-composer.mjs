@@ -1,25 +1,26 @@
 // Screenshot: Prompt composer under Responses. Demo sessions have no $.prompt.submit — Send stays disabled, labeled DEMO.
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 mkdirSync(resolve(root, 'docs/screens'), { recursive: true });
 const out = resolve(root, 'docs/screens/session-composer.png');
-const urlFile = resolve(root, 'orchestrator/.run/ui-url.txt'), prevUrl = existsSync(urlFile) ? readFileSync(urlFile, 'utf8') : null;
-const env = { ...process.env }; delete env.OFFICE_PROMETHEUS_URL;
+const runDir = mkdtempSync(join(tmpdir(), 'deck-screens-')); // temp DECK_RUN_DIR: never overwrite the live orchestrator/.run/ui-url.txt
+const env = { ...process.env, DECK_RUN_DIR: runDir }; for (const k of ['DECK_PROMETHEUS_URL', 'OFFICE_PROMETHEUS_URL', 'OFFICE_RUN_DIR']) delete env[k];
+const urlFile = join(runDir, 'ui-url.txt');
 const p = spawn(process.execPath, [resolve(root, 'orchestrator/node_modules/tsx/dist/cli.mjs'), 'orchestrator/src/cli.ts', 'start', '--demo', '--port', '0', '--step-ms', '900'], { cwd: root, env, stdio: ['ignore', 'ignore', 'pipe'] });
 const url = await new Promise((res, rej) => {
-  p.stderr.on('data', (d) => { if (/\[office\] UI:/.test(String(d))) res(readFileSync(urlFile, 'utf8').trim()); });
+  p.stderr.on('data', (d) => { if (/\[deck\] UI:/.test(String(d))) res(readFileSync(urlFile, 'utf8').trim()); });
   setTimeout(() => rej(new Error('no start')), 20000);
 });
-if (prevUrl != null) writeFileSync(urlFile, prevUrl, { mode: 0o600 });
 const errors = [];
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
-  await ctx.addInitScript(() => { localStorage.removeItem('vp-collapse'); });
+  await ctx.addInitScript(() => { localStorage.removeItem('deck.collapse'); });
   const pg = await ctx.newPage(); pg.on('pageerror', (e) => errors.push(e.message));
   await pg.goto(url); await pg.waitForSelector('[data-testid=conn]:has-text("live")');
   await pg.waitForSelector('[data-testid=prompt-composer]');

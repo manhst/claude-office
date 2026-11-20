@@ -1,32 +1,33 @@
 // Screenshot: left sidebar Responses section (CLI-style turns) fed by `turn` mod events POSTed to /event, 1280.
-// Restores orchestrator/.run/ui-url.txt afterwards (a real server may be running) and never prints its contents.
+// Starts its server with a temp DECK_RUN_DIR (the live orchestrator/.run/ui-url.txt is never touched) and never prints the URL.
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 mkdirSync(resolve(root, 'docs/screens'), { recursive: true });
 const out = resolve(root, 'docs/screens/session-responses.png'), outSide = resolve(root, 'docs/screens/session-responses-side.png');
-const urlFile = resolve(root, 'orchestrator/.run/ui-url.txt'), prevUrl = existsSync(urlFile) ? readFileSync(urlFile, 'utf8') : null;
-const env = { ...process.env }; delete env.OFFICE_PROMETHEUS_URL;
+const runDir = mkdtempSync(join(tmpdir(), 'deck-screens-')); // temp DECK_RUN_DIR: never overwrite the live orchestrator/.run/ui-url.txt
+const env = { ...process.env, DECK_RUN_DIR: runDir }; for (const k of ['DECK_PROMETHEUS_URL', 'OFFICE_PROMETHEUS_URL', 'OFFICE_RUN_DIR']) delete env[k];
+const urlFile = join(runDir, 'ui-url.txt');
 const p = spawn(process.execPath, [resolve(root, 'orchestrator/node_modules/tsx/dist/cli.mjs'), 'orchestrator/src/cli.ts', 'start', '--demo', '--port', '0', '--step-ms', '900'], { cwd: root, env, stdio: ['ignore', 'ignore', 'pipe'] });
 const url = await new Promise((res, rej) => {
-  p.stderr.on('data', (d) => { if (/\[office\] UI:/.test(String(d))) res(readFileSync(urlFile, 'utf8').trim()); });
+  p.stderr.on('data', (d) => { if (/\[deck\] UI:/.test(String(d))) res(readFileSync(urlFile, 'utf8').trim()); });
   setTimeout(() => rej(new Error('no start')), 20000);
 });
-if (prevUrl != null) writeFileSync(urlFile, prevUrl, { mode: 0o600 }); // the page already has its URL; give the file back to the real server
 const errors = [];
 const post = async (b) => { const r = await fetch(`http://127.0.0.1:${new URL(url).port}/event`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }); if (!r.ok) errors.push(`POST ${b.type} ${r.status}`); };
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
-  await ctx.addInitScript(() => { localStorage.removeItem('vp-collapse'); });
+  await ctx.addInitScript(() => { localStorage.removeItem('deck.collapse'); });
   const pg = await ctx.newPage(); pg.on('pageerror', (e) => errors.push(e.message));
   await pg.goto(url); await pg.waitForSelector('[data-testid=conn]:has-text("live")');
   await pg.waitForSelector('[data-testid=responses-collapse][aria-expanded=true]');
-  const sid = 'shot-office-0001', sid2 = 'shot-blog-0002';
-  await post({ type: 'start', sid, project: 'claude-office', cwd: root });
+  const sid = 'shot-deck-0001', sid2 = 'shot-blog-0002';
+  await post({ type: 'start', sid, project: 'claude-deck', cwd: root });
   await post({ type: 'start', sid: sid2, project: 'blog', cwd: root });
   await post({ type: 'turn', sid, turn: { id: 't1', phase: 'start', prompt: 'Why is the Responses panel empty?' } });
   await post({ type: 'turn', sid, turn: { id: 't1', phase: 'end', reason: 'answer', durationMs: 12_300, prompt: 'Why is the Responses panel empty?',

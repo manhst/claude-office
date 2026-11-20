@@ -1,4 +1,4 @@
-/** First-person look: pure pose math for the Vanphong camera (no three.js). */
+/** First-person look: pure pose math for the Office camera (no three.js). */
 export const POV_FOV = 72;
 export const POV_NEAR = 0.08;
 export const OVERVIEW_FOV = 38;

@@ -1,4 +1,4 @@
-import type { AgentUI, OfficeState } from './reducer';
+import type { AgentUI, DeckState } from './reducer';
 import type { AgentState, SessionView, SubagentInfo, TurnView } from './types';
 
 /** Shown when the payload has no current prompt / tool / description. */
@@ -147,7 +147,7 @@ function deskRow(a: AgentUI, session: SessionView, lead: boolean, turns: TurnVie
  * Subagents nest under the desk whose profile name matches type/name/description;
  * unmatched subagents stay as session-level rows (no invented parent).
  */
-export function sessionAgentTree(s: OfficeState, sid: string | undefined): AgentRow[] {
+export function sessionAgentTree(s: DeckState, sid: string | undefined): AgentRow[] {
   const session = s.sessions.find((x) => x.sid === sid);
   if (!session) return [];
   const desks = session.agentIds.map((id) => s.agents[id]).filter((a): a is AgentUI => !!a);

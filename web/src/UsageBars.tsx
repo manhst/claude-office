@@ -3,7 +3,7 @@ import { WINDOW_MS, overPace, paceFraction, resetLabel } from './usage';
 const IconGauge = () => <svg className="icon" width={13} height={13} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden><path d="M2.5 11a5.5 5.5 0 1 1 11 0" /><path d="M8 11l2.6-3.4" /></svg>;
 /** Header: Claude usage, 5h and 7d bars, each with a red pace line (share of the window already elapsed). */
 export function UsageBars({ u, now }: { u?: UsageReading | null; now: number }) {
-  if (!u) return <div className="usage" data-testid="usage"><IconGauge /><span className="muted">Claude usage: chưa có số liệu</span></div>;
+  if (!u) return <div className="usage" data-testid="usage"><IconGauge /><span className="muted">Claude usage: no data yet</span></div>;
   return (
     <div className="usage" data-testid="usage" title={u.cost_usd != null ? `cost $${u.cost_usd}` : undefined}>
       <IconGauge />{u.source === 'demo' && <span className="usage-demo">demo</span>}
