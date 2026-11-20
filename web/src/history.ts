@@ -121,9 +121,20 @@ export function projectOptions(projects: readonly HistoryProject[], current = ''
   for (const p of projects) out.push({ value: p.project, label: `${(n.get(p.projectName) ?? 0) > 1 ? p.project : p.projectName} (${p.sessions})`, title: p.project });
   return out;
 }
-export type MainTab = 'office' | 'history' | 'claude';
+/** Placeholder for a session opened by sid alone (from the "Hiệu suất" tab) until /history/session answers; bytes -1 marks it. */
+export const ghostSession = (sid: string): HistorySession => ({ sid, project: '', projectName: '', title: '', startedAt: 0, endedAt: 0, prompts: 0, messages: 0, auto: false, subagents: 0, bytes: -1 });
+export const isGhost = (x: HistorySession) => x.bytes < 0;
+/** The selection to keep once a transcript is loaded: a placeholder for that sid becomes the loaded session (same object otherwise). */
+export function unGhost<T extends HistorySession>(sel: T, det: { sid: string; data?: { session: HistorySession } }): T | HistorySession {
+  return isGhost(sel) && det.sid === sel.sid && det.data ? det.data.session : sel;
+}
+/** A placeholder's 404 is retried once after this long: the server refreshes its index on an unknown sid. */
+export const GHOST_RETRY_MS = 2000;
+/** Request from another tab to open a sid in History; n changes on every request so the same sid can be opened again. */
+export type OpenRequest = { sid: string; n: number };
+export type MainTab = 'office' | 'history' | 'claude' | 'report';
 export const TAB_KEY = 'office.tab';
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 const local = (): Store | undefined => { try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; } };
-export function loadTab(store: Store | undefined = local()): MainTab { try { const t = store?.getItem(TAB_KEY); return t === 'history' || t === 'claude' ? t : 'office'; } catch { return 'office'; } }
+export function loadTab(store: Store | undefined = local()): MainTab { try { const t = store?.getItem(TAB_KEY); return t === 'history' || t === 'claude' || t === 'report' ? t : 'office'; } catch { return 'office'; } }
 export function saveTab(t: MainTab, store: Store | undefined = local()) { try { store?.setItem(TAB_KEY, t); } catch { /* private mode / quota */ } }

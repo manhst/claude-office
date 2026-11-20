@@ -92,6 +92,10 @@ describe('history helpers', () => {
     expect(promptText(user('keep this<system-reminder>unclosed reminder text', 0))).toBe('keep this');
     const big = promptText(user(`${'word '.repeat(40_000)}<system-reminder>${'<'.repeat(1000)}`, 0))!;
     expect(big.length).toBeLessThanOrEqual(2 * HISTORY_CAP.item); expect(big).not.toContain('<');
+    // an IDE selection longer than the cap must not swallow the prompt in the next block
+    const sel = `<ide_selection>${'x'.repeat(3 * HISTORY_CAP.item)}</ide_selection>`;
+    expect(promptText(user([{ type: 'text', text: sel }, { type: 'text', text: 'fix this' }], 0))).toBe('fix this');
+    expect(promptText(user(`${sel}\nfix that`, 0))).toBe('fix that');
   });
   it('keepLine skips heavy line kinds by prefix and keeps unknown shapes', () => {
     for (const t of ['api-request', 'api-request-blob', 'file-history-snapshot', 'queue-operation', 'last-prompt', 'mode']) expect(keepLine(`{"type":"${t}","x":1}`)).toBe(false);
@@ -270,6 +274,17 @@ describe('HistoryIndex refresh', () => {
     write(root, '-w-new', 'n9', [user('late', 600), said('ok', 601)]);
     expect((await ix.list({ auto: true })).total).toBe(5);
     await ix.refresh(); expect((await ix.list({ auto: true })).total).toBe(6);
+  });
+  it('detail() of a sid newer than the index waits for one shared rescan before answering null', async () => {
+    const root = world(), ix = index(root, 60_000);
+    expect((await ix.list({ auto: true })).total).toBe(5);
+    write(root, '-w-new', 'n10', [user('deep link', 700), said('ok', 701)]);
+    const orig = (ix as any).scan.bind(ix); let scans = 0; (ix as any).scan = () => { scans++; return orig(); };
+    const [a, b, c] = await Promise.all([ix.detail('n10'), ix.detail('nope-1'), ix.detail('nope-2')]);
+    expect(a?.session.sid).toBe('n10'); expect(b).toBeNull(); expect(c).toBeNull(); expect(scans).toBe(1);
+    expect(await ix.detail('a1')).not.toBeNull(); expect(scans).toBe(1); // known sids never rescan within the TTL
+    expect(await ix.detail('nope-3')).toBeNull(); expect(await ix.detail('nope-4')).toBeNull(); expect(scans).toBe(1); // misses rescan at most every 5 s
+    (ix as any).missAt -= 5000; expect(await ix.detail('nope-5')).toBeNull(); expect(scans).toBe(2);
   });
   it('after the first scan, stale requests answer at once and refresh in the background (one shared scan)', async () => {
     const root = world(), ix = index(root, 0);

@@ -143,6 +143,79 @@ export interface McpErrorResponse { error: string; reason?: string; backup?: str
 /** Reply of save/delete: the fresh view, plus the backup file written before the change. */
 export interface McpWriteResponse { ok: true; view: ClaudeConfigView; backup?: string }
 
+/** Model report tab (GET /model-report?days=30&auto=0): how each Claude model did in this machine's Claude Code transcripts.
+ *  Every number is a proxy (tool errors by cause, interrupts, corrections, test/build results, API errors, time, cost), not a grade
+ *  of the answers. Times are epoch ms. Heuristics ported from _local/model-report/model_report.py. */
+export type ModelErrorCategory = 'misuse' | 'cmd_fail' | 'infra' | 'auto_denied' | 'user_rejected' | 'other';
+export type ModelErrorCounts = Record<ModelErrorCategory, number>;
+export interface ModelStats {
+  /** API model id (claude-opus-5-5) and short label (Opus 5.5) */
+  model: string; label: string;
+  /** main sessions in the window whose most-used model is this one; subagent transcripts (<dir>/<sid>/subagents/*.jsonl) led by it */
+  sessions: number; subagentRuns: number;
+  /** prompt → answer exchanges answered mostly by this model; prompts = those started by a typed prompt (not /command or !bash) */
+  turns: number; prompts: number;
+  /** distinct API responses (deduped by message id), tool calls, Edit/Write/MultiEdit/NotebookEdit calls */
+  apiCalls: number; toolCalls: number; edits: number;
+  /** failed tool results by cause */
+  errors: ModelErrorCounts;
+  /** edit-tool calls that failed with a misuse error (string not found, file not read…) */
+  editFails: number;
+  /** Esc presses ("[Request interrupted by user…]"), and correction prompts ("sai rồi", "vẫn lỗi", "that's wrong"…) charged to the model of the previous turn */
+  interrupts: number; corrections: number;
+  /** test/build/typecheck commands run by this model, and failures (exit ≠ 0 or failure text in the output, e.g. `npm test | tail`) */
+  verifyRuns: number; verifyFails: number;
+  /** main sessions led by this model with ≥1 verify run, and those whose last verify run passed */
+  verifySessions: number; verifyGreen: number;
+  /** turn wall time (prompt → last transcript line before the next prompt, so it includes permission waits) */
+  turnMedianMs: number | null; turnP90Ms: number | null;
+  outputTokens: number;
+  /** from each main session's cost-state modelUsage (so it includes subagents and side calls) */
+  costUsd: number;
+  compactions: number; maxTokensStops: number; refusals: number;
+  /** lines added + removed (cost-state) and PRs created (pr-link lines) in main sessions led by this model */
+  linesChanged: number; prs: number;
+  /** effort level (high, xhigh…) → API calls */
+  effort: Record<string, number>;
+  /** < 200 tool calls or < 20 turns: rates are not meaningful */
+  smallSample: boolean;
+}
+export interface ModelTrendPoint { toolCalls: number; misuse: number; turns: number; interrupts: number; corrections: number }
+/** one week (week = its Monday, YYYY-MM-DD, local time) → model id → counts; weeks without data are present with models: {} */
+export interface ModelTrendWeek { week: string; models: Record<string, ModelTrendPoint> }
+/** A normalized, redacted tool error message (paths, numbers, IPs, quoted values and secrets replaced). tool = the tool that produced it most. */
+export interface ModelErrorPattern { category: ModelErrorCategory; pattern: string; count: number; tool: string; byModel: Record<string, number>; lastAt: number }
+export interface ModelToolStat { tool: string; calls: number; errors: number; byCategory: Partial<ModelErrorCounts> }
+/** API error responses (rate_limit (429), server_error…) and automatic retries (by connection code / status) */
+export interface ModelApiErrorStat { kind: string; count: number; lastAt: number }
+export interface ModelRetryStat { kind: string; incidents: number; retries: number }
+/** Sessions worth a look, highest score first: score = misuse + 2·interrupts + 2·corrections + rejected (window counts). */
+export interface ModelReviewSession { sid: string; title: string; project: string; projectName: string; model: string; lastAt: number; turns: number; toolCalls: number; misuse: number; interrupts: number; corrections: number; rejected: number; costUsd: number; score: number }
+export interface ModelReportResponse {
+  /** window = last `days` days (0 = all history), since = its start; the trend covers max(12, ceil(days/7)) weeks, at most 52 (days 0 → 52) */
+  days: number; since: number; generatedAt: number;
+  /** when the transcripts behind this answer were last scanned; refreshing = a rescan is running (the UI refetches once it ends). GET ?fresh=1 waits for a rescan first ("Làm mới"). */
+  scannedAt: number; refreshing: boolean;
+  /** auto=false skips automation sessions (entrypoint sdk-cli: claude -p from scripts/plugins); autoSkipped = how many were skipped */
+  auto: boolean; autoSkipped: number;
+  /** main sessions in the window (not subagent transcripts) */
+  sessions: number;
+  totals: { turns: number; toolCalls: number; errors: ModelErrorCounts; interrupts: number; corrections: number; costUsd: number; apiErrors: number; retryIncidents: number };
+  /** models with activity in the window, most API calls first */
+  models: ModelStats[];
+  /** models by API calls in the last 52 weeks, then older ones: the UI assigns chart colors in this order so a color follows its model across windows */
+  modelOrder: string[];
+  trend: ModelTrendWeek[];
+  /** top 10 per category, most frequent first */
+  patterns: ModelErrorPattern[];
+  /** top 20 tools by error count */
+  tools: ModelToolStat[];
+  apiErrors: ModelApiErrorStat[];
+  retries: ModelRetryStat[];
+  /** top 20 */
+  review: ModelReviewSession[];
+}
+
 type Base = { ts: number };
 export type OfficeEvent = Base & (
   | { t: 'agent.spawned'; id: string; role: string; name: string; desk: { x: number; y: number }; tools: string[]; sessionId?: string; model?: string }

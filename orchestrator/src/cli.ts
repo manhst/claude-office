@@ -10,10 +10,13 @@ import { simulate } from './simulate.js';
 import { UsageStore } from './usage.js';
 import { ItOpsMonitor } from './itops.js';
 import { HistoryIndex, historyRoot } from './history.js';
+import { ModelReport } from './modelReport.js';
 import { BookmarkStore } from './bookmarks.js';
 import { ClaudeConfig, claudePaths } from './claudeConfig.js';
 import { applyPatch, loadSettings, resolveItopsConfig, saveSettings, toView, type OfficeSettingsFile, type SettingsPatch } from './settings.js';
 const here = dirname(fileURLToPath(import.meta.url));
+/** "now" of the demo model report (the demo transcripts are dated 2026-11). */
+export const DEMO_NOW = new Date(2026, 10, 20, 12).getTime();
 export interface StartOpts { demo: boolean; port: number; logDir: string; printToken: boolean; webDir: string; stepMs: number; userAgentsDir?: string; prometheus?: string; settingsPath?: string; historyDir?: string; bookmarksPath?: string; runDir?: string }
 export function parseArgs(argv: string[]): StartOpts {
   const o: StartOpts = { demo: process.env.OFFICE_DEMO === '1', port: 7777, logDir: resolve(here, '../logs'), printToken: false, webDir: resolve(here, '../../web/dist'), stepMs: 1500,
@@ -45,7 +48,10 @@ export async function start(o: StartOpts) {
   const view = () => toView(file, itops.config, itops.status, o.demo);
   // History tab: past transcripts; demo shows fixtures only, never this machine's sessions
   const bookmarks = new BookmarkStore(o.bookmarksPath ?? (o.demo ? undefined : join(runDir, 'history-bookmarks.json'))); // demo: memory only
-  const history = new HistoryIndex(o.historyDir ?? (o.demo ? resolve(here, '../fixtures/demo/history') : historyRoot()), { bookmarks });
+  const histRoot = o.historyDir ?? (o.demo ? resolve(here, '../fixtures/demo/history') : historyRoot());
+  const history = new HistoryIndex(histRoot, { bookmarks });
+  // Hiệu suất tab: per-model stats from the same transcripts, parsed on first use; the demo fixtures are dated, so demo pins "today" to 2026-11-20
+  const modelReport = new ModelReport(histRoot, o.demo && !o.historyDir ? { now: () => DEMO_NOW } : {});
   // Claude config tab: Claude Code's MCP servers; demo reads fixtures (project paths mapped under fixtures/…/fs) and never writes
   const ccDemo = o.demo ? resolve(here, '../fixtures/demo/claude-config') : undefined;
   const claude = new ClaudeConfig({ ...claudePaths(process.env, ccDemo), runDir, demo: o.demo, fsRoot: ccDemo && !process.env.OFFICE_CLAUDE_JSON ? join(ccDemo, 'fs') : undefined });
@@ -69,7 +75,7 @@ export async function start(o: StartOpts) {
     onInboxClaim: (sid, tok) => inbox.claim(sid, tok),
     onInboxAck: (sid, tok, id, state, reason) => inbox.ack(sid, tok, id, state as any, reason),
     staticDir: existsSync(o.webDir) ? o.webDir : undefined,
-    history, claude,
+    history, claude, modelReport,
     getSettings: () => view(),
     setSettings: (raw) => {
       try {
@@ -96,8 +102,8 @@ export async function start(o: StartOpts) {
   console.error(`[office] UI: ${o.printToken ? uiUrl : uiUrl.replace(/#token=.*/, '#token=[REDACTED]')} (full URL in orchestrator/.run/ui-url.txt, mode 600)`);
   console.error(`[office] settings: ${settingsPath}`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
-  const close = async () => { clearInterval(sweep); itops.stop(); history.stop(); await server.close(); };
-  return { port, token, tracker, server, inbox, usage, itops, history, bookmarks, claude, settingsPath, close, logPath: log.path };
+  const close = async () => { clearInterval(sweep); itops.stop(); history.stop(); modelReport.stop(); await server.close(); };
+  return { port, token, tracker, server, inbox, usage, itops, history, modelReport, bookmarks, claude, settingsPath, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

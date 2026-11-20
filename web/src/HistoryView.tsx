@@ -1,7 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistorySession } from './types';
 import { fetchHistory, fetchHistorySession, fetchHistoryUpTo, HistoryHttpError, isAbort, setBookmark } from './historyApi';
-import { absTime, bookmarkRequest, continuePage, fmtCost, fmtDuration, fmtSpan, highlight, historyErrorText, NOTE_MAX, parseTerms, patchList, patchSession, projectOptions, relTime, resumeCommand } from './history';
+import { absTime, bookmarkRequest, continuePage, fmtCost, fmtDuration, fmtSpan, ghostSession, GHOST_RETRY_MS, highlight, historyErrorText, isGhost, NOTE_MAX, parseTerms, patchList, patchSession, projectOptions, relTime, resumeCommand, unGhost, type OpenRequest } from './history';
 import { IconBranch } from './icons';
 
 const PAGE = 50;
@@ -17,8 +17,9 @@ function Star({ on, onClick, className = '', testid }: { on: boolean; onClick: (
   return <button type="button" className={`hstar ${className}`} aria-pressed={on} aria-label={on ? 'Remove bookmark' : 'Bookmark session'} title={on ? 'Remove bookmark' : 'Bookmark'} onClick={(e) => { e.stopPropagation(); onClick(); }} data-testid={testid}>{on ? '★' : '☆'}</button>;
 }
 
-/** History tab: search every past Claude Code session on this machine (GET /history) and read one transcript (GET /history/session). */
-export const HistoryView = memo(function HistoryView({ token, live, active, focusTick }: { token: string; live: ReadonlySet<string>; active: boolean; focusTick: number }) {
+/** History tab: search every past Claude Code session on this machine (GET /history) and read one transcript (GET /history/session).
+ *  openReq (from another tab) selects that sid: its listed row, else a placeholder filled in by /history/session even when it isn't on the current page. */
+export const HistoryView = memo(function HistoryView({ token, live, active, focusTick, openReq }: { token: string; live: ReadonlySet<string>; active: boolean; focusTick: number; openReq?: OpenRequest }) {
   const [q, setQ] = useState(''), [dq, setDq] = useState(''), [project, setProject] = useState(''), [auto, setAuto] = useState(false), [reload, setReload] = useState(0);
   const [list, setList] = useState<ListState>({ next: 0, loading: true });
   const [sel, setSel] = useState<HistorySession>(), [det, setDet] = useState<DetState>(), [detReload, setDetReload] = useState(0);
@@ -50,18 +51,25 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
     })().then((r) => { if (g === gen.current) setList((l) => ({ ...l, ...r, more: false })); },
       (e) => { if (g === gen.current && !isAbort(e)) setList((l) => ({ ...l, more: false, moreErr: errText(e, 'list') })); });
   };
-  const sid = sel?.sid;
+  const sid = sel?.sid, ghost = !!sel && isGhost(sel);
   useEffect(() => {
     if (!sid) { setDet(undefined); return; }
-    const ac = new AbortController(); setDet({ sid });
-    fetchHistorySession(token, sid, ac.signal).then((d) => { if (!ac.signal.aborted) setDet({ sid, data: d }); }, (e) => { if (!ac.signal.aborted && !isAbort(e)) setDet({ sid, err: errText(e, 'session') }); });
-    return () => ac.abort();
+    const ac = new AbortController(); let t: ReturnType<typeof setTimeout> | undefined; setDet({ sid });
+    const load = (again: boolean): void => void fetchHistorySession(token, sid, ac.signal).then((d) => { if (!ac.signal.aborted) setDet({ sid, data: d }); }, (e) => {
+      if (ac.signal.aborted || isAbort(e)) return;
+      if (again && e instanceof HistoryHttpError && e.status === 404) { t = setTimeout(() => load(false), GHOST_RETRY_MS); return; } // a sid opened from another tab may be newer than the index: the server rescans once, so ask once more
+      setDet({ sid, err: errText(e, 'session') });
+    });
+    load(ghost);
+    return () => { ac.abort(); clearTimeout(t); };
   }, [token, sid, detReload]);
+  useEffect(() => { if (sel && det) { const u = unGhost(sel, det); if (u !== sel) setSel(u); } }, [sel, det]); // placeholder → loaded session, also when the same sid is reopened
   const d = list.data, rows = d?.sessions ?? [], nAuto = !auto && d ? d.autoHidden : 0;
   const opts = useMemo(() => projectOptions(d?.projects ?? [], project), [d, project]);
   const clear = () => { setQ(''); setDq(''); };
   const pick = useCallback((x: HistorySession) => { setSel(x); if (window.matchMedia?.('(max-width:900px)').matches) detEl.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, []); // stacked layout: detail sits below the list
   const retry = useCallback(() => setDetReload((r) => r + 1), []);
+  useEffect(() => { if (openReq) pick(list.data?.sessions.find((x) => x.sid === openReq.sid) ?? ghostSession(openReq.sid)); }, [openReq]); // only a new request re-selects (not list reloads)
   const applyBm = useCallback((r: HistoryBookmarkResponse) => {
     setList((l) => l.data ? { ...l, data: patchList(l.data, r) } : l); setSel((x) => x && patchSession(x, r));
     setDet((v) => v?.data ? { ...v, data: { ...v.data, session: patchSession(v.data.session, r) } } : v);
@@ -150,6 +158,8 @@ const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err 
   }, [items, terms]);
   const body = useMemo(() => items?.map((it, i) => <Item key={i} it={it} terms={terms} />), [items, terms]);
   const kv = (k: string, v: ReactNode, mono?: boolean) => <div className="kv"><span>{k}</span><b className={mono ? 'mono' : undefined}>{v}</b></div>;
+  if (isGhost(m)) return (<><div className="hd-head"><h2 className="mono">{m.sid}</h2></div>
+    <div className="hx-scroll" data-testid="history-transcript">{det?.err ? <div className="hist-err" role="alert"><span>{det.err}</span><button type="button" className="hist-btn" onClick={onRetry}>Retry</button></div> : <div className="muted hist-empty">Loading transcript…</div>}</div></>);
   return (<>
     <div className="hd-head"><h2><Hl text={m.title || m.sid.slice(0, 8)} terms={terms} /></h2>{live ? <span className="hbadge live">live</span> : null}{m.auto ? <span className="hbadge">auto</span> : null}
       {onStar ? <Star on={!!m.bookmark} onClick={() => onStar(m, !m.bookmark)} className="hd-star" testid="history-star" /> : null}</div>
