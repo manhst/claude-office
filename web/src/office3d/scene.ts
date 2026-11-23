@@ -38,10 +38,10 @@ const SVG = {
   zoomIn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
   zoomOut: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11h14v2H5z"/></svg>',
   reset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.7 9h2.1A5 5 0 1 0 12 7v3L7.5 6 12 2z"/></svg>',
-  exit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V4h11v16H9v-3M4 12h12M8 8l-4 4 4 4"/></svg><span>Exit</span>',
+  exit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V4h11v16H9v-3M4 12h12M8 8l-4 4 4 4"/></svg><span>Thoát</span>',
 };
-const HINT = 'Drag to rotate · scroll to zoom · right-drag to pan · click a name to rename, change the avatar, see through their eyes or throw them to the crocodiles';
-const HINT_POV = 'Drag to look around · Esc or Exit restores the previous view';
+const HINT = 'Drag to rotate · scroll to zoom · right-drag to pan · click a name: đặt tên, avatar, nhìn từ nhân vật, ném cho cá sấu';
+const HINT_POV = 'Drag to look around · Esc or Thoát restores the previous view';
 /** Software rasterisers (SwiftShader/llvmpipe) can't afford shadows + MSAA. */
 function softwareGL() {
   try { const c = document.createElement('canvas').getContext('webgl2'); const e = c?.getExtension('WEBGL_debug_renderer_info');
@@ -86,7 +86,7 @@ export class OfficeScene {
         <button type="button" class="btn-3d" data-3d="zoom-in" title="Zoom in" aria-label="Zoom in">${SVG.zoomIn}</button>
         <button type="button" class="btn-3d" data-3d="zoom-out" title="Zoom out" aria-label="Zoom out">${SVG.zoomOut}</button>
         <button type="button" class="btn-3d" data-3d="reset" title="Reset view" aria-label="Reset view">${SVG.reset}</button>
-        <button type="button" class="btn-3d" data-3d="exit-pov" data-testid="office3d-pov-exit" title="Leave the character view" aria-label="Leave the character view">${SVG.exit}</button>
+        <button type="button" class="btn-3d" data-3d="exit-pov" data-testid="office3d-pov-exit" title="Thoát nhìn từ nhân vật" aria-label="Thoát nhìn từ nhân vật">${SVG.exit}</button>
       </div>
       <p class="office3d-hint">${HINT}</p>`;
     this.viewport = host.querySelector('.office3d-scene')!;
@@ -515,7 +515,7 @@ export class OfficeScene {
         n.idleKind = undefined;
         if (!n.el.classList.contains('boss-here')) {
           n.el.classList.add('boss-here');
-          const line = ['Boss incoming!', 'Sit up straight!', 'Phones away!', 'Look busy!'][Math.abs(hashBoss(id + now)) % 4];
+          const line = ['Sếp tới kìa!', 'Ngồi ngay ngắn!', 'Cất điện thoại!', 'Giả vờ code!'][Math.abs(hashBoss(id + now)) % 4];
           if (n.walker.phase === 'seated' || n.walker.phase === 'waiting') {
             n.bb = `boss|${line}`; n.el.classList.add('has-bubble'); n.bbEl.textContent = line;
           }

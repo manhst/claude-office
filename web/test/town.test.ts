@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LINES } from '../src/town/dialogue';
-import { agentPartnerId, BOSS_ID, BOSS_LOOK, BOSS_NAME, forceBoss, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, menuEnt, step, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
-import { ITOPS_SPOT, inPond, pondCenter, CAFE, TEA_STALL, BUILDING, ATM, ATM_SPOTS, GATE, PRINT, ROADS, crossesBuilding, waypoint, toWorld, fromWorld, PX, type Box } from '../src/town/map';
+import { agentPartnerId, BOSS_ID, BOSS_LOOK, BOSS_NAME, forceBoss, forceLayoff, GRASP_LIFT, GRASP_PLAN_DX, graspPlan, graspWorldFromCarrier, initialWorld, menuEnt, step, FAKE_SICK, throwIntoPond, problemKey, problemText, walkerHeldByLayoff, type AgentPrey, type World } from '../src/town/sim';
+import { MASSAGE_BEDS, BBQ_SEATS, ITOPS_SPOT, inPond, pondCenter, CAFE, TEA_STALL, BUILDING, ATM, ATM_SPOTS, GATE, PRINT, ROADS, crossesBuilding, waypoint, toWorld, fromWorld, PX, type Box } from '../src/town/map';
 import { FLOOR } from '../src/office3d/adapter';
 import { loadLooks, setIdent, agentKey, setCurrentLooks, currentName, currentLook } from '../src/town/looks';
 import { chibiSvg, PRESETS } from '../src/town/Avatar';
@@ -65,6 +65,19 @@ describe('town sim', () => {
   });
 });
 
+describe('fake sick day (Vietnamese line text)', () => {
+  it('a fakeSick excuse is caught at Xuka / Xém Nướng; an honest trip is not', () => {
+    expect(LINES.fakeSick.filter((l) => FAKE_SICK.test(l)).length / LINES.fakeSick.length).toBeGreaterThan(0.8);
+    expect(LINES.massageGo.filter((l) => FAKE_SICK.test(l)).length).toBeLessThanOrEqual(2);
+    const excuse = LINES.fakeSick.find((l) => FAKE_SICK.test(l))!, honest = LINES.massageGo.find((l) => !FAKE_SICK.test(l))!;
+    const at = (next: 'massage' | 'bbq', say: string): World => { const w = initialWorld(0), p = next === 'massage' ? MASSAGE_BEDS[0] : BBQ_SEATS[0];
+      return { ...w, ents: w.ents.map((e) => (e.id === 'npc-1' ? { ...e, x: p.x, y: p.y, tx: p.x, ty: p.y, act: 'walk' as const, next, say, sayUntil: 99_999 } : e)) }; };
+    for (const next of ['massage', 'bbq'] as const) {
+      expect(LINES.sickCaught).toContain(ent(step(at(next, excuse), 200, () => 0.5), 'npc-1').say);
+      expect(LINES.sickCaught).not.toContain(ent(step(at(next, honest), 200, () => 0.5), 'npc-1').say);
+    }
+  });
+});
 describe('Layoff the T-Rex', () => {
   it('force eat: Layoff chomps an idle NPC on the spot (comedic eaten → gone → respawn)', () => {
     let w = initialWorld(0);
@@ -190,7 +203,7 @@ describe('side characters walk around the building', () => {
     expect(waypoint({ x: 1400, y: 300 }, { x: 1500, y: 600 })).toEqual({ x: 1500, y: 600 });
   });
 });
-describe('visiting boss', () => {
+describe('visiting Sếp', () => {
   it('menuEnt includes the visiting boss even though initialWorld has no boss', () => {
     expect(initialWorld(0).ents.find((e) => e.kind === 'boss' || e.id === BOSS_ID)).toBeUndefined();
     expect(menuEnt(BOSS_ID)).toEqual({ name: BOSS_NAME, look: BOSS_LOOK });
@@ -236,10 +249,10 @@ describe('names and avatars (Phúc presets)', () => {
     expect(setIdent({}, 'k', { name: '', look: 'bad' })).toEqual({});
     expect(agentKey({ name: 'coder' })).toBe('agent:coder');
     const k = `npc:${BOSS_ID}`;
-    const saved = setIdent({}, k, { name: ' Big Boss ', look: 'male_07' });
-    expect(saved[k]).toEqual({ name: 'Big Boss', look: 'male_07' });
+    const saved = setIdent({}, k, { name: ' Sếp Lớn ', look: 'male_07' });
+    expect(saved[k]).toEqual({ name: 'Sếp Lớn', look: 'male_07' });
     setCurrentLooks(saved);
-    expect(currentName(k)).toBe('Big Boss');
+    expect(currentName(k)).toBe('Sếp Lớn');
     expect(currentLook(k)).toBe('male_07');
     setCurrentLooks({});
   });

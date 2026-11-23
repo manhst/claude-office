@@ -28,7 +28,7 @@ try {
   await pg.fill('[data-testid=editor-name]', 'Hùng Coder'); await pg.click('[data-testid=preset-male_05]'); await pg.waitForTimeout(200);
   await pg.locator('[data-testid=editor]').screenshot({ path: out('editor') }); done.push('editor');
   await pg.click('[data-testid=editor-save]');
-  await pg.locator('[data-testid=ent-npc-2] .name-3d').click(); await pg.click('[data-testid=ctx-edit]'); await pg.click('button:has-text("Female")'); await pg.click('[data-testid=preset-female_10]'); await pg.click('[data-testid=editor-save]');
+  await pg.locator('[data-testid=ent-npc-2] .name-3d').click(); await pg.click('[data-testid=ctx-edit]'); await pg.click('button:has-text("Nữ")'); await pg.click('[data-testid=preset-female_10]'); await pg.click('[data-testid=editor-save]');
   await pg.waitForTimeout(4000);
   if (!(await pg.locator('[data-testid^=office3d-agent-] .name-3d:has-text("Hùng Coder")').count())) errors.push('custom name not applied to existing agent');
   await pg.locator('[data-testid=office-view]').screenshot({ path: out('overview') }); done.push('overview');

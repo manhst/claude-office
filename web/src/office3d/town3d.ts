@@ -96,7 +96,7 @@ function cafe(ctx: TownCtx) {
   const shade = ctx.own(new THREE.MeshLambertMaterial({ color: '#fff4d6', emissive: '#ffd27a', emissiveIntensity: 0 }));
   for (const x of [-1, 1]) block(g, 0.3, 0.2, 0.3, shade, x, H - 0.25, 0, false); ctx.shades.push(shade);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffd9a0', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
-  sign(ctx, ICON.coffee, 'Crossian Cafe', 'coffee · iced milk coffee', '#2f7d6d', b.cx, H + 0.6, b.cz - D / 2 + 0.2, 'office3d-cafe', 'cafe');
+  sign(ctx, ICON.coffee, 'Crossian Cafe', 'cà phê · bạc xỉu', '#2f7d6d', b.cx, H + 0.6, b.cz - D / 2 + 0.2, 'office3d-cafe', 'cafe');
 }
 /** Xuka Massage: across the back street from Crossian Cafe, open front facing the street. Beds + towels + lanterns, PG. */
 function massage(ctx: TownCtx) {
@@ -123,7 +123,7 @@ function massage(ctx: TownCtx) {
   const shade = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd6e6', emissive: '#ff8fb8', emissiveIntensity: 0 }));
   for (const x of [-1.2, 0, 1.2]) block(g, 0.26, 0.34, 0.26, shade, x, H - 0.3, 0.6, false); ctx.shades.push(shade);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffc2da', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.5); g.add(l); ctx.lights.push(l); }
-  sign(ctx, ICON.spa, 'Xuka Massage', 'neck & shoulders · foot soak', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'office3d-massage', 'massage');
+  sign(ctx, ICON.spa, 'Xuka Mát xa', 'cổ vai gáy · ngâm chân', '#b0476f', b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'office3d-massage', 'massage');
 }
 /** BBQ grill: BBQ + crocodile-meat hotpot opposite the pond. Voxel like Crossian / Xuka. */
 function bbqGrill(ctx: TownCtx) {
@@ -155,7 +155,7 @@ function bbqGrill(ctx: TownCtx) {
   const shade = ctx.own(new THREE.MeshLambertMaterial({ color: '#ffd4a8', emissive: '#ff8a3d', emissiveIntensity: 0 }));
   for (const x of [-1.1, 0.2, 1.3]) block(g, 0.28, 0.28, 0.28, shade, x, H - 0.3, 0.4, false); ctx.shades.push(shade);
   if (!ctx.soft) { const l = new THREE.PointLight('#ffb070', 0, 9, 1.6); l.position.set(0, H - 0.4, 0.4); g.add(l); ctx.lights.push(l); }
-  sign(ctx, ICON.grill, 'BBQ Grill', 'BBQ · croc hotpot', accent, b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'office3d-bbq', 'bbq');
+  sign(ctx, ICON.grill, 'Xém Nướng', 'BBQ · lẩu cá sấu', accent, b.cx, H + 0.6, b.cz + D / 2 - 0.2, 'office3d-bbq', 'bbq');
 }
 /** Flower garden between Xuka and the BBQ grill — secret-affair hangout. */
 function garden(ctx: TownCtx) {
@@ -178,7 +178,7 @@ function garden(ctx: TownCtx) {
   }
   // low hedges at the edges
   for (const s of [-1, 1]) block(g, b.w - 0.4, 0.45, 0.22, '#4caf50', 0, 0.25, s * (b.d / 2 - 0.2));
-  sign(ctx, ICON.flower, 'Flower Garden', 'strolls · dates…?', '#ad1457', b.cx, 1.6, b.cz - b.d / 2 + 0.3, 'office3d-garden', 'garden');
+  sign(ctx, ICON.flower, 'Vườn hoa', 'đi bộ · hẹn hò…?', '#ad1457', b.cx, 1.6, b.cz - b.d / 2 + 0.3, 'office3d-garden', 'garden');
 }
 /** Sidewalk iced tea stall: plastic stools, a tea jug, a beer crate. */
 function teaStall(ctx: TownCtx) {
@@ -195,7 +195,7 @@ function teaStall(ctx: TownCtx) {
   block(g, 0.6, 0.35, 0.42, '#2e7d32', 1.7, 0.18, -0.7); for (let i = 0; i < 6; i++) block(g, 0.07, 0.18, 0.07, '#8bc34a', 1.5 + (i % 3) * 0.2, 0.44, -0.8 + Math.floor(i / 3) * 0.2, false);
   block(g, 0.06, 2.3, 0.06, '#5d5f6b', 0.1, 1.15, -0.3);
   for (let i = 0; i < 4; i++) block(g, 0.6, 0.06, 2.4, i % 2 ? '#f5d547' : '#e23d3d', -0.8 + i * 0.6, 2.32, -0.2, false);
-  sign(ctx, ICON.glass, 'Iced Tea Stall', '3k a glass', '#d89a2b', b.cx, 2.75, b.cz, 'office3d-iced-tea', 'iced-tea');
+  sign(ctx, ICON.glass, 'Trà đá vỉa hè', '3 nghìn một cốc', '#d89a2b', b.cx, 2.75, b.cz, 'office3d-iced-tea', 'iced-tea');
 }
 export interface Croc { g: THREE.Group; jaw: THREE.Group; a: number; r: number; v: number }
 function crocMesh(parent: THREE.Object3D): Croc {
@@ -218,7 +218,7 @@ function pond(ctx: TownCtx) {
   for (const [dx, dz] of [[-0.6, 1.6], [0.5, -2.2]]) block(ctx.group, 0.6, 0.02, 0.5, '#5fae4f', cx + dx, 0.18, cz + dz, false); // lily pads
   // warning sign
   block(ctx.group, 0.08, 1.2, 0.08, '#6b5544', cx + rx + 0.7, 0.6, cz - rz * 0.6); block(ctx.group, 0.7, 0.45, 0.05, '#f5d547', cx + rx + 0.7, 1.25, cz - rz * 0.6);
-  sign(ctx, ICON.croc, 'Crocodile Pond', 'do not feed', '#3f7d3a', cx, 1.4, cz - rz - 0.3, 'office3d-pond', 'pond');
+  sign(ctx, ICON.croc, 'Hồ cá sấu', 'cấm cho ăn', '#3f7d3a', cx, 1.4, cz - rz - 0.3, 'office3d-pond', 'pond');
   const crocs = [0, 1, 2].map((i) => { const c = crocMesh(ctx.group); c.a = i * 2.1; c.r = 0.45 + i * 0.12; c.v = 0.25 + i * 0.07; return c; });
   const splash = new THREE.Mesh(ctx.own(new THREE.RingGeometry(0.7, 0.9, 32)), ctx.own(new THREE.MeshBasicMaterial({ color: '#e8f8ff', transparent: true, side: THREE.DoubleSide })));
   splash.rotation.x = -Math.PI / 2; splash.position.set(cx, 0.2, cz); splash.visible = false; ctx.group.add(splash);
@@ -250,7 +250,7 @@ function smokeCorner(ctx: TownCtx) {
   // cigarette butt tray hint
   block(g, 0.2, 0.04, 0.2, '#c4cad3', 0.4, 0.96, 0.3, false);
   ctx.plant(g, b.w / 2 - 0.3, -b.d / 2 + 0.3, 0.7);
-  sign(ctx, ICON.smoke, 'Smoking Corner', 'cooler · rumors', '#64748b', b.cx, 1.8, b.cz, 'office3d-smoke', 'smoke');
+  sign(ctx, ICON.smoke, 'Góc hút thuốc', 'cooler · tin đồn', '#64748b', b.cx, 1.8, b.cz, 'office3d-smoke', 'smoke');
 }
 /** Outdoor gym + table tennis in the south yard. */
 function gymYard(ctx: TownCtx) {
@@ -265,7 +265,7 @@ function gymYard(ctx: TownCtx) {
   for (let i = 0; i < 4; i++) { block(g, 0.08, 0.08, 0.55, '#8a8f99', 1.3 + i * 0.3, 0.55, -0.6); block(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.85); block(g, 0.16, 0.16, 0.16, '#2a2a30', 1.3 + i * 0.3, 0.55, -0.35); }
   // mat
   block(g, 1.6, 0.03, 1.0, '#ef5350', 2.0, 0.04, 0.8, false);
-  sign(ctx, ICON.gym, 'Outdoor Gym', 'ping pong · weights', '#1565c0', b.cx, 1.7, b.cz - b.d / 2 + 0.2, 'office3d-gym', 'gym');
+  sign(ctx, ICON.gym, 'Gym ngoài trời', 'bóng bàn · tạ', '#1565c0', b.cx, 1.7, b.cz - b.d / 2 + 0.2, 'office3d-gym', 'gym');
 }
 /** ATM + snack machine near the iced tea stall. */
 function atmSnack(ctx: TownCtx) {
@@ -278,7 +278,7 @@ function atmSnack(ctx: TownCtx) {
   block(g, 0.85, 1.7, 0.55, '#e53935', 0.7, 0.85, -0.15); block(g, 0.7, 1.2, 0.04, material('#81d4fa', { transparent: true, opacity: 0.55 }), 0.7, 0.95, 0.14, false);
   for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) block(g, 0.14, 0.14, 0.1, ['#ffeb3b', '#8bc34a', '#ff9800', '#e91e63', '#fff', '#2196f3'][(r * 3 + c) % 6], 0.4 + c * 0.22, 1.35 - r * 0.3, 0.1, false);
   block(g, 0.35, 0.08, 0.12, '#1a1a1a', 0.7, 0.25, 0.15, false);
-  sign(ctx, ICON.atm, 'ATM · Snack', 'cash · instant noodles', '#c62828', b.cx, 2.1, b.cz, 'office3d-atm', 'atm');
+  sign(ctx, ICON.atm, 'ATM · Snack', 'rút tiền · mì tôm', '#c62828', b.cx, 2.1, b.cz, 'office3d-atm', 'atm');
 }
 /** Parking / security gate SW. */
 function securityGate(ctx: TownCtx) {
@@ -292,7 +292,7 @@ function securityGate(ctx: TownCtx) {
   block(g, 0.15, 0.9, 0.15, '#455a64', 0.2, 0.45, 0); block(g, 2.4, 0.1, 0.12, '#fdd835', 1.4, 0.95, 0); block(g, 2.4, 0.1, 0.04, '#212121', 1.4, 0.95, 0.02, false);
   // parking lines
   for (let i = 0; i < 3; i++) block(g, 0.08, 0.02, 1.0, '#ffffff', 0.6 + i * 0.9, 0.03, 0.3, false);
-  sign(ctx, ICON.gate, 'Security Gate', 'parking · sign in', '#455a64', b.cx, 2.4, b.cz, 'office3d-gate', 'gate');
+  sign(ctx, ICON.gate, 'Cổng bảo vệ', 'đỗ xe · xin vào', '#455a64', b.cx, 2.4, b.cz, 'office3d-gate', 'gate');
 }
 /** Glass outdoor meeting pod — fake meetings / naps. */
 function meetingPod(ctx: TownCtx) {
@@ -311,7 +311,7 @@ function meetingPod(ctx: TownCtx) {
   }
   // laptop decoy
   block(g, 0.35, 0.02, 0.25, '#263238', 0.15, 0.78, 0.1, false); block(g, 0.35, 0.22, 0.02, glowMaterial('#4fc3f7'), 0.15, 0.9, -0.02, false);
-  sign(ctx, ICON.pod, 'Meeting Pod', 'fake meetings · naps', '#0288d1', b.cx, 2.6, b.cz, 'office3d-pod', 'pod');
+  sign(ctx, ICON.pod, 'Pod họp ngoài', 'meeting giả · ngủ', '#0288d1', b.cx, 2.6, b.cz, 'office3d-pod', 'pod');
 }
 
 /** Beer stall opposite parking/gate across the front street. */
@@ -339,7 +339,7 @@ function beerStall(ctx: TownCtx) {
   }
   // signboard
   block(g, 1.8, 0.45, 0.06, accent, 0, 2.35, -b.d / 2 + 0.15, false);
-  sign(ctx, ICON.glass, 'Beer Stall', 'draft beer · roasted peanuts', accent, b.cx, 2.9, b.cz - b.d / 2 + 0.2, 'office3d-beer-stall', 'beer-stall');
+  sign(ctx, ICON.glass, 'Bia Hải Xồm', 'bia hơi · lạc rang', accent, b.cx, 2.9, b.cz - b.d / 2 + 0.2, 'office3d-beer-stall', 'beer-stall');
 }
 
 /** Printer + photocopier inside the office: back/north wall, by the window right of the back door; fronts face into the room. */
@@ -355,7 +355,7 @@ function printKiosk(ctx: TownCtx) {
   block(g, 0.5, 0.02, 0.4, '#fafafa', 1.0, 1.12, 0.05, false);
   // paper stack mess
   for (let i = 0; i < 3; i++) block(g, 0.35, 0.02, 0.28, '#fff', -0.1 + i * 0.05, 0.2 + i * 0.03, 0.5, false);
-  sign(ctx, ICON.print, 'Printer · Copier', 'paper jams · the boss\'s payslip?', '#546e7a', b.cx, 1.9, b.cz, 'office3d-print', 'print');
+  sign(ctx, ICON.print, 'Máy in · photocopy', 'kẹt giấy · lương sếp?', '#546e7a', b.cx, 1.9, b.cz, 'office3d-print', 'print');
 }
 
 // ---------- side characters ----------
@@ -416,8 +416,8 @@ export function liveEye(head: THREE.Object3D, eyes: THREE.Object3D[], push: numb
 interface Fig { e: Ent; g: THREE.Group; body?: Body; pet?: Pet; trex?: Trex; el: HTMLDivElement; bb: HTMLSpanElement; nameEl: HTMLElement; subEl: HTMLElement; label: CSS2DObject;
   lookId: string; cycle: number; x: number; z: number; heading: number; fallFrom?: [number, number]; bubble: string }
 /** Short act bit under the name — only when it adds info beyond the name. */
-const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'coffee', tea: 'iced tea', bark: 'barking', fight: 'arguing', report: 'alert', massage: 'massage', knocked: 'knocked down', bbq: 'BBQ', romance: 'dating', smoke: 'smoking', gym: 'gym', atm: 'ATM', gate: 'gate', pod: 'meeting pod', print: 'printer', drama: 'drama', beer: 'beer stall', wobble: 'tipsy', shipper: 'shipper', hunt: 'hunting', chomp: 'eating', carry: 'carrying', carried: 'carried off' };
-const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'dog', cat: 'cat', trex: 'T-Rex', boss: 'boss', shipper: 'shipper' };
+const ACT_LABEL: Partial<Record<Ent['act'], string>> = { drink: 'cà phê', tea: 'trà đá', bark: 'sủa', fight: 'cãi', report: 'alert', massage: 'mát xa', knocked: 'ngã', bbq: 'BBQ', romance: 'hẹn hò', smoke: 'hút thuốc', gym: 'gym', atm: 'ATM', gate: 'cổng', pod: 'pod họp', print: 'máy in', drama: 'drama', beer: 'Hải Xồm', wobble: 'say', shipper: 'shipper', hunt: 'săn', chomp: 'ăn', carry: 'tha', carried: 'bị tha' };
+const ROLE: Partial<Record<Ent['kind'], string>> = { dog: 'chó', cat: 'mèo', trex: 'T-Rex', boss: 'sếp', shipper: 'shipper' };
 
 export class TownLayer {
   private world: World; private lastStep = 0; private figs = new Map<string, Fig>(); private itops?: ItOpsStatus; private eatUntil = 0;
@@ -506,7 +506,7 @@ export class TownLayer {
   setItops(s?: ItOpsStatus) {
     this.itops = s;
     const un = !s || s.mode === 'unconfigured', st = un ? 'idle' : s!.state;
-    const label = un ? 'not configured' : st === 'alert' ? `${s!.alerts.length} ${s!.alerts.length === 1 ? 'alert' : 'alerts'}` : st === 'error' ? 'can\'t read metrics' : st === 'checking' ? 'checking…' : 'all good';
+    const label = un ? 'chưa cấu hình' : st === 'alert' ? `${s!.alerts.length} cảnh báo` : st === 'error' ? 'lỗi đọc metrics' : st === 'checking' ? 'đang kiểm tra…' : 'ổn định';
     const mode = s?.mode === 'demo' ? 'Monitor (demo)' : s?.mode === 'prometheus' ? 'Monitor · Prometheus' : 'Monitor';
     const show = monitorLabelVisible(s);
     const key = `${st}|${label}|${mode}|${s?.endpoint ?? ''}|${show}`; if (key === this.nocKey) return; this.nocKey = key;

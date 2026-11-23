@@ -48,12 +48,15 @@ export function townRunSpeed(): number {
 /**
  * Office walker speed for this goal.
  * - Active agent (thinking/working/talking) returning home → max run.
- * - Idle amenity / outdoor plans (cafe, massage, garden, …) → half of configurable ambient run.
+ * - A pair off to a garden date or a fight → the full ambient run, never below WALK_SPEED: at half speed the garden trip ate half of the
+ *   36 s idle slot (e65b728), so couples barely met before the next slot sent them elsewhere.
+ * - Other idle amenity / outdoor plans (cafe, massage, …) → half of configurable ambient run.
  * - Visit colleague / free agent walking home → WALK_SPEED (unchanged).
  */
 export function walkerSpeedFor(goal: Goal, state: string): number {
   const active = state === 'thinking' || state === 'working' || state === 'talking';
   if (goal.home && active) return RUN_SPEED_MAX;
+  if (!goal.home && /^(romance|fight):/.test(goal.key)) return Math.max(WALK_SPEED, loadRunSpeed());
   if (!goal.home && !goal.key.startsWith('visit:')) return loadRunSpeed() / 2;
   return WALK_SPEED;
 }
