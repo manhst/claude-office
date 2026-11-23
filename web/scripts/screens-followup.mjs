@@ -33,7 +33,7 @@ try {
 
   // Agent at Xuka (walk there) — wait for an agent with phase waiting at massage, or any massage act
   await pg.waitForFunction(() => {
-    const a = [...document.querySelectorAll('[data-testid^=office3d-agent-]')].some((el) => el.querySelector('.name-3d small')?.textContent === 'massage' || el.className.includes(''));
+    const a = [...document.querySelectorAll('[data-testid^=office3d-agent-]')].some((el) => el.querySelector('.name-3d small')?.textContent === 'mát xa' || el.className.includes(''));
     const n = document.querySelectorAll('[data-act=massage]').length > 0;
     // agents don't set data-act; look for lying agent near massage sign by checking idle — fall back to NPC massage
     return n || a;

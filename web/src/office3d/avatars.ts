@@ -16,10 +16,10 @@
   const MALE_HAIR = ['spiky', 'neat', 'messy', 'slicked'];
   const FEMALE_HAIR = ['short', 'long', 'pigtails', 'ponytail', 'bun', 'curly', 'bangs'];
   const HAIR_STYLE_NAMES = {
-    short: 'Shoulder-length', long: 'Long and straight', pigtails: 'Pigtails', ponytail: 'Ponytail', bun: 'Top bun', curly: 'Long and curly',
-    bangs: 'Long with bangs', spiky: 'Spiky', neat: 'Short and neat', messy: 'Messy', slicked: 'Slicked back',
+    short: 'Ngắn ngang vai', long: 'Dài thẳng', pigtails: 'Buộc hai bên', ponytail: 'Đuôi ngựa', bun: 'Búi tó', curly: 'Dài xoăn',
+    bangs: 'Dài mái bằng', spiky: 'Tóc dựng', neat: 'Ngắn gọn gàng', messy: 'Tóc rối', slicked: 'Vuốt ngược',
   };
-  const ACCESSORY_NAMES = { glasses: 'Glasses', star: 'Star clip', headphones: 'Headphones', flower: 'Flower pin', bow: 'Bow', clip: 'Hair clip', earrings: 'Earrings' };
+  const ACCESSORY_NAMES = { glasses: 'Kính', star: 'Kẹp sao', headphones: 'Tai nghe', flower: 'Hoa cài', bow: 'Nơ', clip: 'Kẹp tóc', earrings: 'Khuyên tai' };
 
   const CAP = 'M42 64 Q38 18 80 16 Q122 18 118 64 Q113 46 101 41 Q80 35 59 41 Q47 46 42 64 Z ';
   const FRINGE = {
@@ -236,26 +236,26 @@
   // 20 ready-made presets: pick one, nothing else to draw.
   const preset = (id, gender, name, hairStyle, hair, hair2, eyes, shirt, accent, accessories) => ({ id, gender, name, appearance: { gender, hairStyle, hair, hair2, eyes, shirt, accent, accessories } });
   const PRESETS = [
-    preset('male_01', 'male', 'Coder in glasses', 'neat', '#2b2b33', '#4a4a58', '#5a4632', '#e9eef5', '#3b6fd1', ['glasses']),
-    preset('male_02', 'male', 'Spiky and sporty', 'spiky', '#4f6bff', '#a07bff', '#3d5afe', '#ebe8ff', '#4f6bff', ['headphones']),
-    preset('male_03', 'male', 'Sharp suit', 'slicked', '#1d1d24', '#3a3a48', '#6b4a2e', '#2f3550', '#c0392b', []),
-    preset('male_04', 'male', 'Messy and playful', 'messy', '#c8643f', '#e9925f', '#b4532a', '#fff4e6', '#e67e22', []),
-    preset('male_05', 'male', 'Cool platinum', 'spiky', '#e8e9f2', '#b9bdd6', '#4aa3df', '#1f2a44', '#4aa3df', ['earrings']),
-    preset('male_06', 'male', 'Chill green', 'messy', '#2e8b57', '#7ccf9a', '#2e7d4f', '#effaf3', '#2e8b57', ['headphones']),
-    preset('male_07', 'male', 'Brown-haired scholar', 'neat', '#6b4423', '#9a6a3f', '#6b4423', '#f5efe6', '#8e5a2b', ['glasses']),
-    preset('male_08', 'male', 'Fiery redhead', 'spiky', '#d63a3a', '#ff8a65', '#c62828', '#ffffff', '#d63a3a', []),
-    preset('male_09', 'male', 'Mysterious purple', 'slicked', '#5b3c88', '#9b6fd6', '#7e57c2', '#2b2440', '#9b6fd6', ['earrings']),
-    preset('male_10', 'male', 'Sunny blond', 'messy', '#f2c14e', '#ffe08a', '#e09f1f', '#eaf4ff', '#3b82f6', ['clip']),
-    preset('female_01', 'female', 'Dreamy lilac', 'long', '#86a8ff', '#c39bff', '#5b6cff', '#33406f', '#c39bff', ['star']),
-    preset('female_02', 'female', 'Ginger in round glasses', 'short', '#c8643f', '#e9925f', '#b4532a', '#f4e7da', '#d97757', ['glasses']),
-    preset('female_03', 'female', 'Teal pigtails', 'pigtails', '#2d2d34', '#169c7c', '#10a37f', '#e6f6f0', '#10a37f', ['flower']),
-    preset('female_04', 'female', 'Pink ponytail', 'ponytail', '#ff8fb1', '#ffc2d4', '#e0558a', '#fff0f5', '#e0558a', ['bow']),
-    preset('female_05', 'female', 'Elegant bun', 'bun', '#23232b', '#45455a', '#5a3e2b', '#f2efe9', '#b23a48', ['earrings']),
-    preset('female_06', 'female', 'Warm brown curls', 'curly', '#7a4a2a', '#b07a4f', '#7a4a2a', '#fdf3e7', '#c06c3e', ['flower']),
-    preset('female_07', 'female', 'Mint bob', 'short', '#7fd6c2', '#c3f0e6', '#1fa38a', '#eefaf7', '#1fa38a', ['clip']),
-    preset('female_08', 'female', 'Classic bangs', 'bangs', '#18181f', '#3a3a4a', '#3b2f2f', '#fbe9ec', '#d6336c', ['bow']),
-    preset('female_09', 'female', 'Sporty ponytail', 'ponytail', '#f5c84c', '#ffe9a3', '#d48806', '#eaf3ff', '#3b82f6', ['headphones']),
-    preset('female_10', 'female', 'Strawberry pigtails', 'pigtails', '#d6455d', '#ff8da1', '#c2185b', '#ffffff', '#d6455d', ['bow']),
+    preset('male_01', 'male', 'Coder kính cận', 'neat', '#2b2b33', '#4a4a58', '#5a4632', '#e9eef5', '#3b6fd1', ['glasses']),
+    preset('male_02', 'male', 'Tóc dựng năng động', 'spiky', '#4f6bff', '#a07bff', '#3d5afe', '#ebe8ff', '#4f6bff', ['headphones']),
+    preset('male_03', 'male', 'Vest lịch lãm', 'slicked', '#1d1d24', '#3a3a48', '#6b4a2e', '#2f3550', '#c0392b', []),
+    preset('male_04', 'male', 'Tóc rối tinh nghịch', 'messy', '#c8643f', '#e9925f', '#b4532a', '#fff4e6', '#e67e22', []),
+    preset('male_05', 'male', 'Bạch kim lạnh lùng', 'spiky', '#e8e9f2', '#b9bdd6', '#4aa3df', '#1f2a44', '#4aa3df', ['earrings']),
+    preset('male_06', 'male', 'Xanh lá thư thái', 'messy', '#2e8b57', '#7ccf9a', '#2e7d4f', '#effaf3', '#2e8b57', ['headphones']),
+    preset('male_07', 'male', 'Học giả tóc nâu', 'neat', '#6b4423', '#9a6a3f', '#6b4423', '#f5efe6', '#8e5a2b', ['glasses']),
+    preset('male_08', 'male', 'Tóc đỏ nhiệt huyết', 'spiky', '#d63a3a', '#ff8a65', '#c62828', '#ffffff', '#d63a3a', []),
+    preset('male_09', 'male', 'Tím bí ẩn', 'slicked', '#5b3c88', '#9b6fd6', '#7e57c2', '#2b2440', '#9b6fd6', ['earrings']),
+    preset('male_10', 'male', 'Vàng nắng vui vẻ', 'messy', '#f2c14e', '#ffe08a', '#e09f1f', '#eaf4ff', '#3b82f6', ['clip']),
+    preset('female_01', 'female', 'Tím mộng mơ', 'long', '#86a8ff', '#c39bff', '#5b6cff', '#33406f', '#c39bff', ['star']),
+    preset('female_02', 'female', 'Tóc cam kính tròn', 'short', '#c8643f', '#e9925f', '#b4532a', '#f4e7da', '#d97757', ['glasses']),
+    preset('female_03', 'female', 'Hai bím xanh ngọc', 'pigtails', '#2d2d34', '#169c7c', '#10a37f', '#e6f6f0', '#10a37f', ['flower']),
+    preset('female_04', 'female', 'Đuôi ngựa hồng', 'ponytail', '#ff8fb1', '#ffc2d4', '#e0558a', '#fff0f5', '#e0558a', ['bow']),
+    preset('female_05', 'female', 'Búi tóc thanh lịch', 'bun', '#23232b', '#45455a', '#5a3e2b', '#f2efe9', '#b23a48', ['earrings']),
+    preset('female_06', 'female', 'Xoăn nâu ấm áp', 'curly', '#7a4a2a', '#b07a4f', '#7a4a2a', '#fdf3e7', '#c06c3e', ['flower']),
+    preset('female_07', 'female', 'Bob bạc hà', 'short', '#7fd6c2', '#c3f0e6', '#1fa38a', '#eefaf7', '#1fa38a', ['clip']),
+    preset('female_08', 'female', 'Mái bằng truyền thống', 'bangs', '#18181f', '#3a3a4a', '#3b2f2f', '#fbe9ec', '#d6336c', ['bow']),
+    preset('female_09', 'female', 'Đuôi ngựa thể thao', 'ponytail', '#f5c84c', '#ffe9a3', '#d48806', '#eaf3ff', '#3b82f6', ['headphones']),
+    preset('female_10', 'female', 'Hai bím đỏ dâu', 'pigtails', '#d6455d', '#ff8da1', '#c2185b', '#ffffff', '#d6455d', ['bow']),
   ];
 
 export { drawAvatar, normalizeLook, PRESETS, MALE_HAIR, FEMALE_HAIR, HAIR_STYLE_NAMES, ACCESSORY_NAMES };

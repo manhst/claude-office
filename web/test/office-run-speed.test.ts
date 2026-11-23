@@ -55,4 +55,12 @@ describe('officeRunSpeed', () => {
     expect(walkerSpeedFor(cafe, 'done')).toBeCloseTo(1.4, 5);
     expect(WALK_SPEED).toBe(1.6);
   });
+
+  it('walkerSpeedFor: a pair off to a garden date or a fight hurries at the full setting, never slower than walking', () => {
+    const date: Goal = { key: 'romance:9:1:a:b', to: [0, 0, -15], home: false, face: 0 }, fight: Goal = { ...date, key: 'fight:9:0:a:b' };
+    saveRunSpeed(2.8);
+    expect(walkerSpeedFor(date, 'idle')).toBeCloseTo(2.8, 5); expect(walkerSpeedFor(fight, 'done')).toBeCloseTo(2.8, 5);
+    saveRunSpeed(0.1);
+    expect(walkerSpeedFor(date, 'idle')).toBe(WALK_SPEED); expect(walkerSpeedFor(cafe, 'idle')).toBeCloseTo(0.05, 5);
+  });
 });

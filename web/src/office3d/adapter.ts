@@ -128,6 +128,8 @@ export const PRINT_AGENT_SPOTS: Spot[] = PRINT_SPOTS.map((p) => { const [x, z] =
 /** Outdoor amenity meet centers for gossip / drama pairs. */
 export const DRAMA_CENTERS: Vec3[] = [...SMOKE_SPOTS, ...POD_SPOTS].map((p) => { const [x, z] = toWorld(p); return [x, 0, z] as Vec3; });
 
+/** idlePlans roll (0-99) from which the lead of a pair goes on a garden date / picks a fight. */
+export const PAIR_FROM = { fight: 86, romance: 93 };
 export type IdleKind = 'coffee' | 'pool' | 'chat' | 'fight' | 'massage' | 'bbq' | 'romance' | 'smoke' | 'gym' | 'atm' | 'gate' | 'pod' | 'print' | 'beer';
 export interface IdlePlan { kind: IdleKind; key: string; to: Vec3; face: number; partner?: string; first?: boolean }
 /** Free agents pick a new activity every slot. Longer slots = fewer chatter bursts. */
@@ -161,9 +163,9 @@ export function idlePlans(agents: Record<string, AgentUI>, order: string[], mess
     if (r < 81) { if (print < PRINT_AGENT_SPOTS.length) out[id] = { kind: 'print', key: `print:${slot}:${print}`, ...PRINT_AGENT_SPOTS[print++] }; continue; }
     const partner = ids.find((x) => !taken.has(x)); if (!partner) continue;
     taken.add(partner);
-    const kind: IdleKind = r >= 95 ? 'romance' : r >= 90 ? 'fight' : r >= 85 ? 'chat' : 'chat';
-    // 81-100: pairs — occasionally gossip at smoke/pod (drama chat) via DRAMA_CENTERS when r in 81..84 range already handled; use smoke-ish for mid
-    const useDrama = r >= 81 && r < 85;
+    // 81-99 pairs: 81-83 gossip at smoke/pod (DRAMA_CENTERS), 84-85 chat, 86-92 fight, 93-99 garden date (the 7% / 7% of 7498bcb; fb03191 cut both to 5%).
+    const kind: IdleKind = r >= PAIR_FROM.romance ? 'romance' : r >= PAIR_FROM.fight ? 'fight' : 'chat';
+    const useDrama = r < 84;
     const spots = kind === 'fight' ? FIGHT_SPOTS : kind === 'romance' ? ROMANCE_CENTERS : useDrama ? DRAMA_CENTERS : CHAT_SPOTS;
     const gap = kind === 'fight' ? PAIR_GAP.fight : kind === 'romance' ? PAIR_GAP.romance : PAIR_GAP.chat;
     const si = (pairs++ + slot) % spots.length, c = spots[si], key = `${kind}:${slot}:${si}:${id}:${partner}`;

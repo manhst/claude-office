@@ -9,14 +9,14 @@ export type VType =
   | 'motorbike' | 'bicycle' | 'grab-bike' | 'car' | 'taxi' | 'pickup' | 'bus' | 'truck' | 'container' | 'cement-mixer' | 'garbage-truck'
   | 'crane' | 'road-roller' | 'excavator' | 'bulldozer' | 'tank' | 'cargo-trike' | 'ambulance' | 'fire-truck' | 'police' | 'road-inspector' | 'ice-cream-van';
 export const VEHICLES: Record<VType, { name: string; len: number; speed: number }> = {
-  motorbike: { name: 'Motorbike', len: 34, speed: 230 }, bicycle: { name: 'Bicycle', len: 30, speed: 95 }, 'grab-bike': { name: 'Grab bike', len: 34, speed: 210 },
-  car: { name: 'Car', len: 70, speed: 240 }, taxi: { name: 'Taxi', len: 70, speed: 250 }, pickup: { name: 'Pickup', len: 80, speed: 220 },
-  bus: { name: 'Bus', len: 150, speed: 150 }, truck: { name: 'Truck', len: 120, speed: 160 }, container: { name: 'Container truck', len: 180, speed: 140 },
-  'cement-mixer': { name: 'Cement mixer', len: 120, speed: 120 }, 'garbage-truck': { name: 'Garbage truck', len: 110, speed: 110 }, crane: { name: 'Crane', len: 140, speed: 110 },
-  'road-roller': { name: 'Road roller', len: 80, speed: 45 }, excavator: { name: 'Excavator', len: 100, speed: 60 }, bulldozer: { name: 'Bulldozer', len: 90, speed: 60 },
-  tank: { name: 'Tank', len: 120, speed: 90 }, 'cargo-trike': { name: 'Cargo trike', len: 60, speed: 100 }, ambulance: { name: 'Ambulance', len: 90, speed: 280 },
-  'fire-truck': { name: 'Fire truck', len: 130, speed: 260 }, police: { name: 'Police car', len: 75, speed: 270 }, 'road-inspector': { name: 'Road inspection', len: 75, speed: 130 },
-  'ice-cream-van': { name: 'Ice cream van', len: 70, speed: 90 },
+  motorbike: { name: 'Xe máy', len: 34, speed: 230 }, bicycle: { name: 'Xe đạp', len: 30, speed: 95 }, 'grab-bike': { name: 'Xe ôm Grab', len: 34, speed: 210 },
+  car: { name: 'Ô tô con', len: 70, speed: 240 }, taxi: { name: 'Taxi', len: 70, speed: 250 }, pickup: { name: 'Xe bán tải', len: 80, speed: 220 },
+  bus: { name: 'Xe buýt', len: 150, speed: 150 }, truck: { name: 'Ô tô tải', len: 120, speed: 160 }, container: { name: 'Xe container', len: 180, speed: 140 },
+  'cement-mixer': { name: 'Xe trộn bê tông', len: 120, speed: 120 }, 'garbage-truck': { name: 'Xe rác', len: 110, speed: 110 }, crane: { name: 'Xe cẩu', len: 140, speed: 110 },
+  'road-roller': { name: 'Xe lu', len: 80, speed: 45 }, excavator: { name: 'Máy xúc', len: 100, speed: 60 }, bulldozer: { name: 'Máy ủi', len: 90, speed: 60 },
+  tank: { name: 'Xe tăng', len: 120, speed: 90 }, 'cargo-trike': { name: 'Xe ba gác', len: 60, speed: 100 }, ambulance: { name: 'Xe cứu thương', len: 90, speed: 280 },
+  'fire-truck': { name: 'Xe cứu hỏa', len: 130, speed: 260 }, police: { name: 'Xe cảnh sát', len: 75, speed: 270 }, 'road-inspector': { name: 'Xe kiểm tra đường', len: 75, speed: 130 },
+  'ice-cream-van': { name: 'Xe bán kem', len: 70, speed: 90 },
 };
 /** Random traffic mix (service vehicles mostly arrive on call, but drive by now and then too). */
 const MIX: VType[] = ['motorbike', 'motorbike', 'motorbike', 'grab-bike', 'grab-bike', 'bicycle', 'car', 'car', 'taxi', 'pickup', 'bus', 'truck', 'container', 'cement-mixer', 'garbage-truck', 'crane', 'road-roller', 'excavator', 'bulldozer', 'tank', 'cargo-trike', 'cargo-trike', 'ambulance', 'police', 'road-inspector', 'ice-cream-van'];

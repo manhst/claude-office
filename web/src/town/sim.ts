@@ -64,14 +64,16 @@ export function problemKey(s?: ItOpsStatus): string | undefined {
   return undefined;
 }
 export function problemText(s: ItOpsStatus): string {
-  if (s.state === 'error') return `Can't read metrics: ${s.error ?? 'error'}`;
+  if (s.state === 'error') return `Không đọc được metrics: ${s.error ?? 'lỗi'}`;
   const a = s.alerts[0]; const more = s.alerts.length > 1 ? ` (+${s.alerts.length - 1})` : '';
   return `${LINES.itopsReport[0]} ${a.name}${a.detail ? ` · ${a.detail}` : ''}${more}`;
 }
 /** Visiting boss — spawned for a short walkthrough, not in initialWorld. */
 export const BOSS_ID = 'boss-walk';
-export const BOSS_NAME = 'Boss';
+export const BOSS_NAME = 'Sếp';
 export const BOSS_LOOK = 'male_02';
+/** A fakeSick excuse (Vietnamese line text): the NPC who said it gets caught at Xuka / the BBQ grill. */
+export const FAKE_SICK = /ốm|nghỉ|sốt|cúm|leave/i;
 const POND_ACTS: ReadonlySet<Act> = new Set(['fall', 'eaten', 'gone']);
 export function menuEnt(id: string): { name: string; look?: string } | undefined {
   if (id === BOSS_ID) return { name: BOSS_NAME, look: BOSS_LOOK };
@@ -247,8 +249,8 @@ function arrive(e: Ent, now: number, r: () => number): Ent {
     case 'drink': return say({ ...e, act: 'drink', until: now + 8000 + r() * 5000 }, pick(LINES.coffee, r), now);
     case 'tea': return say({ ...e, act: 'tea', until: now + 8000 + r() * 5000 }, pick(LINES.tea, r), now);
     case 'chat': return say({ ...e, act: 'chat', until: now + 7500 }, pick(r() < 0.15 ? LINES.gossipBoss : r() < 0.28 ? LINES.trollPR : r() < 0.4 ? LINES.ghostWork : r() < 0.5 ? LINES.remoteWar : LINES.chat, r), now, 7500);
-    case 'massage': return say({ ...e, act: 'massage', until: now + 10000 + r() * 6000 }, pick(e.say && /sick|fever|flu|leave|day off/i.test(e.say) ? LINES.sickCaught : LINES.massageTalk, r), now, 6500);
-    case 'bbq': return say({ ...e, act: 'bbq', until: now + 10000 + r() * 6000 }, pick(e.say && /sick|fever|flu|leave|day off/i.test(e.say) ? LINES.sickCaught : LINES.bbqTalk, r), now, 6500);
+    case 'massage': return say({ ...e, act: 'massage', until: now + 10000 + r() * 6000 }, pick(e.say && FAKE_SICK.test(e.say) ? LINES.sickCaught : LINES.massageTalk, r), now, 6500);
+    case 'bbq': return say({ ...e, act: 'bbq', until: now + 10000 + r() * 6000 }, pick(e.say && FAKE_SICK.test(e.say) ? LINES.sickCaught : LINES.bbqTalk, r), now, 6500);
     case 'romance': return say({ ...e, act: 'romance', until: now + 14000 + r() * 6000 }, pick(LINES.romance, r), now, 7000);
     case 'smoke': return say({ ...e, act: 'smoke', until: now + 9000 + r() * 5000 }, pick(r() < 0.45 ? LINES.gossipBoss : LINES.smokeTalk, r), now, 6500);
     case 'gym': return say({ ...e, act: 'gym', until: now + 9000 + r() * 5000 }, pick(LINES.gymTalk, r), now, 6500);
@@ -272,10 +274,10 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
   if (!key) reportedKey = undefined;
   let layoffEvent = w.layoffEvent;
   const payday = isPayday(now);
-  // Occasional rain (~8% chance to start when clear; lasts 20–35s).
+  // Weather: always clear now (rain disabled).
   let weather: 'clear' | 'rain' = w.weather === 'rain' && (w.weatherUntil ?? 0) > now ? 'rain' : 'clear';
   let weatherUntil = w.weatherUntil;
-  if (weather === 'clear' && r() < 0.008) { weather = 'rain'; weatherUntil = now + 20_000 + r() * 15_000; }
+  // Rain is off (user request 2026-11-23): never starts; a stored rainy world clears below.
   if (weather === 'rain' && (weatherUntil ?? 0) <= now) { weather = 'clear'; weatherUntil = undefined; }
   let bossUntil = w.bossUntil;
   const dog0 = w.ents.find((z) => z.kind === 'dog');
@@ -322,6 +324,8 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
       if (now <= e.until) return e;
       return { ...e, act: 'idle' as const, partner: undefined, until: now + (payday ? 10_000 + r() * 10_000 : 25_000 + r() * 25_000), say: undefined };
     }
+    // First one at the garden waits for the date (who is still walking over) instead of leaving before they ever meet.
+    if (e.act === 'romance' && e.partner && e.until < now + 14_000) { const p = w.ents.find((z) => z.id === e.partner); if (p?.act === 'walk' && p.next === 'romance' && p.partner === e.id) e = { ...e, until: now + 14_000 }; }
     if (e.act === 'massage' && now <= e.until && !e.say && r() < 0.025) return say(e, pick(LINES.massageTalk, r), now, 5500);
     if (e.act === 'bbq' && now <= e.until && !e.say && r() < 0.03) return say(e, pick(LINES.bbqTalk, r), now, 5500);
     if (e.act === 'romance' && now <= e.until && !e.say && r() < 0.04) return say(e, pick(LINES.romance, r), now, 6500);
@@ -408,8 +412,11 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     }
   }
 
-  // Rare secret garden affair: two free idle NPCs sneak off together.
-  let free = ents.filter((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner && now > e.until - 50);
+  // Rare secret garden affair: two free idle NPCs sneak off together. Free = idle at the start of this step and, after it, still idle or
+  // just off on a fresh solo errand (decide() already ran for anyone whose idle time ran out, so filtering on act === 'idle' alone never sees them).
+  const idle0 = new Set(w.ents.filter((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner).map((e) => e.id));
+  const freeNpc = (e: Ent) => e.kind === 'npc' && idle0.has(e.id) && !e.partner && !e.topic && (e.act === 'idle' || (e.act === 'walk' && e.next !== 'fall'));
+  let free = ents.filter(freeNpc);
   if (weather === 'clear' && free.length >= 2 && r() < 0.01) {
     const a = free[0], b = free[1], c = pick(ROMANCE_SPOTS, r), gap = 14;
     ents = ents.map((e) => {
@@ -419,7 +426,7 @@ export function step(w: World, now: number, r: () => number, itops?: ItOpsStatus
     });
   }
   // Occasional office-drama pair walk to an amenity and argue / gossip (paced bubbles).
-  free = ents.filter((e) => e.kind === 'npc' && e.act === 'idle' && !e.partner && now > e.until - 50);
+  free = ents.filter(freeNpc);
   if (free.length >= 2 && r() < 0.012) {
     const kinds = ['smoke', 'gym', 'atm', 'print', 'pod', 'gate'] as const;
     const kind = pick(kinds, r);
