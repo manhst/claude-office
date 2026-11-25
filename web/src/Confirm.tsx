@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
-/** A pending confirmation: OK runs `run`; cancel label defaults to "Cancel". */
-export type Ask = { title: string; body: ReactNode; ok: string; cancel?: string; danger?: boolean; run: () => void };
+/** A pending confirmation: OK runs `run`; cancel label defaults to "Cancel". block: body holds block content (lists…), rendered in a div, wider box. */
+export type Ask = { title: string; body: ReactNode; ok: string; cancel?: string; danger?: boolean; block?: boolean; run: () => void };
 const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 /** Small modal confirm shared by the Claude config and History tabs (both stay mounted, hidden when not shown).
  *  Esc / backdrop = cancel; focus starts on Cancel, Tab stays inside, and on close focus goes back to the element focused when it first showed
@@ -27,8 +27,8 @@ export function Confirm({ a, onClose, active = true }: { a: Ask; onClose: () => 
     document.addEventListener('keydown', key, true); document.addEventListener('focusin', into);
     return () => { document.removeEventListener('keydown', key, true); document.removeEventListener('focusin', into); };
   }, [active]);
-  return <div className="editor-back" onClick={onClose}><div ref={box} className="editor cc-confirm" role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`} onClick={(e) => e.stopPropagation()} data-testid="cc-confirm">
-    <h3 id={`${id}-t`}>{a.title}</h3><p id={`${id}-d`}>{a.body}</p>
+  return <div className="editor-back" onClick={onClose}><div ref={box} className={`editor cc-confirm${a.block ? ' cc-wide' : ''}`} role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`} onClick={(e) => e.stopPropagation()} data-testid="cc-confirm">
+    <h3 id={`${id}-t`}>{a.title}</h3>{a.block ? <div id={`${id}-d`} className="cc-body">{a.body}</div> : <p id={`${id}-d`}>{a.body}</p>}
     <div className="editor-foot"><button ref={cancel} type="button" onClick={onClose}>{a.cancel ?? 'Cancel'}</button><button type="button" className={a.danger ? 'cc-danger-b' : 'primary'} onClick={() => { onClose(); a.run(); }} data-testid="cc-confirm-ok">{a.ok}</button></div>
   </div></div>;
 }

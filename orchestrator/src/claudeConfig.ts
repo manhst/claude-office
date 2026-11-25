@@ -59,6 +59,11 @@ export function claudePaths(env: NodeJS.ProcessEnv = process.env, demoDir?: stri
   }
   return { claudeJson, settings };
 }
+/** The Claude Code config dir (CLAUDE_CONFIG_DIR or ~/.claude; DECK_CLAUDE_CONFIG_DIR overrides). Under vitest only the override counts, and never the real dir. */
+export function claudeConfigDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (env.DECK_CLAUDE_CONFIG_DIR) { const d = resolve(env.DECK_CLAUDE_CONFIG_DIR); return env.VITEST && [join(homedir(), '.claude'), ...(env.CLAUDE_CONFIG_DIR ? [env.CLAUDE_CONFIG_DIR] : [])].some((r) => resolve(r) === d) ? undefined : d; }
+  return env.VITEST ? undefined : resolve(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'));
+}
 /** First file named `name` (Windows: + PATHEXT suffixes) in the absolute PATH entries, then ~/.local/bin, /opt/homebrew/bin, /usr/local/bin. */
 export function which(name: string, path = process.env.PATH ?? '', exts = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').toLowerCase().split(';')] : ['']) {
   for (const d of [...path.split(delimiter), ...EXTRA_BIN_DIRS()]) if (d && isAbsolute(d)) for (const x of exts) { const f = join(d, name + x); if (isFileSync(f)) return f; }

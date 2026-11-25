@@ -98,6 +98,21 @@ export interface HistoryOpenersResponse { openers: HistoryOpener[]; reason?: str
 export interface HistoryOpenRequest { sid: string; app: HistoryOpenerId; confirm?: boolean }
 /** resumed: false when an editor only opened the folder; note: e.g. "macOS may ask once to let Claude Deck control iTerm" */
 export interface HistoryOpenResponse { ok: true; app: HistoryOpenerId; project: string; resumed: boolean; note?: string }
+/** History "Delete from this machine" (POST /history/delete). LOCAL files only: every `projects/<dir>/<sid>.jsonl`, its <sid>/ dir (subagents, tool-results…),
+ *  set-aside copies (*.orphaned-*, *.jsonl.superseded-*), file-history/<sid>, session-env/<sid>, uploads/<sid>, dev-mods/<sid>, debug/<sid>.txt, todos/<sid>-*.json,
+ *  telemetry/*.<sid>.*.json, the session scratchpad, the session's lines in history.jsonl, and Claude Deck's own data (its run logs' lines for the sid, bookmark,
+ *  index, report cache). Server-side copies (e.g. Claude Enterprise Compliance capture, kept by the organization) are NOT affected and cannot be deleted from here.
+ *  dryRun: list only, delete nothing; the answer has planId. A real delete may send that planId back: if the plan differs now, 409 {error:'changed'}.
+ *  Needs confirm (409 confirm-required): live in Claude Deck, reopened here <2 min ago, a Claude Code process registered for it (sessions/*.json, pid alive),
+ *  or any of its files written <2 min ago. Errors: HistoryDeleteError. */
+export interface HistoryDeleteRequest { sid: string; dryRun?: boolean; confirm?: boolean; planId?: string }
+/** path is shown home-relative (~/…) (deck-data: a label or a Claude Deck log); lines = JSONL lines removed for this session (history.jsonl, Claude Deck logs);
+ *  skipped = set when this item is listed but left unchanged, with the reason (e.g. too large) */
+export interface HistoryDeleteItem { path: string; kind: 'transcript' | 'dir' | 'file' | 'history-lines' | 'deck-data'; bytes?: number; lines?: number; skipped?: string }
+export interface HistoryDeleteResponse { sid: string; dryRun: boolean; items: HistoryDeleteItem[]; deleted: boolean; note: string; planId?: string }
+/** errors: bad-sid, bad-flag, bad-plan (400); not-found (404); unavailable, confirm-required, busy, changed, unsafe-path (409); delete-failed (500).
+ *  delete-failed after a partial delete lists the items that were removed in `deleted`. */
+export interface HistoryDeleteError { error: string; reason?: string; deleted?: HistoryDeleteItem[] }
 
 /** Claude config tab (GET /claude-config). Where an MCP server entry lives: user = ~/.claude.json mcpServers; local = ~/.claude.json
  *  projects[path].mcpServers; project = <path>/.mcp.json; settings = ~/.claude/settings.json mcpServers (NOT loaded by Claude Code: read-only, clone it to use it). */

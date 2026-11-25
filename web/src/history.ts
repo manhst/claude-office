@@ -1,4 +1,4 @@
-import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryHit, HistoryListResponse, HistoryOpener, HistoryOpenResponse, HistoryProject, HistorySession } from './types';
+import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryDeleteItem, HistoryDeleteResponse, HistoryHit, HistoryListResponse, HistoryOpener, HistoryOpenResponse, HistoryProject, HistorySession } from './types';
 /** Pure helpers for the History tab (unit-tested in test/history.test.ts). */
 
 const foldMemo = new Map<string, string>();
@@ -166,5 +166,50 @@ export const permissionHint = (label: string) => `If macOS asks for permission t
 /** The copyable command is quoted for sh/bash/zsh only: a POSIX path with \ ! ' or a control character (newline…) reads differently in fish & co. */
 export const shOnlyPath = (project: string) => !isWinPath(project) && /[\\!'\x00-\x1f\x7f]/.test(project);
 export const SH_ONLY_NOTE = 'the path has special characters: use in bash/zsh only';
+/** 0 B, 512 B, 1.5 KB, 12 MB, 1.2 GB (1024 steps; one decimal under 10). */
+export function fmtBytes(n: number) {
+  if (!(n > 0)) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0, v = n; while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return i === 0 ? `${Math.round(v)} B` : `${v < 10 ? (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '') : Math.round(v)} ${u[i]}`;
+}
+export const DELETE_KINDS: Record<HistoryDeleteItem['kind'], string> = { transcript: 'transcript', dir: 'folder', file: 'file', 'history-lines': 'prompt history', 'deck-data': 'Claude Deck data' };
+/** Kind label; a deck-data item that is a Claude Deck run log (logs/run-*.jsonl, or counted in lines) reads "Claude Deck log lines". */
+export const deleteKind = (it: HistoryDeleteItem) => it.kind === 'deck-data' && (/(^|[\\/])logs[\\/]run-[^\\/]*\.jsonl$/.test(it.path) || typeof it.lines === 'number') ? 'Claude Deck log lines' : DELETE_KINDS[it.kind] ?? it.kind;
+/** Size column of one item: "12 KB", "3 lines", "3 lines · 1 KB" or ''. */
+export function deleteItemSize(it: HistoryDeleteItem) {
+  const l = typeof it.lines === 'number' ? `${it.lines} line${it.lines === 1 ? '' : 's'}` : '', b = typeof it.bytes === 'number' ? fmtBytes(it.bytes) : '';
+  return [l, b].filter(Boolean).join(' · ');
+}
+/** Count + summed bytes of the items that are (or will be) removed: skipped ones are left out (items without bytes count as 0). */
+export function deleteTotal(items: readonly HistoryDeleteItem[]) {
+  const on = items.filter((it) => !it.skipped);
+  return { n: on.length, bytes: on.reduce((a, it) => a + (typeof it.bytes === 'number' && it.bytes > 0 ? it.bytes : 0), 0), skipped: items.length - on.length };
+}
+export const DELETE_NOTE = 'Deletes files on this machine only. Copies kept on Anthropic\'s servers for your organization (e.g. Claude Enterprise Compliance) are not affected.';
+/** Status after a delete: "Deleted 4 items (1.2 MB) from this machine." */
+export function deletedText(r: Pick<HistoryDeleteResponse, 'items'>) { const t = deleteTotal(r.items); return `Deleted ${t.n} item${t.n === 1 ? '' : 's'} (${fmtBytes(t.bytes)}) from this machine.`; }
+/** Inline error for a failed delete (or dry run): the server's reason when it gave one (status 0 = network, -1 = not JSON).
+ *  409 busy = another delete runs, or Claude Code holds the history.jsonl lock. */
+export function deleteErrorText(status: number, error?: string, reason?: string) {
+  if (reason) return reason;
+  if (error === 'busy') return 'Busy (another delete, or Claude Code is writing its prompt history). Try again in a moment.';
+  if (error === 'changed') return 'Files changed since the preview. Review the list again.';
+  if (error === 'unavailable') return 'Deleting is not available here (demo or read-only mode).';
+  if (error === 'not-found' || error === 'not-indexed') return 'Session not found: it may already be deleted. Refresh the list.';
+  if (status === 401 || status === 403) return 'Run token rejected. Reopen the URL in orchestrator/.run/ui-url.txt.';
+  if (status === 0) return 'Can\'t reach the orchestrator.';
+  if (status === -1) return 'The orchestrator sent a response that can\'t be read.';
+  if (!error && (status === 404 || status === 405 || status === 501)) return 'This orchestrator doesn\'t support deleting sessions yet. Restart it.';
+  return `${error ?? `HTTP ${status}`}.`;
+}
+/** The error line with the step that failed: "Preview failed: …" (dry run) or "Delete failed: …". */
+export const deleteStepError = (dryRun: boolean, status: number, error?: string, reason?: string) => `${dryRun ? 'Preview failed' : 'Delete failed'}: ${deleteErrorText(status, error, reason)}`;
+export const isDeleteChanged = (error?: string) => error === 'changed';
+/** The list without sid (total and bookmark count adjusted); same object when sid isn't in it. */
+export function dropSession(d: HistoryListResponse, sid: string): HistoryListResponse {
+  const i = d.sessions.findIndex((x) => x.sid === sid); if (i < 0) return d;
+  const was = d.sessions[i], sessions = d.sessions.slice(); sessions.splice(i, 1);
+  return { ...d, sessions, total: Math.max(0, d.total - 1), bookmarked: Math.max(0, (d.bookmarked ?? 0) - (was.bookmark ? 1 : 0)) };
+}
 export function loadTab(store: Store | undefined = local()): MainTab { try { const t = store?.getItem(TAB_KEY); return t === 'history' || t === 'claude' || t === 'report' ? t : 'office'; } catch { return 'office'; } }
 export function saveTab(t: MainTab, store: Store | undefined = local()) { try { store?.setItem(TAB_KEY, t); } catch { /* private mode / quota */ } }

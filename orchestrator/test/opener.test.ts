@@ -102,7 +102,7 @@ describe('SessionOpener launching (macOS)', () => {
     }
     expect(statSync(join(m.runDir, 'resume')).mode & 0o777).toBe(0o700);
     for (const l of [...ITERM_SCRIPT, ...TERMINAL_SCRIPT]) expect(l).not.toMatch(/rm -rf|\/w\/|resume\//); // data never reaches the AppleScript source
-    expect(ITERM_SCRIPT).toContain('set wasRunning to application id "com.googlecode.iterm2" is running'); expect(TERMINAL_SCRIPT).toContain('do script cmd in window 1');
+    expect(ITERM_SCRIPT).toContain('set wasRunning to application id "com.googlecode.iterm2" is running'); expect(TERMINAL_SCRIPT).toContain('do script cmd in window 1'); expect(ITERM_SCRIPT).toContain('tell w to set t to (create tab with default profile)');
     expect(it1.env).toEqual({ PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME, USER: 'me' }); // no CLAUDECODE / CLAUDE_CODE_* / DECK_* / OFFICE_* / NODE_OPTIONS / keys
     expect(m.later.map(([, ms]) => ms)).toEqual([120_000, 120_000]);
     expect(scripts(m.runDir)).toHaveLength(2); for (const [fn] of m.later) fn(); await new Promise((r) => setTimeout(r, 20)); expect(scripts(m.runDir)).toEqual([]);

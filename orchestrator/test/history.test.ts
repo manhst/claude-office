@@ -275,17 +275,18 @@ describe('HistoryIndex refresh', () => {
     expect((await ix.list({ auto: true })).total).toBe(5);
     await ix.refresh(); expect((await ix.list({ auto: true })).total).toBe(6);
   });
-  it('locate(): raw cwd for POST /history/open (never in list/detail), redacted project, folder name, mtime; no cwd when the transcript has none or it is >4096 chars', async () => {
+  it('locate(): raw cwd for POST /history/open (never in list/detail), redacted project, transcript file, folder name, mtime; no cwd when the transcript has none or it is >4096 chars', async () => {
     const root = mkdtempSync(join(tmpdir(), 'deck-hist-'));
     const f1 = write(root, '-w-x', 'l1', [user('go', 0, { cwd: `/w/${SECRET}/app` }), said('ok', 1)]);
     write(root, '-w-blog', 'l2', [user('go', 0, { cwd: undefined }), said('ok', 1, { cwd: undefined })]);
     write(root, '-w-long', 'l3', [user('go', 0, { cwd: `/${'x'.repeat(4100)}` }), said('ok', 1)]);
     const ix = index(root);
-    expect(await ix.locate('l1')).toEqual({ cwd: `/w/${SECRET}/app`, project: '/w/[REDACTED]/app', folder: '-w-x', mtimeMs: statSync(f1).mtimeMs });
-    expect(await ix.locate('l2')).toEqual({ project: '/w/blog', folder: '-w-blog', mtimeMs: expect.any(Number) }); // the folder-name decode is never used as a cwd
+    expect(await ix.locate('l1')).toEqual({ cwd: `/w/${SECRET}/app`, project: '/w/[REDACTED]/app', file: f1, folder: '-w-x', mtimeMs: statSync(f1).mtimeMs });
+    expect(await ix.locate('l2')).toEqual({ project: '/w/blog', file: join(root, '-w-blog', 'l2.jsonl'), folder: '-w-blog', mtimeMs: expect.any(Number) }); // the folder-name decode is never used as a cwd
     expect((await ix.locate('l3'))?.cwd).toBeUndefined();
     expect(await ix.locate('nope')).toBeNull(); expect(await ix.locate('../x')).toBeNull();
     expect(JSON.stringify([await ix.list({}), await ix.detail('l1')])).not.toContain(SECRET);
+    ix.forget('l1'); expect((await ix.list({})).sessions.map((x) => x.sid)).not.toContain('l1'); // dropped at once (POST /history/delete), file still on disk
   });
   it('detail() of a sid newer than the index waits for one shared rescan before answering null', async () => {
     const root = world(), ix = index(root, 60_000);
