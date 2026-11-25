@@ -1,6 +1,6 @@
-import { resolve, dirname, join } from 'node:path';
+import { resolve, dirname, join, delimiter } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { SessionTracker } from './sessions.js';
 import { DeckServer, newToken } from './server.js';
@@ -12,8 +12,9 @@ import { ItOpsMonitor } from './itops.js';
 import { HistoryIndex, historyRoot } from './history.js';
 import { ModelReport } from './modelReport.js';
 import { SessionOpener } from './opener.js';
+import { SessionDeleter } from './historyDelete.js';
 import { BookmarkStore } from './bookmarks.js';
-import { ClaudeConfig, claudePaths } from './claudeConfig.js';
+import { ClaudeConfig, claudeConfigDir, claudePaths } from './claudeConfig.js';
 import { applyLegacyEnv, migrateLegacySettings } from './env.js';
 import { applyPatch, loadSettings, resolveItopsConfig, saveSettings, toView, type DeckSettingsFile, type SettingsPatch } from './settings.js';
 const here = dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,12 @@ export async function start(o: StartOpts) {
   // History "Reopen": resumes a past session in iTerm/Terminal/Cursor/VS Code (macOS) or Windows Terminal/Cursor/VS Code; demo lists no apps and launches nothing
   const opener = new SessionOpener({ demo: o.demo, runDir, historyRoot: histRoot, locate: (sid) => history.locate(sid), isLive: (sid) => tracker.list().some((s) => s.sid === sid) });
   const modelReport = new ModelReport(histRoot, o.demo && !o.historyDir ? { now: () => DEMO_NOW } : {});
+  // History "Delete from this machine": local files of one session + Claude Deck's own data (its logs too); demo never deletes (fixtures).
+  // Scratchpads: DECK_SCRATCH_ROOTS (path list), else os.tmpdir() and /tmp; under vitest only the override.
+  const scratchRoots = process.env.DECK_SCRATCH_ROOTS ? process.env.DECK_SCRATCH_ROOTS.split(delimiter).filter(Boolean) : process.env.VITEST || process.platform === 'win32' ? [] : [tmpdir(), '/tmp'];
+  const deleter = new SessionDeleter({ demo: o.demo, historyRoot: histRoot, configDir: claudeConfigDir(), logDir: o.logDir, scratchRoots, bookmarks, locate: (sid) => history.locate(sid),
+    isLive: (sid) => tracker.list().some((s) => s.sid === sid), openedRecently: (sid) => opener.openedRecently(sid),
+    forget: (sid, files) => { history.forget(sid, files); for (const f of files) modelReport.forget(f); } });
   // Claude config tab: Claude Code's MCP servers; demo reads fixtures (project paths mapped under fixtures/…/fs) and never writes
   const ccDemo = o.demo ? resolve(here, '../fixtures/demo/claude-config') : undefined;
   const claude = new ClaudeConfig({ ...claudePaths(process.env, ccDemo), runDir, demo: o.demo, fsRoot: ccDemo && !process.env.DECK_CLAUDE_JSON ? join(ccDemo, 'fs') : undefined });
@@ -80,7 +87,7 @@ export async function start(o: StartOpts) {
     onInboxClaim: (sid, tok) => inbox.claim(sid, tok),
     onInboxAck: (sid, tok, id, state, reason) => inbox.ack(sid, tok, id, state as any, reason),
     staticDir: existsSync(o.webDir) ? o.webDir : undefined,
-    history, claude, modelReport, opener,
+    history, claude, modelReport, opener, deleter,
     getSettings: () => view(),
     setSettings: (raw) => {
       try {
@@ -108,7 +115,7 @@ export async function start(o: StartOpts) {
   console.error(`[deck] settings: ${settingsPath}`);
   if (o.demo) void simulate(`http://127.0.0.1:${port}/event`, { stepMs: o.stepMs });
   const close = async () => { clearInterval(sweep); itops.stop(); history.stop(); modelReport.stop(); await server.close(); };
-  return { port, token, tracker, server, inbox, usage, itops, history, modelReport, opener, bookmarks, claude, settingsPath, close, logPath: log.path };
+  return { port, token, tracker, server, inbox, usage, itops, history, modelReport, opener, deleter, bookmarks, claude, settingsPath, close, logPath: log.path };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {

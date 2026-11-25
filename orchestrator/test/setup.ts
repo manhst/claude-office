@@ -7,6 +7,9 @@ process.env.DECK_HISTORY_DIR = mkdtempSync(join(tmpdir(), 'deck-hist-empty-'));
 // Bookmarks and the run dir (ui-url.txt, default settings) go to temp paths too, never the live server's orchestrator/.run/.
 process.env.DECK_HISTORY_BOOKMARKS = join(mkdtempSync(join(tmpdir(), 'deck-bm-')), 'history-bookmarks.json');
 process.env.DECK_RUN_DIR = mkdtempSync(join(tmpdir(), 'deck-run-'));
+// History delete: a temp Claude config dir (never ~/.claude) and temp scratchpad roots (never the real /tmp).
+process.env.DECK_CLAUDE_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'deck-cfg-'));
+process.env.DECK_SCRATCH_ROOTS = mkdtempSync(join(tmpdir(), 'deck-scratch-'));
 // Claude config tab: temp ~/.claude.json + settings.json and a fake `claude` CLI; the real config and CLI are never touched.
 const cc = mkdtempSync(join(tmpdir(), 'deck-cc-'));
 process.env.DECK_CLAUDE_JSON = join(cc, '.claude.json'); process.env.DECK_CLAUDE_SETTINGS = join(cc, 'settings.json');

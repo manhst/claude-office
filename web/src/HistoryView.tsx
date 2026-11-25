@@ -1,10 +1,11 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { HistoryBookmarkResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistoryOpener, HistorySession } from './types';
+import type { HistoryBookmarkResponse, HistoryDeleteResponse, HistoryDetailResponse, HistoryHit, HistoryItem, HistoryListResponse, HistoryOpener, HistorySession } from './types';
 import { fetchHistory, fetchHistorySession, fetchHistoryUpTo, fetchOpeners, HistoryHttpError, isAbort, setBookmark } from './historyApi';
-import { absTime, bookmarkRequest, continuePage, fmtCost, fmtDuration, fmtSpan, ghostSession, GHOST_RETRY_MS, highlight, historyErrorText, isGhost, NOTE_MAX, parseTerms, patchList, patchSession, permissionHint, projectOptions, relTime, resumeCommand, SH_ONLY_NOTE, shOnlyPath, unGhost, type OpenRequest } from './history';
+import { absTime, bookmarkRequest, continuePage, deletedText, dropSession, fmtCost, fmtDuration, fmtSpan, ghostSession, GHOST_RETRY_MS, highlight, historyErrorText, isGhost, NOTE_MAX, parseTerms, patchList, patchSession, permissionHint, projectOptions, relTime, resumeCommand, SH_ONLY_NOTE, shOnlyPath, unGhost, type OpenRequest } from './history';
 import { IconBranch } from './icons';
 import { OpenButton, useOpenSession } from './OpenSession';
 import { Confirm } from './Confirm';
+import { DeleteButton, DeleteError, useDeleteSession } from './DeleteSession';
 
 const PAGE = 50;
 type ListState = { data?: HistoryListResponse; next: number; loading: boolean; more?: boolean; err?: string; moreErr?: string };
@@ -29,6 +30,7 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
   const [bmOnly, setBmOnly] = useState(false), [bmErr, setBmErr] = useState<{ sid: string; text: string }>(), [openers, setOpeners] = useState<readonly HistoryOpener[]>([]);
   const bmSeq = useRef(new Map<string, number>()), bmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(bmTimer.current), []);
+  const [delMsg, setDelMsg] = useState<string>(), noPick = useRef(false), delEl = useRef<HTMLParagraphElement>(null);
   useEffect(() => { // "Reopen" apps: fetched once when the tab first opens, kept for its lifetime; any failure (old orchestrator…) just hides the button
     const ac = new AbortController(); fetchOpeners(token, ac.signal).then((r) => setOpeners(Array.isArray(r.openers) ? r.openers : []), () => {}); return () => ac.abort();
   }, [token]);
@@ -42,8 +44,9 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
     setList((l) => ({ data: l.data, next: l.next, loading: true }));
     fetchHistory(token, { q: dq, project, auto, bookmarked: bmOnly, limit: PAGE }, ac.signal).then((d) => {
       if (g !== gen.current) return;
-      setList({ data: d, next: d.offset + d.sessions.length, loading: false }); setSel((cur) => cur ?? d.sessions[0]); if (listEl.current) listEl.current.scrollTop = 0;
-    }, (e) => { if (g === gen.current && !isAbort(e)) setList({ next: 0, loading: false, err: errText(e, 'list') }); });
+      const skip = noPick.current; noPick.current = false; // after a delete the detail pane stays closed
+      setList({ data: d, next: d.offset + d.sessions.length, loading: false }); setSel((cur) => cur ?? (skip ? undefined : d.sessions[0])); if (listEl.current) listEl.current.scrollTop = 0;
+    }, (e) => { if (g === gen.current && !isAbort(e)) { noPick.current = false; setList({ next: 0, loading: false, err: errText(e, 'list') }); } });
     return () => { ac.abort(); moreAc.current?.abort(); };
   }, [token, dq, project, auto, bmOnly, reload]);
   const loadMore = () => { // overlap one row; if the order drifted (a session jumped to the top) reload rows [0, have+PAGE) instead of skipping
@@ -88,6 +91,13 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
       applyBm({ sid, bookmark: prev }); setBmErr({ sid, text: errText(e, 'bookmark') }); clearTimeout(bmTimer.current); bmTimer.current = setTimeout(() => setBmErr(undefined), 5000);
     });
   }, [token, applyBm]);
+  /** Deleted from this machine: drop the row (and its bookmark count), close the detail pane, say what went, then reload the list. */
+  const onDeleted = useCallback((r: HistoryDeleteResponse) => {
+    setList((l) => l.data ? { ...l, data: dropSession(l.data, r.sid), next: Math.max(0, l.next - (l.data.sessions.some((x) => x.sid === r.sid) ? 1 : 0)) } : l);
+    setSel((x) => x?.sid === r.sid ? undefined : x); setDelMsg(deletedText(r)); noPick.current = true; setReload((n) => n + 1);
+  }, []);
+  useEffect(() => { if (sel) setDelMsg(undefined); }, [sel]);
+  useEffect(() => { if (delMsg) delEl.current?.focus(); }, [delMsg]); // the Delete button is gone: keep keyboard focus in the pane
   const bmOld = !!d && typeof d.bookmarked !== 'number', bm = !!d && !bmOld; // an orchestrator without bookmarks omits the count
   return (
     <div className="hist" data-testid="history">
@@ -119,7 +129,8 @@ export const HistoryView = memo(function HistoryView({ token, live, active, focu
         </div>
       </section>
       <section className="hist-detail" aria-label="Session transcript" data-testid="history-detail" ref={detEl}>
-        {sel ? <Detail key={sel.sid} x={sel} det={det?.sid === sel.sid ? det : undefined} terms={terms} live={live.has(sel.sid)} onRetry={retry} onStar={bm ? onStar : undefined} err={bmErr?.sid === sel.sid ? bmErr.text : undefined} token={token} openers={openers} active={active} />
+        {sel ? <Detail key={sel.sid} x={sel} det={det?.sid === sel.sid ? det : undefined} terms={terms} live={live.has(sel.sid)} onRetry={retry} onStar={bm ? onStar : undefined} err={bmErr?.sid === sel.sid ? bmErr.text : undefined} token={token} openers={openers} active={active} onDeleted={onDeleted} />
+          : delMsg ? <p className="hd-open-ok hdel-done" role="status" tabIndex={-1} ref={delEl} data-testid="history-deleted">{delMsg}</p>
           : <div className="muted hist-empty">{list.loading ? '' : 'Select a session to read its transcript.'}</div>}
       </section>
     </div>
@@ -148,8 +159,8 @@ const Row = memo(function Row({ x, sel, live, terms, now, onPick, onStar, dim, e
 
 /** Memoised (stable props), and the highlighted transcript is memoised on (items, terms): typing, list loads and the app tick don't redo it. */
 const COPIED = { cmd: 'Command copied', sid: 'Sid copied', 'cmd-fail': 'Couldn\'t copy: the command is selected, press ⌘C / Ctrl+C', 'sid-fail': 'Copy failed' } as const;
-const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err, token, openers, active }: { x: HistorySession; det?: DetState; terms: readonly string[]; live: boolean; onRetry: () => void; onStar?: OnStar; err?: string; token: string; openers: readonly HistoryOpener[]; active: boolean }) {
-  const m = det?.data?.session ?? x, items = det?.data?.items, cmd = resumeCommand(m.project, m.sid), op = useOpenSession(token, m.sid, openers);
+const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err, token, openers, active, onDeleted }: { x: HistorySession; det?: DetState; terms: readonly string[]; live: boolean; onRetry: () => void; onStar?: OnStar; err?: string; token: string; openers: readonly HistoryOpener[]; active: boolean; onDeleted: (r: HistoryDeleteResponse) => void }) {
+  const m = det?.data?.session ?? x, items = det?.data?.items, cmd = resumeCommand(m.project, m.sid), op = useOpenSession(token, m.sid, openers), del = useDeleteSession(token, m.sid, onDeleted);
   const [copied, setCopied] = useState<keyof typeof COPIED>();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), tx = useRef<HTMLDivElement>(null), cmdEl = useRef<HTMLElement>(null);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -177,6 +188,7 @@ const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err,
     {op.slow ? <p className="hd-open-wait" role="status" data-testid="history-open-wait">{permissionHint(op.slow)}</p> : null}
     {op.msg ? <p className={op.msg.kind === 'ok' ? 'hd-open-ok' : 'hist-err'} role={op.msg.kind === 'ok' ? 'status' : 'alert'} data-testid="history-open-msg">{op.msg.text}</p> : null}
     {op.ask ? <Confirm a={op.ask} onClose={op.closeAsk} active={active} /> : null}
+    {del.ask ? <Confirm a={del.ask} onClose={del.closeAsk} active={active} /> : null}
     {onStar && m.bookmark ? <NoteField note={m.bookmark.note ?? ''} onSave={(n) => onStar(m, true, n)} /> : null}
     {err ? <p className="hist-err" role="alert">{err}</p> : null}
     <div className="hd-meta" data-testid="history-meta">
@@ -192,7 +204,9 @@ const Detail = memo(function Detail({ x, det, terms, live, onRetry, onStar, err,
     <div className="hd-actions">
       <button type="button" className="hist-btn" onClick={() => copy('sid', m.sid)}>Copy sid</button>
       <span role="status" className={copied?.endsWith('fail') ? 'fail' : undefined}>{copied ? COPIED[copied] : ''}</span>
+      <DeleteButton busy={del.busy} onClick={del.start} />
     </div>
+    {del.err ? <DeleteError err={del.err} /> : null}
     <div className="hd-cmdrow" title="Command that resumes this session in a terminal (always works)"><code className="hd-cmd" ref={cmdEl}>{cmd}</code><button type="button" className="hist-btn" onClick={() => copy('cmd', cmd)} data-testid="history-copy-resume">Copy</button></div>
     {shOnlyPath(m.project) ? <p className="muted hd-note" data-testid="history-sh-only">{SH_ONLY_NOTE}</p> : null}
     {det?.data?.truncated ? <p className="muted hd-note">Transcript truncated by the orchestrator: showing {plural(det.data.items.length, 'item')}.</p> : null}

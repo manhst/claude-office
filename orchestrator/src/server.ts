@@ -66,6 +66,7 @@ export class DeckServer {
     claude?: { view(): Promise<ClaudeConfigView>; post(op: string, body: unknown, signal?: AbortSignal): Promise<{ status: number; body: unknown }> };
     modelReport?: { report(q: { days: number; auto: boolean; fresh: boolean }): Promise<ModelReportResponse> };
     opener?: { openers(): Promise<HistoryOpenersResponse>; open(body: unknown): Promise<{ status: number; body: unknown }> };
+    deleter?: { delete(body: unknown): Promise<{ status: number; body: unknown }> };
   } = {}) {
     this.http = createServer((req, res) => { this.handle(req, res).catch(() => { if (!res.headersSent) res.writeHead(500).end(); }); });
     this.wss = new WebSocketServer({ noServer: true });
@@ -130,6 +131,21 @@ export class DeckServer {
         let p: unknown; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
         const r = await this.opts.opener.open(p); if (!res.destroyed) out(r.status, r.body);
       } catch (e) { if (!res.headersSent) out(500, { error: redactText(String((e as Error)?.message ?? e), 300) }); }
+      return;
+    }
+    if (url.pathname === '/history/delete') { // deletes local files: /prompt gate + Bearer run token, 4 KB
+      const out = (status: number, body: unknown) => { res.writeHead(status, { ...sec, 'content-type': 'application/json' }).end(JSON.stringify(body)); };
+      if (req.method !== 'POST') { req.resume(); res.writeHead(405, sec).end(); return; }
+      const why = promptRequestRejection(req);
+      if (why) { req.resume(); res.writeHead(why, sec).end(); return; }
+      const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!tokenOk(auth ?? null, this.token)) { req.resume(); out(401, { error: 'unauthorized' }); return; }
+      if (!this.opts.deleter) { req.resume(); out(501, { error: 'unavailable' }); return; }
+      try {
+        const raw = await this.readBody(req, res, sec, 4 * 1024); if (raw == null) return;
+        let p: unknown; try { p = raw ? JSON.parse(raw) : {}; } catch { out(400, { error: 'bad json' }); return; }
+        const r = await this.opts.deleter.delete(p); if (!res.destroyed) out(r.status, r.body);
+      } catch (e) { console.error(`[deck] history delete: ${redactText(String((e as Error)?.message ?? e), 500)}`); if (!res.headersSent) out(500, { error: 'delete-failed', reason: 'Unexpected error while deleting; see the Claude Deck console.' }); }
       return;
     }
     if (url.pathname === '/history/bookmark') {

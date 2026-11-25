@@ -40,8 +40,12 @@ export const SAFE_SCRIPT_PATH = /^[A-Za-z0-9/._ -]+$/;
 const waitWindows = ['if not wasRunning then', 'repeat 50 times', 'if (count of windows) > 0 then exit repeat', 'delay 0.1', 'end repeat', 'end if'];
 /** Fixed AppleScripts (one `-e` per line), data only in argv. Cold start: the app's own first window is used instead of a second one (waits ≤5 s for it). */
 export const ITERM_SCRIPT = ['on run argv', 'set cmd to item 1 of argv', 'set wasRunning to application id "com.googlecode.iterm2" is running', 'tell application id "com.googlecode.iterm2"',
-  'activate', 'set w to missing value', ...waitWindows, 'if (not wasRunning) and (count of windows) > 0 then set w to window 1', 'if w is missing value then set w to (create window with default profile)',
-  'tell current session of w to write text cmd', 'end tell', 'end run'];
+  'activate', 'set s to missing value', ...waitWindows,
+  'if (not wasRunning) and (count of windows) > 0 then', 'set s to current session of window 1', // cold start: use iTerm's own first window
+  'else if (count of windows) > 0 then', 'set w to current window', 'if w is missing value then set w to window 1', // running: a new tab in the front window
+  'tell w to set t to (create tab with default profile)', 'set s to current session of t',
+  'else', 'set s to current session of (create window with default profile)', 'end if',
+  'tell s to write text cmd', 'end tell', 'end run'];
 export const TERMINAL_SCRIPT = ['on run argv', 'set cmd to item 1 of argv', 'set wasRunning to application id "com.apple.Terminal" is running', 'tell application id "com.apple.Terminal"',
   'activate', ...waitWindows, 'if (not wasRunning) and (count of windows) > 0 then', 'do script cmd in window 1', 'else', 'do script cmd', 'end if', 'end tell', 'end run'];
 /** POSIX single-quoted word for /bin/sh: 'it'\''s' (backslashes are literal inside). */
@@ -188,6 +192,8 @@ export class SessionOpener {
       if (st?.isFile() && now - st.mtimeMs > OPENER_CAP.staleMs) await unlink(f).catch(() => {});
     }
   }
+  /** sid was reopened here less than 2 min ago (POST /history/delete needs confirm then) */
+  openedRecently(sid: string) { const t = this.recent.get(sid); return t !== undefined && this.now() - t < OPENER_CAP.liveMs; }
   /** POST /history/open: sid (UUID-shaped, indexed) → its recorded cwd (absolute, no controls, matching the transcript folder, an existing dir) → app (detected)
    *  → live checks unless confirm → one launch at a time. */
   async open(raw: unknown): Promise<Reply> {

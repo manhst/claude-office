@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
@@ -337,6 +337,48 @@ describe('history open endpoints', () => {
       const auth = { authorization: `Bearer ${d.token}` };
       expect(JSON.parse((await httpJson(d.port, '/history/openers', { headers: auth })).body)).toEqual({ openers: [], reason: expect.any(String) });
       const o = await httpJson(d.port, '/history/open', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ sid: '7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a05', app: 'iterm' }) });
+      expect(o.status).toBe(409); expect(JSON.parse(o.body)).toMatchObject({ error: 'unavailable' });
+    } finally { await d.close(); }
+  }, 15000);
+});
+describe('history delete endpoint', () => {
+  it('POST /history/delete: /prompt gate + Bearer (header only), 4 KB; dry run then delete; demo refuses', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'deck-')), cfg = join(mkdtempSync(join(tmpdir(), 'deck-cfg-')), '.claude'), pd = join(cfg, 'projects', '-w-shop'), sid = '7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a05';
+    mkdirSync(join(pd, sid, 'subagents'), { recursive: true }); mkdirSync(join(cfg, 'file-history', sid), { recursive: true });
+    const t = new Date(Date.now() - 3_600_000).toISOString(), f = join(pd, `${sid}.jsonl`);
+    writeFileSync(f, [{ type: 'user', message: { role: 'user', content: 'hi' }, timestamp: t, cwd: '/w/shop' }, { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] }, timestamp: t }].map((l) => JSON.stringify(l)).join('\n') + '\n');
+    for (const p of [f, join(pd, sid, 'subagents'), join(pd, sid)]) utimesSync(p, new Date(t), new Date(t)); // not freshly written (that needs confirm)
+    writeFileSync(join(cfg, 'history.jsonl'), `${JSON.stringify({ display: 'a', pastedContents: {}, timestamp: 1, project: '/w', sessionId: sid })}\n${JSON.stringify({ display: 'b', pastedContents: {}, timestamp: 2, project: '/w', sessionId: 'other' })}\n`);
+    const savedCfg = process.env.DECK_CLAUDE_CONFIG_DIR; process.env.DECK_CLAUDE_CONFIG_DIR = cfg; // the config dir must be the History root's parent
+    let r; try { r = await start(parseArgs(['--port', '0', '--log-dir', dir, '--history-dir', join(cfg, 'projects')])); } finally { process.env.DECK_CLAUDE_CONFIG_DIR = savedCfg; }
+    try {
+      const auth = { authorization: `Bearer ${r.token}` }, json = { ...auth, 'content-type': 'application/json' }, body = JSON.stringify({ sid, dryRun: true });
+      const call = (headers: Record<string, string>, method = 'POST', b?: string) => httpJson(r.port, '/history/delete', { headers, method, body: b });
+      expect((await call({ 'content-type': 'application/json' }, 'POST', body)).status).toBe(401);
+      expect((await call({ ...json, authorization: 'Bearer nope' }, 'POST', body)).status).toBe(401);
+      expect((await httpJson(r.port, `/history/delete?token=${r.token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })).status).toBe(401);
+      expect((await call({ ...json, origin: 'https://evil.example' }, 'POST', body)).status).toBe(403);
+      expect((await call({ ...json, origin: 'null' }, 'POST', body)).status).toBe(403);
+      expect((await call({ ...auth, 'content-type': 'text/plain' }, 'POST', body)).status).toBe(415);
+      expect((await call(auth, 'GET')).status).toBe(405);
+      expect((await call(json, 'POST', JSON.stringify({ sid: 'x'.repeat(5000) }))).status).toBe(413);
+      expect(JSON.parse((await call(json, 'POST', '{nope')).body)).toEqual({ error: 'bad json' });
+      expect(JSON.parse((await call(json, 'POST', JSON.stringify({ sid: '../x' }))).body)).toMatchObject({ error: 'bad-sid', reason: expect.any(String) });
+      const dry = await call({ ...json, origin: 'http://localhost:5173' }, 'POST', body);
+      expect(dry.status).toBe(200); const d = JSON.parse(dry.body);
+      expect(d).toMatchObject({ sid, dryRun: true, deleted: false, note: expect.stringMatching(/this machine only/) });
+      expect(d.items.map((i: any) => i.kind)).toEqual(['transcript', 'dir', 'dir', 'history-lines', 'deck-data']);
+      expect(existsSync(f)).toBe(true);
+      expect(d.planId).toEqual(expect.any(String));
+      const del = await call(json, 'POST', JSON.stringify({ sid, planId: d.planId }));
+      expect(del.status).toBe(200); expect(JSON.parse(del.body)).toMatchObject({ deleted: true });
+      expect(existsSync(f)).toBe(false); expect(existsSync(join(cfg, 'file-history', sid))).toBe(false);
+      expect(readFileSync(join(cfg, 'history.jsonl'), 'utf8')).toBe(`${JSON.stringify({ display: 'b', pastedContents: {}, timestamp: 2, project: '/w', sessionId: 'other' })}\n`);
+      expect(JSON.parse((await httpJson(r.port, '/history', { headers: auth })).body).total).toBe(0);
+    } finally { await r.close(); }
+    const d = await start(parseArgs(['--demo', '--port', '0', '--log-dir', dir]));
+    try {
+      const o = await httpJson(d.port, '/history/delete', { method: 'POST', headers: { authorization: `Bearer ${d.token}`, 'content-type': 'application/json' }, body: JSON.stringify({ sid: '7f3c2a10-5b6e-4d21-9a8f-0c1d2e3f4a05', dryRun: true }) });
       expect(o.status).toBe(409); expect(JSON.parse(o.body)).toMatchObject({ error: 'unavailable' });
     } finally { await d.close(); }
   }, 15000);

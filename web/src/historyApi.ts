@@ -1,6 +1,6 @@
-/** Authenticated GET /history, /history/session and POST /history/bookmark (same Bearer run token as /settings; never in the query string). */
+/** Authenticated GET /history, /history/session and POST /history/bookmark|open|delete (same Bearer run token as /settings; never in the query string). */
 import { deckHttpBase } from './settingsApi';
-import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, HistoryOpenRequest, HistoryOpenResponse } from './types';
+import type { HistoryBookmarkRequest, HistoryBookmarkResponse, HistoryDeleteItem, HistoryDeleteRequest, HistoryDeleteResponse, HistoryDetailResponse, HistoryListResponse, HistoryOpenersResponse, HistoryOpenRequest, HistoryOpenResponse } from './types';
 import { appendPage } from './history';
 
 export type HistoryQuery = { q?: string; project?: string; auto?: boolean; bookmarked?: boolean; limit?: number; offset?: number };
@@ -15,22 +15,25 @@ export function historyQs(p: HistoryQuery): string {
   if (p.offset && p.offset > 0) kv.push(['offset', String(Math.floor(p.offset))]);
   return kv.length ? `?${kv.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}` : '';
 }
-/** HTTP failure; status 0 = network error, -1 = response was not JSON. error / reason: the server's `{error, reason?}` body, when it sent one. */
+/** HTTP failure; status 0 = network error, -1 = response was not JSON. error / reason: the server's `{error, reason?}` body, when it sent one;
+ *  deleted: what a partly failed /history/delete already removed (HistoryDeleteError). */
 export class HistoryHttpError extends Error {
-  status: number; error?: string; reason?: string;
-  constructor(status: number, error?: string, reason?: string) {
+  status: number; error?: string; reason?: string; deleted?: HistoryDeleteItem[];
+  constructor(status: number, error?: string, reason?: string, deleted?: HistoryDeleteItem[]) {
     super(`history ${status}${error ? `: ${error}` : ''}`); this.name = 'HistoryHttpError'; this.status = status;
-    if (error !== undefined) this.error = error; if (reason !== undefined) this.reason = reason;
+    if (error !== undefined) this.error = error; if (reason !== undefined) this.reason = reason; if (deleted !== undefined) this.deleted = deleted;
   }
 }
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+/** Well-formed {path, kind} items only (anything else in the error body is dropped). */
+const items = (v: unknown): HistoryDeleteItem[] | undefined => Array.isArray(v) ? v.filter((x): x is HistoryDeleteItem => !!x && typeof x === 'object' && typeof (x as HistoryDeleteItem).path === 'string' && typeof (x as HistoryDeleteItem).kind === 'string') : undefined;
 async function request<T>(token: string, path: string, signal?: AbortSignal, body?: unknown): Promise<T> {
   let r: Response;
   const init: RequestInit = body === undefined ? { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, cache: 'no-store', signal }
     : { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body), signal };
   try { r = await fetch(`${deckHttpBase()}${path}`, init); }
   catch (e) { if (signal?.aborted) throw e; throw new HistoryHttpError(0); }
-  if (!r.ok) { let j: Record<string, unknown> | null = null; try { j = await r.json() as Record<string, unknown> | null; } catch { /* no JSON body */ } throw new HistoryHttpError(r.status, str(j?.error), str(j?.reason)); }
+  if (!r.ok) { let j: Record<string, unknown> | null = null; try { j = await r.json() as Record<string, unknown> | null; } catch { /* no JSON body */ } throw new HistoryHttpError(r.status, str(j?.error), str(j?.reason), items(j?.deleted)); }
   try { return (await r.json()) as T; } catch (e) { if (signal?.aborted) throw e; throw new HistoryHttpError(-1); }
 }
 export const fetchHistory = (token: string, p: HistoryQuery, signal?: AbortSignal) => request<HistoryListResponse>(token, `/history${historyQs(p)}`, signal);
@@ -53,4 +56,7 @@ export const setBookmark = (token: string, req: HistoryBookmarkRequest, signal?:
 export const fetchOpeners = (token: string, signal?: AbortSignal) => request<HistoryOpenersResponse>(token, '/history/openers', signal);
 /** POST /history/open: resume sid in app; a live session needs confirm:true (else 409 error 'confirm-required' + reason). */
 export const openSession = (token: string, req: HistoryOpenRequest, signal?: AbortSignal) => request<HistoryOpenResponse>(token, '/history/open', signal, req);
+/** POST /history/delete: dryRun lists the local files only (+ planId); the real delete sends planId back (409 'changed' if the files changed since),
+ *  a live / just-written session needs confirm:true (else 409 'confirm-required' + reason); 500 'delete-failed' may carry `deleted`. */
+export const deleteSession = (token: string, req: HistoryDeleteRequest, signal?: AbortSignal) => request<HistoryDeleteResponse>(token, '/history/delete', signal, req);
 export const isAbort = (e: unknown) => (e as { name?: string } | null)?.name === 'AbortError';

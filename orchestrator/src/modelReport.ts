@@ -1,7 +1,7 @@
 import { createReadStream, type Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { redactText } from './redact.js';
 import { HISTORY_SID, decodeProjectDir, projectLabel, promptText } from './history.js';
 import type { ModelApiErrorStat, ModelErrorCategory, ModelErrorCounts, ModelErrorPattern, ModelReportResponse, ModelRetryStat, ModelReviewSession, ModelStats, ModelToolStat, ModelTrendWeek } from './types.js';
@@ -257,13 +257,22 @@ export class ModelReport {
   refresh(): Promise<void> { return (this.pending ??= this.scan().finally(() => { this.pending = undefined; })); }
   /** Abandons a running scan at the next file (server shutdown). */
   stop() { this.stopped = true; }
+  /** Drops a deleted transcript `<dir>/<sid>.jsonl` and its `<dir>/<sid>/subagents/*` from the cache (POST /history/delete); answers are rebuilt. */
+  forget(file: string) {
+    this.gone.add(file); let n = 0;
+    for (const k of [...this.files.keys()]) if (this.isGone(k)) { this.files.delete(k); n++; }
+    if (n) { this.gen++; this.memo.clear(); }
+  }
+  /** deleted transcripts (and their <sid>/subagents files): skipped by scans, a running one included, until a full scan no longer lists them */
+  private gone = new Set<string>();
+  private isGone(k: string) { for (const g of this.gone) if (k === g || k.startsWith(`${g.replace(/\.jsonl$/, '')}${sep}`)) return g; return undefined; }
   private ensure(): Promise<void> {
     if (!this.scannedAt) return this.refresh();
     if (!this.pending && Date.now() - this.scannedAt >= (this.opts.ttlMs ?? 10_000)) this.refresh().catch(() => {});
     return Promise.resolve();
   }
   private async scan() {
-    const t = Date.now(), seen = new Set<string>(), home = this.opts.home ?? homedir(); let parsed = 0;
+    const t = Date.now(), seen = new Set<string>(), home = this.opts.home ?? homedir(), listed = new Set<string>(); let parsed = 0;
     const dirs: Dirent[] = await readdir(this.root, { withFileTypes: true }).catch(() => []);
     for (const d of dirs) {
       if (this.stopped) return;
@@ -277,12 +286,14 @@ export class ModelReport {
       for (let i = 0; i < list.length; i++) {
         const st = sts[i], [file, sub, sid] = list[i]; if (!st?.isFile()) continue;
         if (this.stopped) return;
+        const g = this.gone.size ? this.isGone(file) : undefined; if (g) { if (g === file) listed.add(g); continue; }
         seen.add(file);
         const c = this.files.get(file); if (c && c.mtimeMs === st.mtimeMs && c.size === st.size) continue;
         this.files.set(file, { mtimeMs: st.mtimeMs, size: st.size, a: await parseFile(file, sub, sid, d.name, home).catch(() => null) }); parsed++; await tick();
       }
     }
     for (const k of [...this.files.keys()]) if (!seen.has(k)) this.files.delete(k);
+    for (const g of [...this.gone]) if (!listed.has(g)) this.gone.delete(g);
     this.scannedAt = Date.now(); this.stats = { files: seen.size, parsed, ms: this.scannedAt - t }; this.gen++; this.memo.clear();
   }
   /** GET /model-report: window = the last `days` local calendar days including today (0 = all history); auto = also count sdk-cli sessions; fresh = rescan first. */

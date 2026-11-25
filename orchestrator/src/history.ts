@@ -183,6 +183,8 @@ const int = (v: unknown, d: number) => { const n = Math.trunc(Number(v ?? d)); r
 export class HistoryIndex {
   private files = new Map<string, Cached>(); private bySid = new Map<string, Entry>(); private sorted: Entry[] = [];
   private pending?: Promise<void>; private stopped = false; private missAt = -Infinity;
+  /** transcripts deleted via POST /history/delete: skipped by scans (one may be in flight) until a full scan no longer lists them */
+  private gone = new Set<string>();
   /** epoch ms of the last completed refresh (0 before the first) */
   scannedAt = 0;
   /** last refresh: transcript files seen, files (re)parsed, wall time, search text chars held (text + folded copy) */
@@ -200,7 +202,7 @@ export class HistoryIndex {
     return Promise.resolve();
   }
   private async scan() {
-    const t = Date.now(), seen = new Set<string>(), home = this.opts.home ?? homedir(); let parsed = 0;
+    const t = Date.now(), seen = new Set<string>(), home = this.opts.home ?? homedir(), listed = new Set<string>(); let parsed = 0;
     const dirs: Dirent[] = await readdir(this.root, { withFileTypes: true }).catch(() => []);
     for (const d of dirs) {
       if (this.stopped) return;
@@ -212,7 +214,9 @@ export class HistoryIndex {
       for (let i = 0; i < list.length; i++) {
         const st = sts[i]; if (!st) continue;
         if (this.stopped) return;
-        const sid = list[i].name.slice(0, -6), file = join(dir, list[i].name); seen.add(file);
+        const sid = list[i].name.slice(0, -6), file = join(dir, list[i].name);
+        if (this.gone.has(file)) { listed.add(file); continue; }
+        seen.add(file);
         let c = this.files.get(file);
         if (!c || c.mtimeMs !== st.mtimeMs || c.size !== st.size) {
           c = { mtimeMs: st.mtimeMs, size: st.size, e: await indexFile(file, sid, d.name, st, home).catch(() => null) };
@@ -222,6 +226,7 @@ export class HistoryIndex {
       }
     }
     for (const k of [...this.files.keys()]) if (!seen.has(k)) this.files.delete(k);
+    for (const f of [...this.gone]) if (!listed.has(f)) this.gone.delete(f);
     const by = new Map<string, Entry>();
     for (const { e } of this.files.values()) if (e) { const o = by.get(e.s.sid); if (!o || o.s.endedAt < e.s.endedAt) by.set(e.s.sid, e); }
     const sorted = [...by.values()].sort((a, b) => b.s.endedAt - a.s.endedAt || (a.s.sid < b.s.sid ? -1 : 1)), budget = this.opts.budget ?? C.budget;
@@ -270,13 +275,20 @@ export class HistoryIndex {
     if (Date.now() - this.missAt >= C.missMs) { this.missAt = Date.now(); await this.refresh().catch(() => {}); } else if (this.pending) await this.pending.catch(() => {});
     return this.bySid.get(sid);
   }
-  /** POST /history/open: the session's recorded working directory (raw, unredacted, never sent to the client; absent when the transcript has none), its redacted
-   *  project label, the transcript's folder name and mtime. null = unknown sid. */
-  async locate(sid: string): Promise<{ cwd?: string; project: string; folder: string; mtimeMs: number } | null> {
+  /** POST /history/open and /history/delete: the session's recorded working directory (raw, unredacted, never sent to the client; absent when the transcript has none),
+   *  its redacted project label, the transcript file (never sent to the client), its folder name and mtime. null = unknown sid. */
+  async locate(sid: string): Promise<{ cwd?: string; project: string; file: string; folder: string; mtimeMs: number } | null> {
     if (!HISTORY_SID.test(sid)) return null;
     const e = await this.lookup(sid); if (!e) return null;
     const st = await stat(e.file).catch(() => null);
-    return { ...(e.cwd ? { cwd: e.cwd } : {}), project: e.s.project, folder: basename(dirname(e.file)), mtimeMs: st?.mtimeMs ?? 0 };
+    return { ...(e.cwd ? { cwd: e.cwd } : {}), project: e.s.project, file: e.file, folder: basename(dirname(e.file)), mtimeMs: st?.mtimeMs ?? 0 };
+  }
+  /** Drops sid from the index at once (POST /history/delete). `files` (deleted transcripts) are ignored by scans, a running one included, until a full scan
+   *  no longer finds them; other copies of the sid still on disk come back with the next scan. */
+  forget(sid: string, files: string[] = []) {
+    for (const f of files) this.gone.add(f);
+    for (const [k, c] of this.files) if (c.e?.s.sid === sid || this.gone.has(k)) { this.files.delete(k); this.gone.add(k); }
+    this.bySid.delete(sid); this.sorted = this.sorted.filter((e) => e.s.sid !== sid);
   }
   /** GET /history/session: the transcript re-read as prompts, assistant text and tool summaries (no thinking, no tool results); ≤3000 items and ~4 MB of text, else
    *  truncated. An unknown sid waits for one rescan (a deep link to a session newer than the index) before null. */

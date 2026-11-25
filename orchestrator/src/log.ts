@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { DeckEvent } from './types.js';
+/** Append-only JSONL log. Opens the file per event (appendFileSync, no fd kept), so POST /history/delete can rewrite it in place synchronously. */
 export class JsonlLog {
   constructor(readonly path: string) { mkdirSync(dirname(path), { recursive: true }); }
   write(e: DeckEvent) { appendFileSync(this.path, JSON.stringify(e) + '\n', { mode: 0o600 }); }
